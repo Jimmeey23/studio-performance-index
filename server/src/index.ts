@@ -401,4 +401,14 @@ const minutes = Number(config.syncCron);
 if (minutes > 0 && fs.existsSync(config.googleCredentialsFile)) {
   setInterval(() => { syncFromGoogle().then(afterSync).catch((e) => log.error({ err: e.message }, 'scheduled sync failed')); }, minutes * 60e3);
   log.info(`Scheduled Google Sheets sync every ${minutes} minutes`);
+  // fresh deployment (empty data disk): sync straight away instead of waiting for the first interval
+  (async () => {
+    try {
+      const db = await warehouse();
+      if (await db.tableExists('fct_sales')) return;
+      log.info('no data yet — running the first Google Sheets sync now');
+      const r = await syncFromGoogle({ force: true }); afterSync();
+      log.info({ status: r.status }, 'first sync finished');
+    } catch (e) { log.error({ err: (e as Error).message }, 'first sync failed — use Settings → Sync from Google Sheets'); }
+  })();
 }

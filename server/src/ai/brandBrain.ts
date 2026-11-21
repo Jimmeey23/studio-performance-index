@@ -97,7 +97,7 @@ export async function buildLearned(): Promise<string> {
 
   L.push('\n(These are context and benchmarks only. Always quote numbers from tool results in answers.)');
   const md = L.join('\n');
-  fs.writeFileSync(LEARNED, md);
+  if (st.length) fs.writeFileSync(LEARNED, md); // don't cache an empty brain before the first sync
   return md;
 }
 let building: Promise<string> | null = null;
