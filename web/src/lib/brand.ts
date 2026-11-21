@@ -24,6 +24,8 @@ const BY_SECTION: Record<string, string> = {
 /** Cover photographs: subjects sit in the upper half, clear of the title block. */
 const COVER_BY_SECTION: Record<string, string> = { cover: 'cycle-group', trainers: 'trainers-pair', associates: 'trainers-duo', churn: 'strength-kettlebell', clients: 'strength-kettlebell', classes: 'cycle-ride', late: 'cycle-ride', leads: 'cycle-ride', formats: 'strength-kettlebell' };
 export const coverPhotoFor = (id: string) => B(COVER_BY_SECTION[id] ?? 'cycle-group');
+/** A photo by key (cover_photo from the AI design). */
+export const photoByKey = (k: string) => B(k);
 export const photoForSection = (id: string) => B(BY_SECTION[id] ?? 'barre-group');
 export const photoFor = (i: number) => BRAND.photos[((i % BRAND.photos.length) + BRAND.photos.length) % BRAND.photos.length];
 

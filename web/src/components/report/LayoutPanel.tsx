@@ -41,7 +41,7 @@ export function LayoutPanel({ layout, data, onChange, onClose }: { layout: Repor
     // jump over sections this report does not have
     let j = i + d; while (j >= 0 && j < o.length && !present.has(o[j])) j += d;
     if (j < 0 || j >= o.length) return;
-    [o[i], o[j]] = [o[j], o[i]]; set({ order: o });
+    [o[i], o[j]] = [o[j], o[i]]; set({ order: o, autoDesign: false }); // the reader's own order replaces the AI's
   };
   const app = currentAccent();
   return (
@@ -53,6 +53,7 @@ export function LayoutPanel({ layout, data, onChange, onClose }: { layout: Repor
       </div>
       <div className="flex-1 overflow-y-auto">
         <Group icon={Palette} title="Colour">
+          <Toggle on={layout.autoDesign !== false} label="AI art direction — palette, cover, section order" onChange={(v) => set({ autoDesign: v })} />
           <div className="flex flex-wrap gap-2">
             <button onClick={() => set({ accent: 'app' })} className={clsx('flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs', layout.accent === 'app' ? 'border-accent ring-2 ring-accent/30' : 'border-line')}>
               <span className="h-4 w-4 rounded-full" style={{ background: `linear-gradient(135deg, ${app.a}, ${app.b})` }} />App accent
