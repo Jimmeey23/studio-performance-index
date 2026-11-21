@@ -622,10 +622,13 @@ function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P:
 function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { rv: Review; ai?: AI; gl?: GlanceAI; P: ReportPeriod; base: Base; live: boolean; busy: boolean; canAi: boolean; onRewrite: () => void; jump: (id: string) => void }) {
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 1} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} />
-      <KpiGrid kpis={rv.glance.cards} base={base} P={P} />
+      <SectionHead n={1} total={rv.sections.length + 1} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} />
+      <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
+      <Sub n="1.2" title="Headline numbers" note="Click any number for the records behind it" />
+      <KpiGrid kpis={rv.glance.cards} base={base} P={P} />
       {rv.scorecard?.length > 0 && <Signals kpis={rv.scorecard} base={base} P={P} />}
+      <Sub n="1.3" title="Chapter by chapter" />
       <div className="epr-highlights">{rv.sections.map((s, i) => {
         const h = gl?.highlights.find((x) => x.section === s.id)?.text ?? ai?.sections[s.id]?.headline ?? s.ruleFindings[0];
         const hi = gl?.highlights.findIndex((x) => x.section === s.id) ?? -1;
@@ -641,6 +644,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
         );
       })}</div>
       {!!gl?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{gl.watch.map((w, i) => <li key={i}><Ed part="glance" path={['watch', i]} value={w} /></li>)}</ul></div></div>}
+      <div className="epr-detail"><Sub n="1.4" title="In detail" /></div>
       <div className="epr-detail epr-grid-2">{rv.glance.charts.slice(0, 2).map((c, i) => <ChartCard key={c.id} c={c} i={i} part="glance" note={gl?.notes[c.id] ?? rv.glance.notes[c.id]} />)}</div>
       <div className="epr-detail epr-grid-2">
         {rv.glance.lists.length > 0 && <TopBottom lists={rv.glance.lists} />}
@@ -670,19 +674,32 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
   );
 }
 
-function SectionHead({ n, total, kicker, title, lead, right, part }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string }) {
+/** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
+function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [] }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[] }) {
+  const d = useRD();
   return (
-    <header className="epr-sh epr-rv">
-      <div className="epr-sh-n" aria-hidden>{String(n).padStart(2, '0')}</div>
-      <div className="min-w-0 flex-1">
-        <div className="epr-sh-k">Section {String(n).padStart(2, '0')} of {String(total).padStart(2, '0')} · {kicker}</div>
-        {part ? <Ed as="h2" part={part} path={['title']} value={title} /> : <h2>{title}</h2>}
-        {part ? <Ed as="p" part={part} path={['lead']} value={lead} /> : <p>{lead}</p>}
+    <header className="epr-hero">
+      <div className="epr-hero-top">
+        <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
+        <span className="epr-hero-kick">{kicker}</span>
+        {right}
       </div>
-      {right}
+      <div className="epr-hero-body">
+        <div className="epr-hero-n" aria-hidden>{String(n).padStart(2, '0')}</div>
+        <div className="min-w-0">
+          {part ? <Ed as="h2" part={part} path={['title']} value={title} /> : <h2>{title}</h2>}
+          {part ? <Ed as="p" className="epr-hero-lead" part={part} path={['lead']} value={lead} /> : <p className="epr-hero-lead">{lead}</p>}
+        </div>
+      </div>
+      {headline && <div className="epr-hero-quote">{headline}</div>}
+      {stats.length > 0 && <div className="epr-hero-stats">{stats.slice(0, 3).map((k) => { const t = tone(k, k.chg); return (
+        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(k.chg, k.format)}</em></div>
+      ); })}</div>}
     </header>
   );
 }
+/** Numbered sub-heading inside a chapter (2.1, 2.2 …) — gives every chapter the same reading structure. */
+const Sub = ({ n, title, note }: { n: string; title: string; note?: string }) => <div className="epr-sub epr-rv"><span>{n}</span><h3>{title}</h3>{note && <em>{note}</em>}</div>;
 function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; model?: string; edited?: boolean }; busy: boolean; canAi: boolean; onRewrite: () => void }) {
   return (
     <div className="epr-sh-act no-print">
@@ -699,11 +716,14 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={total} kicker={s.kicker} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} />
-      {ai && <div className="epr-headline epr-rv"><span className="epr-headline-k">The headline</span>{live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />}</div>}
+      <SectionHead n={n} total={total} kicker={s.kicker} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis}
+        headline={ai ? (live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />) : undefined} />
 
-      <KpiGrid kpis={s.kpis} base={base} P={P} />
+      <Sub n={`${n}.1`} title="Analysis" />
       <Analysis part={s.id} ai={ai} live={live} label="Analysis" fallback={s.ruleFindings.slice(0, 3)} />
+      <Sub n={`${n}.2`} title="The numbers" note="Click any number for the records behind it" />
+      <KpiGrid kpis={s.kpis} base={base} P={P} />
+      {(hasFeature || s.charts.length > 0 || s.tables.length > 0) && <div className="epr-detail"><Sub n={`${n}.3`} title="In detail" /></div>}
 
       {hasFeature && <div className="epr-detail epr-feature">
         {s.index && (
@@ -730,6 +750,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
       {s.charts.length > 0 && <div className={clsx('epr-detail', s.charts.length === 1 ? 'epr-grid-1' : 'epr-grid-2')}>{s.charts.map((c, i) => <ChartCard key={c.id} c={c} i={i} part={s.id} note={note(c.id)} loading={busy} />)}</div>}
       {s.tables.length > 0 && <div className="epr-detail epr-grid-1">{s.tables.map((t) => <TableCard key={t.id} t={t} part={s.id} note={note(t.id)} loading={busy} />)}</div>}
 
+      <Sub n={`${n}.${hasFeature || s.charts.length || s.tables.length ? 4 : 3}`} title="Findings & actions" />
       <div className="epr-close">
         <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Flag size={13} /><span>Key findings</span></div>{ai ? <ol className="epr-find">{ai.findings.map((x, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><Ed as="p" part={s.id} path={['findings', i]} value={x} /></li>)}</ol> : <Shimmer lines={5} />}</div>
         <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Target size={13} /><span>Recommended actions</span></div>{ai ? (ai.recommendations.length ? <Recs recs={ai.recommendations} part={s.id} /> : <p className="epr-small">Recommendations are written by the AI — turn it on in Settings to add them.</p>) : <Shimmer lines={5} />}</div>
