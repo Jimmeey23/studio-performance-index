@@ -46,7 +46,14 @@ export default function App() {
 
 function Shell() {
   const [convs, setConvs] = useState<Conversation[]>([]);
-  const [collapsed, setCollapsed] = useState(false);
+  // Phones start with the rail collapsed so pages get the full width; crossing the breakpoint re-applies it.
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const on = (e: MediaQueryListEvent) => setCollapsed(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const refresh = useCallback(() => { api<Conversation[]>('/api/conversations').then(setConvs).catch(() => {}); }, []);
   useEffect(() => { refresh(); }, [refresh]);
   return (

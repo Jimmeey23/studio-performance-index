@@ -394,3 +394,14 @@
 
 @media (max-width: 1100px) { .epr-doc { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .epr-wrap { padding: 16px 16px 60px; } .epr-card, .epr-prose { padding: 16px; } .epr-index-r { grid-template-columns: 1fr 50px; } .epr-index-r > :nth-child(2) { grid-column: 1 / -1; order: 3; } }
+
+/* phone: title on its own line, controls wrap below it (no scroll box, so the history dropdown is not clipped) */
+@media (max-width: 640px) {
+  .epr-bar-in { padding: 8px 16px; gap: 8px; }
+  .epr-bar-t { width: 100%; }
+  .epr-bar-t b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .epr-bar-t span { display: none; }
+  .epr-bar-in > .ml-auto { margin-left: 0; width: 100%; flex-wrap: wrap; }
+  .epr-bar-in > .ml-auto > * { flex-shrink: 0; }
+  .epr-seg button { white-space: nowrap; }
+}
