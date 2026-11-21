@@ -35,7 +35,7 @@ export const REVIEW_SECTIONS = [
 ] as const;
 export type ReviewSectionId = typeof REVIEW_SECTIONS[number]['id'];
 
-export interface ReviewList { id: string; title: string; metric: string; format: string; dimension: string; top: { name: string; value: number | null; sub?: string }[]; bottom: { name: string; value: number | null; sub?: string }[] }
+export interface ReviewList { id: string; title: string; metric: string; format: string; dimension: string; dimKey?: string; metricKey?: string; top: { name: string; value: number | null; sub?: string }[]; bottom: { name: string; value: number | null; sub?: string }[] }
 export interface ReviewSection {
   id: ReviewSectionId; title: string; icon: string; lead: string; kicker: string;
   kpis: Kpi[]; charts: ReportChart[]; tables: ReportTable[];
@@ -112,7 +112,7 @@ function listFrom(t: ReportTable | undefined, title: string, sub?: string): Revi
   const rows = r.rows.filter((x) => isFinite(Number(x[m.key]))).map((x) => ({ name: String(x[dim.key]), value: Number(x[m.key]), sub: s ? `${s.label} ${fmtVal(Number(x[s.key]), s.format ?? 'number')}` : undefined }));
   if (rows.length < 2) return null;
   const sorted = [...rows].sort((a, b) => b.value - a.value);
-  return { id: t.id, title, metric: m.label, format: m.format ?? 'number', dimension: dim.label, top: sorted.slice(0, 5), bottom: sorted.slice(-5).reverse() };
+  return { id: t.id, title, metric: m.label, format: m.format ?? 'number', dimension: dim.label, dimKey: dim.key, metricKey: m.key, top: sorted.slice(0, 5), bottom: sorted.slice(-5).reverse() };
 }
 
 async function trainerCharts(req: ReviewRequest): Promise<ReportChart[]> {

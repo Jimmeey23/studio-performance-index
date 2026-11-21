@@ -4,7 +4,7 @@
  * writes each part (at a glance + every section) once. Saved reviews reopen
  * as they were, and the most recently opened review is shown by default.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import {
@@ -21,12 +21,13 @@ import { BRAND } from '../lib/brand';
 import { InteractiveChart } from '../components/blocks/Charts';
 import { AdvancedTable } from '../components/blocks/AdvancedTable';
 import { CountUp, Sparkline } from '../components/Animated';
+import { useDrill, type DrillFilter } from '../lib/drill';
 import '../review.css';
 
 /* ── types (mirror server/src/report/review.ts) ── */
 type Chart = { id: string; title: string; chart: string; seriesBy?: string; y?: string[]; result: Result };
 type Table = { id: string; title: string; result: Result; note?: string };
-type List = { id: string; title: string; metric: string; format: Format; dimension: string; top: { name: string; value: number | null; sub?: string }[]; bottom: { name: string; value: number | null; sub?: string }[] };
+type List = { id: string; title: string; metric: string; format: Format; dimension: string; dimKey?: string; metricKey?: string; top: { name: string; value: number | null; sub?: string }[]; bottom: { name: string; value: number | null; sub?: string }[] };
 type Section = {
   id: string; title: string; icon: string; lead: string; kicker: string; kpis: Kpi[]; charts: Chart[]; tables: Table[];
   funnels?: { title: string; steps: { label: string; value: number | null }[] }[];
@@ -47,6 +48,12 @@ type HistoryItem = { id: string; label: string; scope: string; created_at: strin
 
 const ICONS: Record<string, LucideIcon> = { IndianRupee, Activity, Filter, CalendarRange, GraduationCap, Shapes, UserMinus };
 type Base = 'prev' | 'ytd' | 'ly';
+
+/* ── drill-down: every number in the review opens the records behind it ── */
+type DrillApi = { kpi: (k: Kpi, extra?: DrillFilter[], ctx?: string[]) => void; slice: (metric: string, filters: DrillFilter[], ctx: string[], expected?: number | null) => void };
+const RDrill = createContext<DrillApi | null>(null);
+const useRD = () => useContext(RDrill);
+const clickable = (fn?: () => void) => fn ? { onClick: fn, role: 'button' as const, tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }, 'data-drill': '' } : {};
 
 /* ── small building blocks ── */
 function useReveal() {
@@ -76,15 +83,31 @@ function KpiCard({ k, base, P, i = 0, big }: { k: Kpi; base: Base; P: ReportPeri
   const vals = k.series.filter((v): v is number => v !== null);
   const t = tone(k, k.chg);
   const ref = base === 'prev' ? k.prev : base === 'ytd' ? k.ytd : k.ly;
+  const d = useRD();
+  const ctx = vals.length > 2 && k.value !== null ? context(k.value, vals, k) : null;
   return (
-    <div className={clsx('epr-kpi epr-rv', big && 'big')} style={{ transitionDelay: `${i * 45}ms` }} title={k.description}>
+    <div className={clsx('epr-kpi epr-rv', big && 'big')} style={{ transitionDelay: `${i * 45}ms` }} title={`${k.description}${d ? ' — click for the records behind this number' : ''}`} {...clickable(d ? () => d.kpi(k) : undefined)}>
       <div className="epr-kpi-l">{k.label}</div>
       <div className="epr-kpi-v">{k.value === null ? '—' : <CountUp value={k.value} format={(n) => fmtK(n, k.format)} />}</div>
       <Delta k={k} base={base} P={P} />
       <div className="epr-kpi-ref">{base === 'prev' ? P.prevLabel : base === 'ytd' ? P.ytdLabel : P.lyLabel}: <b>{fmtK(ref, k.format)}</b></div>
-      {vals.length > 2 && <div className="epr-kpi-spark"><Sparkline values={vals} height={30} color={t > 0 ? 'var(--epr-good)' : t < 0 ? 'var(--epr-bad)' : 'var(--accent)'} format={(n) => fmtK(n, k.format)} /></div>}
+      {ctx && <div className={clsx('epr-kpi-ctx', ctx.t)}>{ctx.text}</div>}
+      {vals.length > 2 && <div className="epr-kpi-spark"><Sparkline values={vals} height={28} color={t > 0 ? 'var(--epr-good)' : t < 0 ? 'var(--epr-bad)' : 'var(--accent)'} format={(n) => fmtK(n, k.format)} /></div>}
     </div>
   );
+}
+/** Where this period sits in the trailing series — a quick sense of "is this unusual?". */
+function context(v: number, vals: number[], k: Kpi): { text: string; t: string } | null {
+  const hist = vals.slice(0, -1); if (hist.length < 3) return null;
+  const hi = Math.max(...hist), lo = Math.min(...hist), n = hist.length + 1;
+  const good = k.higherIsBetter === false ? 'bad' : 'good', bad = good === 'good' ? 'bad' : 'good';
+  if (v >= hi) return { text: `Highest in ${n} periods`, t: good };
+  if (v <= lo) return { text: `Lowest in ${n} periods`, t: bad };
+  const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
+  if (!avg) return null;
+  const p = (v - avg) / Math.abs(avg);
+  if (Math.abs(p) < 0.03) return { text: `In line with ${hist.length}-period average`, t: 'flat' };
+  return { text: `${p > 0 ? 'Above' : 'Below'} ${hist.length}-period average by ${Math.abs(p * 100).toFixed(0)}%`, t: p > 0 ? good : bad };
 }
 /** Bold every figure (₹ amounts, %, pp, multipliers, plain numbers) so a reader can scan the numbers. */
 const NUM = /(₹\s?[\d,.]+\s?(?:[KkLM]|Cr|L|lakh|crore)?|[+−-]?\d[\d,]*(?:\.\d+)?\s?(?:%|pp|x|×|K|L|Cr)?)/g;
@@ -137,13 +160,14 @@ function Scorecard({ kpis, P }: { kpis: Kpi[]; P: ReportPeriod }) {
     <td className="ref"><span>{fmtK(ref, k.format)}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(c, k.format)}</em></td>
   ); };
   const status = (k: Kpi) => { const s = [k.chg, k.chgYtd, k.chgLy].map((c) => tone(k, c)).reduce<number>((a, b) => a + b, 0); return s >= 2 ? 'good' : s <= -2 ? 'bad' : 'mixed'; };
+  const d = useRD();
   return (
     <div className="epr-card epr-card-wide epr-rv">
       <div className="epr-card-h"><span className="epr-card-ic"><Target size={13} /></span><span className="epr-card-t">Executive scorecard</span><span className="epr-card-tag">{kpis.length} metrics · 3 baselines</span></div>
       <div className="epr-score-wrap"><table className="epr-score">
         <thead><tr><th className="m">Metric</th><th>{P.label}</th><th>vs {P.prevLabel}</th><th>vs {P.ytdLabel}</th><th>vs {P.lyLabel}</th><th className="tr">Trend</th><th>Status</th></tr></thead>
         <tbody>{kpis.map((k) => { const vals = k.series.filter((v): v is number => v !== null); const st = status(k); return (
-          <tr key={k.id} title={k.description}>
+          <tr key={k.id} title={k.description} {...clickable(d ? () => d.kpi(k) : undefined)}>
             <td className="m">{k.label}</td>
             <td className="v">{fmtK(k.value, k.format)}</td>
             {cell(k, k.prev, k.chg)}{cell(k, k.ytd, k.chgYtd)}{cell(k, k.ly, k.chgLy)}
@@ -173,6 +197,7 @@ function Funnel({ f }: { f: { title: string; steps: { label: string; value: numb
   );
 }
 function Heat({ hm }: { hm: NonNullable<Section['heatmap']> }) {
+  const d = useRD();
   const vals = Object.values(hm.cells).map((c) => c.fill).filter((v): v is number => v !== null);
   const max = Math.max(...vals, 0.01);
   return (
@@ -180,7 +205,7 @@ function Heat({ hm }: { hm: NonNullable<Section['heatmap']> }) {
       <div className="epr-card-h"><CalendarRange size={14} />Fill rate by weekday & hour</div>
       <div className="epr-heat-wrap"><table className="epr-heat"><thead><tr><th />{hm.cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
         <tbody>{hm.rows.map((r) => <tr key={r}><th>{r.slice(0, 3)}</th>{hm.cols.map((c) => { const cell = hm.cells[`${r}|${c}`]; if (!cell || cell.fill === null) return <td key={c} className="empty" />; const a = cell.fill / max;
-          return <td key={c} title={`${r} ${c}: ${(cell.fill * 100).toFixed(0)}% fill · ${cell.classes} classes`} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round(8 + a * 82)}%, transparent)`, color: a > 0.55 ? '#fff' : undefined }}>{Math.round(cell.fill * 100)}</td>; })}</tr>)}</tbody></table></div>
+          return <td key={c} {...clickable(d ? () => d.slice('fill_rate', [{ dimension: 'day_of_week', op: 'in', values: [r] }, { dimension: 'hour', op: 'in', values: [c] }], [r, c], cell.fill) : undefined)} title={`${r} ${c}: ${(cell.fill * 100).toFixed(0)}% fill · ${cell.classes} classes`} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round(8 + a * 82)}%, transparent)`, color: a > 0.55 ? '#fff' : undefined }}>{Math.round(cell.fill * 100)}</td>; })}</tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -197,6 +222,7 @@ function Gauge({ v }: { v: number | null }) {
 }
 function TopBottom({ lists }: { lists: List[] }) {
   const [i, setI] = useState(0); const [side, setSide] = useState<'top' | 'bottom'>('top');
+  const d = useRD();
   const l = lists[i]; if (!l) return null;
   const items = side === 'top' ? l.top : l.bottom;
   const max = Math.max(...items.map((x) => Math.abs(x.value ?? 0)), 1e-9);
@@ -209,12 +235,37 @@ function TopBottom({ lists }: { lists: List[] }) {
       </div>
       <div className="epr-tb-sub">Ranked by {l.metric.toLowerCase()}</div>
       <ol className="epr-tb-list" key={`${i}-${side}`}>{items.map((x, j) => (
-        <li key={x.name} style={{ ['--d' as string]: `${j * 70}ms` }}>
+        <li key={x.name} style={{ ['--d' as string]: `${j * 70}ms` }} {...clickable(d && l.dimKey && l.metricKey ? () => d.slice(l.metricKey!, [{ dimension: l.dimKey!, op: 'in', values: [x.name] }], [x.name], x.value) : undefined)}>
           <span className={clsx('rk', side)}>{j + 1}</span>
           <div className="nm"><b>{x.name}</b>{x.sub && <em>{x.sub}</em>}<div className="bar"><i className={side} style={{ width: `${(Math.abs(x.value ?? 0) / max) * 100}%` }} /></div></div>
           <span className="v">{fmtK(x.value, l.format)}</span>
         </li>
       ))}</ol>
+    </div>
+  );
+}
+/** Biggest movers across the scorecard — what improved and what slipped, ranked by size of the move. */
+function Signals({ kpis, base, P }: { kpis: Kpi[]; base: Base; P: ReportPeriod }) {
+  const d = useRD();
+  const chg = (k: Kpi) => (base === 'prev' ? k.chg : base === 'ytd' ? k.chgYtd : k.chgLy);
+  const scored = kpis.filter((k) => chg(k) !== null && k.higherIsBetter !== undefined).map((k) => ({ k, t: tone(k, chg(k)), m: Math.abs(chg(k)!) }));
+  const up = scored.filter((x) => x.t > 0).sort((a, b) => b.m - a.m).slice(0, 4);
+  const down = scored.filter((x) => x.t < 0).sort((a, b) => b.m - a.m).slice(0, 4);
+  const all = kpis.length; const onTrack = scored.filter((x) => x.t > 0).length; const atRisk = scored.filter((x) => x.t < 0).length;
+  const lab = base === 'prev' ? P.prevLabel : base === 'ytd' ? P.ytdLabel : P.lyLabel;
+  if (!up.length && !down.length) return null;
+  const Row = ({ x }: { x: (typeof scored)[number] }) => (
+    <li {...clickable(d ? () => d.kpi(x.k) : undefined)}><span className="n">{x.k.label}</span><span className="v">{fmtK(x.k.value, x.k.format)}</span><span className={clsx('c', x.t > 0 ? 'good' : 'bad')}>{fmtDelta(chg(x.k), x.k.format)}</span></li>
+  );
+  return (
+    <div className="epr-signals epr-rv">
+      <div className="epr-signals-sum">
+        <div className="epr-eyebrow">Momentum vs {lab}</div>
+        <div className="epr-signals-bar" aria-hidden><i className="good" style={{ flex: onTrack }} /><i className="flat" style={{ flex: Math.max(0, all - onTrack - atRisk) }} /><i className="bad" style={{ flex: atRisk }} /></div>
+        <p><b>{onTrack}</b> of {all} metrics improving · <b>{atRisk}</b> slipping</p>
+      </div>
+      <div className="epr-signals-col"><h4><TrendingUp size={13} />Strongest gains</h4><ul>{up.map((x) => <Row key={x.k.id} x={x} />)}</ul></div>
+      <div className="epr-signals-col"><h4><TrendingDown size={13} />Biggest slips</h4>{down.length ? <ul>{down.map((x) => <Row key={x.k.id} x={x} />)}</ul> : <p className="epr-small">Nothing slipped against this baseline.</p>}</div>
     </div>
   );
 }
@@ -295,6 +346,7 @@ export default function Review({ embedded }: { embedded?: boolean }) {
     return () => io.disconnect();
   }, [saved]);
 
+  useEffect(() => { document.querySelector('.epr-nav button.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }, [active]);
   const period = preset === 'custom' ? custom : preset === 'month' ? range('month', month) : range(preset);
   const generate = async (fresh = false) => {
     setBuilding(true); setErr(null);
@@ -308,6 +360,12 @@ export default function Review({ embedded }: { embedded?: boolean }) {
   const jump = (id: string) => document.getElementById(`epr-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const rv = saved?.review; const ai = saved?.ai; const P = rv?.period;
+  const openDrill = useDrill();
+  const drillApi: DrillApi | null = rv && P && openDrill ? (() => {
+    const loc: DrillFilter[] = rv.request.locations.length ? [{ dimension: 'location', op: 'in', values: rv.request.locations }] : [];
+    const slice: DrillApi['slice'] = (metric, filters, ctx, expected = null) => openDrill({ metric, filters: [...loc, ...filters], start: rv.request.start, end: rv.request.end, context: [...ctx, rv.scope, P.label], expected });
+    return { slice, kpi: (k, extra = [], ctx = []) => slice(k.id, extra, [k.label, ...ctx], k.value) };
+  })() : null;
   const gl = ai?.glance;
   const nav = useMemo(() => rv ? [{ id: 'cover', title: 'Cover' }, { id: 'glance', title: 'At a glance' }, ...rv.sections.map((s) => ({ id: s.id, title: s.title }))] : [], [rv]);
   const chip = (on: boolean) => clsx('epr-chip', on && 'on');
@@ -356,6 +414,15 @@ export default function Review({ embedded }: { embedded?: boolean }) {
             <button className="epr-go sm" onClick={() => setSetup((o) => !o)}><Wand2 size={14} />New review</button>
           </div>
         </div>
+        {rv && !setup && (
+          <nav className="epr-nav" aria-label="Review sections">
+            <div className="epr-nav-in">{nav.map((n, i) => (
+              <button key={n.id} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on')} aria-current={active === n.id ? 'true' : undefined}>
+                <span className="i">{busy.has(n.id) ? <Loader2 size={10} className="animate-spin" /> : i === 0 ? '·' : String(i).padStart(2, '0')}</span>{n.title.replace(/ Index$/, '')}
+              </button>
+            ))}</div>
+          </nav>
+        )}
         {err && <div className="epr-err"><AlertTriangle size={14} />{err}<button onClick={() => setErr(null)}><X size={13} /></button></div>}
       </div>
 
@@ -366,14 +433,8 @@ export default function Review({ embedded }: { embedded?: boolean }) {
           {!loading && !rv && !setup && <div className="epr-empty"><Sparkles /><p>Pick a period and studio to prepare your first review.</p><button className="epr-go" onClick={() => setSetup(true)}>Get started</button></div>}
 
           {rv && P && (
+            <RDrill.Provider value={drillApi}>
             <div className="epr-doc">
-              {/* section rail */}
-              <nav className="epr-rail no-print">{nav.map((n, i) => (
-                <button key={n.id} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on')}>
-                  <span className="dot">{busy.has(n.id) ? <Loader2 size={10} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{n.title}</span>
-                </button>
-              ))}</nav>
-
               <div className="epr-main">
                 {/* ── cover ── */}
                 <section id="epr-cover" data-spy className="epr-cover">
@@ -403,7 +464,7 @@ export default function Review({ embedded }: { embedded?: boolean }) {
                     </ol>
                   </div>
                   <div className="epr-cover-kpis">{rv.cover.headlineKpis.map((k) => { const t = tone(k, k.chg); return (
-                    <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{t > 0 ? '▲' : t < 0 ? '▼' : '•'} {fmtDelta(k.chg, k.format)} <i>vs {P.prevLabel}</i></em></div>
+                    <div key={k.id} {...clickable(drillApi ? () => drillApi.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{t > 0 ? '▲' : t < 0 ? '▼' : '•'} {fmtDelta(k.chg, k.format)} <i>vs {P.prevLabel}</i></em></div>
                   ); })}</div>
                   <div className="epr-cover-foot">Figures computed from synced studio data{gl?.source === 'ai' ? ` · commentary by ${gl.model ?? 'Claude'}` : ''} · Ref {rv.id.slice(0, 8).toUpperCase()}</div>
                 </section>
@@ -412,7 +473,7 @@ export default function Review({ embedded }: { embedded?: boolean }) {
                 <section id="epr-glance" data-spy className="epr-sec">
                   <SectionHead kicker="Section 01 · Overview" title="At a glance" icon={Sparkles} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions part="glance" ai={gl} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} />} />
                   <div className="epr-grid-k8">{rv.glance.cards.map((k, i) => <KpiCard key={k.id} k={k} base={base} P={P} i={i} />)}</div>
-                  {rv.scorecard?.length > 0 && <Scorecard kpis={rv.scorecard} P={P} />}
+                  {rv.scorecard?.length > 0 && <Signals kpis={rv.scorecard} base={base} P={P} />}
                   <div className="epr-split">
                     <div className="epr-prose epr-rv"><div className="epr-prose-h">Executive summary</div><Prose text={gl?.summary} lines={7} /></div>
                     <div className="epr-insights epr-rv"><div className="epr-card-h"><Lightbulb size={14} />Key insights</div>{gl ? <ol>{gl.insights.map((x, i) => <li key={i}><Rich text={x} /></li>)}</ol> : <Shimmer lines={5} />}</div>
@@ -427,6 +488,7 @@ export default function Review({ embedded }: { embedded?: boolean }) {
                     {rv.glance.charts[2] && <ChartCard c={rv.glance.charts[2]} note={gl?.notes[rv.glance.charts[2].id] ?? rv.glance.notes[rv.glance.charts[2].id]} loading={busy.has('glance')} h={300} />}
                   </div>
                   <div className="epr-grid-1">{rv.glance.tables.slice(0, 4).map((t) => <TableCard key={t.id} t={t} note={gl?.notes[t.id] ?? rv.glance.notes[t.id]} loading={busy.has('glance')} />)}</div>
+                  {rv.scorecard?.length > 0 && <Scorecard kpis={rv.scorecard} P={P} />}
                   {rv.studios && rv.studios.result.rows.length > 1 && <TableCard t={{ ...rv.studios, title: rv.studios.title || 'Studio comparison' }} note={rv.studios.note} />}
                 </section>
 
@@ -436,6 +498,7 @@ export default function Review({ embedded }: { embedded?: boolean }) {
                 <div className="epr-end">End of review · {rv.scope} · {P.label} · prepared {new Date(rv.generatedAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</div>
               </div>
             </div>
+            </RDrill.Provider>
           )}
         </div>
       </div>
@@ -465,6 +528,7 @@ function ReviewSectionView({ n, total, s, ai, busy, base, P, canAi, onRewrite }:
   const I = ICONS[s.icon] ?? Sparkles;
   const note = (id: string) => ai?.notes?.[id] ?? s.notes[id];
   const charts = s.charts; const tables = s.tables;
+  const d = useRD();
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec">
       <SectionHead kicker={`Section ${String(n).padStart(2, '0')} of ${String(total).padStart(2, '0')} · ${s.kicker}`} title={s.title} icon={I} lead={s.lead} right={<PartActions part={s.id} ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} />
@@ -489,12 +553,12 @@ function ReviewSectionView({ n, total, s, ai, busy, base, P, canAi, onRewrite }:
 
       {s.funnels?.length ? <div className="epr-grid-2">{s.funnels.map((f) => <Funnel key={f.title} f={f} />)}</div> : null}
       {s.spotlight?.length ? <div className="epr-spot">{s.spotlight.map((t, i) => (
-        <div key={t.name} className={clsx('epr-spot-c epr-rv', `r${i + 1}`)} style={{ transitionDelay: `${i * 80}ms` }}><div className="md"><Trophy size={14} />#{i + 1}</div><b>{t.name}</b>
+        <div key={t.name} className={clsx('epr-spot-c epr-rv', `r${i + 1}`)} style={{ transitionDelay: `${i * 80}ms` }} {...clickable(d ? () => d.slice('class_average', [{ dimension: 'teacher', op: 'in', values: [t.name] }], [t.name], t.avg) : undefined)}><div className="md"><Trophy size={14} />#{i + 1}</div><b>{t.name}</b>
           <div className="st"><span><i>{fmt(t.avg, 'decimal')}</i>class avg</span><span><i>{fmt(t.fill, 'percent')}</i>fill</span><span><i>{t.classes}</i>classes</span><span><i>{fmt(t.checkins, 'number')}</i>check-ins</span></div></div>
       ))}</div> : null}
       {s.formats?.length ? <div className="epr-formats">{s.formats.map((f, fi) => (
         <div key={f.format} className="epr-fmt epr-rv" style={{ transitionDelay: `${fi * 80}ms` }}><h4>{f.format}</h4>
-          <table><tbody>{f.kpis.map((k) => { const t = tone(k, k.chg); return <tr key={k.id}><td>{k.label}</td><td className="v">{fmtK(k.value, k.format)}</td><td className={clsx('c', t > 0 ? 'good' : t < 0 ? 'bad' : '')}>{fmtDelta(k.chg, k.format)}</td></tr>; })}</tbody></table></div>
+          <table><tbody>{f.kpis.map((k) => { const t = tone(k, k.chg); return <tr key={k.id} {...clickable(d ? () => d.kpi(k, [{ dimension: 'format', op: 'in', values: [f.format] }], [f.format]) : undefined)}><td>{k.label}</td><td className="v">{fmtK(k.value, k.format)}</td><td className={clsx('c', t > 0 ? 'good' : t < 0 ? 'bad' : '')}>{fmtDelta(k.chg, k.format)}</td></tr>; })}</tbody></table></div>
       ))}</div> : null}
       {s.heatmap && s.heatmap.rows.length > 0 && <Heat hm={s.heatmap} />}
 
