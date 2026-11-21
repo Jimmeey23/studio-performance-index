@@ -2,13 +2,13 @@
  * Saved Executive Performance Reviews: the computed review and its AI commentary,
  * stored per part (glance + each section) so a part is written once and reused.
  */
-import { appDb, parseJson } from '../store/app.js';
+import { appDb, parseJson, ddl } from '../store/app.js';
 import type { Review, ReviewAI } from './review.js';
 
 let ready = false;
 async function db() {
   const d = await appDb();
-  if (!ready) { await d.exec(`create table if not exists exec_reviews(id varchar primary key, user_id varchar, req_key varchar, label varchar, scope varchar, data json, ai json, created_at timestamp default now(), updated_at timestamp default now());`); ready = true; }
+  if (!ready) { await ddl(d, `create table if not exists exec_reviews(id varchar primary key, user_id varchar, req_key varchar, label varchar, scope varchar, data json, ai json, created_at timestamp default now(), updated_at timestamp default now());`); ready = true; }
   return d;
 }
 export const reviewKey = (r: { start: string; end: string; locations: string[] }) => `${r.start}|${r.end}|${[...r.locations].sort().join(',')}`;

@@ -24,6 +24,8 @@ export const config = {
   dataDir: path.resolve(ROOT, env('DATA_DIR', 'data')),
   warehousePath: path.resolve(ROOT, env('DATA_DIR', 'data'), 'warehouse.duckdb'),
   appDbPath: path.resolve(ROOT, env('DATA_DIR', 'data'), 'app.duckdb'),
+  /** Neon / Postgres connection string. When set, every app table (users, reports, reviews, designs, prefs, config, targets…) lives there. */
+  databaseUrl: env('DATABASE_URL') || env('NEON_DATABASE_URL'),
   rawDir: path.resolve(ROOT, env('DATA_DIR', 'data'), 'raw'),
   googleCredentialsFile: env('GOOGLE_APPLICATION_CREDENTIALS', path.join(ROOT, 'config', 'service-account.json')),
   anthropicKey: env('ANTHROPIC_API_KEY'),

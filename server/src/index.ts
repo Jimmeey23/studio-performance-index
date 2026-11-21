@@ -9,7 +9,7 @@ import multer from 'multer';
 import { config } from './config.js';
 import { log } from './util/log.js';
 import { warehouse } from './warehouse/db.js';
-import { appDb, createUser, newId, parseJson, getResult, audit } from './store/app.js';
+import { appDb, usingPostgres, createUser, newId, parseJson, getResult, audit } from './store/app.js';
 import { answer, hydrateMessage, type StreamEvent } from './ai/orchestrator.js';
 import { clearCoverageCache } from './ai/prompt.js';
 import { DOMAINS, domainById } from './ai/domains.js';
@@ -418,7 +418,9 @@ app.get('/api/sync/:id', wrap(async (req, res) => {
   const r = await wh.one<{ details: string }>(`select details from _sync_log where id = ?`, [req.params.id]);
   r ? res.json(parseJson(r.details)) : res.status(404).json({ error: 'Not found' });
 }));
-const afterSync = () => { insightsCache = null; domainCache.clear(); clearDashboards().catch(() => {}); clearCoverageCache(); learnedKnowledge(true).catch(() => {}); };
+const afterSync = () => { insightsCache = null; domainCache.clear(); clearDashboards().catch(() => {}); clearCoverageCache(); learnedKnowledge(true).catch(() => {}); restoreTargetsNow(); };
+const restoreTargetsNow = () => { if (usingPostgres()) warehouse().then(async (wh) => { await wh.exec(`create table if not exists app_targets(month date, location varchar, metric varchar, target double)`); await restoreTargets(wh); }).catch(() => {}); };
+restoreTargetsNow();
 app.post('/api/sync', adminOnly, wrap(async (req, res) => { const r = await syncFromGoogle({ force: !!req.body.force }); afterSync(); await audit(req.user!.id, 'sync', { status: r.status }); res.json(r); }));
 app.post('/api/sync/upload', adminOnly, upload.array('files', 10), wrap(async (req, res) => {
   const files = ((req.files as Express.Multer.File[]) ?? []).map((f) => ({ name: f.originalname, buffer: f.buffer }));
@@ -428,10 +430,18 @@ app.post('/api/rebuild', adminOnly, wrap(async (req, res) => { const r = await r
 app.get('/api/rules', wrap(async (_req, res) => res.json(loadRules())));
 app.put('/api/rules', adminOnly, wrap(async (req, res) => { saveRules(req.body); await audit(req.user!.id, 'rules_update', {}); res.json({ ok: true, note: 'Saved. Rebuild models to apply.' }); }));
 
+/** Targets are durable in Neon; the warehouse copy (used by analytics joins) is refilled from it when empty. */
+async function restoreTargets(wh: Awaited<ReturnType<typeof warehouse>>) {
+  if (!usingPostgres()) return;
+  if (Number((await wh.one<{ n: number }>(`select count(*)::int n from app_targets`))?.n)) return;
+  const rows = await (await appDb()).all<{ m: string; location: string; metric: string; target: number }>(`select month::varchar m, location, metric, target from app_targets`);
+  for (const r of rows) await wh.all(`insert into app_targets values (?::date, ?, ?, ?)`, [r.m, r.location, r.metric, r.target]);
+}
 /* ── targets ──────────────────────────────────────────────────────────── */
 app.get('/api/targets', wrap(async (_req, res) => {
   const wh = await warehouse();
   await wh.exec(`create table if not exists app_targets(month date, location varchar, metric varchar, target double)`);
+  await restoreTargets(wh);
   res.json(await wh.all(`select month::varchar as "month", location, metric, target from app_targets order by 1 desc, location, metric`));
 }));
 app.post('/api/targets', adminOnly, wrap(async (req, res) => {
@@ -444,6 +454,7 @@ app.post('/api/targets', adminOnly, wrap(async (req, res) => {
     const month = r.month.slice(0, 7) + '-01';
     await wh.all(`delete from app_targets where month = ?::date and location = ? and metric = ?`, [month, r.location ?? 'All', r.metric]);
     await wh.all(`insert into app_targets values (?::date, ?, ?, ?)`, [month, r.location ?? 'All', r.metric, Number(r.target)]);
+    if (usingPostgres()) { const a = await appDb(); await a.all(`delete from app_targets where month = ?::date and location = ? and metric = ?`, [month, r.location ?? 'All', r.metric]); await a.all(`insert into app_targets values (?::date, ?, ?, ?)`, [month, r.location ?? 'All', r.metric, Number(r.target)]); }
     n++;
   }
   await audit(req.user!.id, 'targets_upload', { rows: n });

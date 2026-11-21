@@ -9,7 +9,7 @@
  *  • report topics: hide / rename / re-describe
  *  • report templates and analyst prompt templates: full list replacement (add, edit, delete, hide)
  */
-import { appDb, parseJson } from './app.js';
+import { appDb, parseJson, ddl } from './app.js';
 import { DOMAINS, domainById, type Domain, type Widget } from '../ai/domains.js';
 import { METRICS } from '../semantic/metrics.js';
 
@@ -36,7 +36,7 @@ export const appConfig = () => current;
 
 async function table() {
   const d = await appDb();
-  await d.exec(`create table if not exists app_config(key varchar primary key, value json, updated_at timestamp default now(), updated_by varchar)`);
+  await ddl(d, `create table if not exists app_config(key varchar primary key, value json, updated_at timestamp default now(), updated_by varchar)`);
   return d;
 }
 export async function loadAppConfig() {
