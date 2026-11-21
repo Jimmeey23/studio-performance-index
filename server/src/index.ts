@@ -242,6 +242,23 @@ app.get('/api/review/:id', wrap(async (req, res) => {
 app.delete('/api/review/:id', wrap(async (req, res) => { await reviewStore.remove(req.user!.id, String(req.params.id)); res.json({ ok: true }); }));
 /** AI commentary per part ('glance' or a section id): written once and reused; `fresh` rewrites that part only. */
 const reviewLocks = new Map<string, Promise<unknown>>();
+/** Admin inline edits: replace one AI part (glance or a section) with the edited content. */
+app.put('/api/review/:id/ai/:part', adminOnly, wrap(async (req, res) => {
+  const uid = req.user!.id; const id = String(req.params.id); const part = String(req.params.part);
+  const content = req.body?.content;
+  if (!content || typeof content !== 'object') return res.status(400).json({ error: 'content required' });
+  const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
+    const cur = await reviewStore.byId(uid, id); if (!cur) return false;
+    const ai: ReviewAI = { ...cur.ai, sections: cur.ai.sections ?? {} };
+    const prev = (part === 'glance' ? ai.glance : ai.sections[part]) as object | undefined;
+    const next = { ...(prev ?? {}), ...content, edited: true, at: new Date().toISOString() };
+    if (part === 'glance') ai.glance = next as ReviewAI['glance']; else ai.sections = { ...ai.sections, [part]: next as ReviewAI['sections'][string] };
+    await reviewStore.saveAi(id, ai); return true;
+  });
+  reviewLocks.set(id, run.catch(() => {}));
+  if (!(await run)) return res.status(404).json({ error: 'Review not found' });
+  res.json({ ok: true });
+}));
 app.post('/api/review/:id/ai', wrap(async (req, res) => {
   const uid = req.user!.id; const id = String(req.params.id); const part = String(req.body?.part ?? '');
   const tier = ['fast', 'balanced', 'deep'].includes(req.body?.tier) ? req.body.tier : 'balanced';

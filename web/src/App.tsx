@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { BrowserRouter, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { FileText, BookMarked, Database, LogOut, Moon, Plus, Settings as SettingsIcon, Sigma, Sun, TrendingUp, Pin, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, LayoutTemplate, ChevronDown, Search, Layers, PenTool, ShieldCheck, Gauge } from 'lucide-react';
 import { api } from './lib/api';
@@ -56,6 +56,9 @@ function Shell() {
   }, []);
   const refresh = useCallback(() => { api<Conversation[]>('/api/conversations').then(setConvs).catch(() => {}); }, []);
   useEffect(() => { refresh(); }, [refresh]);
+  const { pathname } = useLocation();
+  // a generated review opens as its own full page — no app sidebar, just the report and its controls
+  if (/^\/review\/[^/]+/.test(pathname)) return <main className="h-full overflow-hidden"><Routes><Route path="/review/:reviewId" element={<Review standalone />} /></Routes></main>;
   return (
     <div className="flex h-full">
       <Sidebar convs={convs} refresh={refresh} collapsed={collapsed} setCollapsed={setCollapsed} />
