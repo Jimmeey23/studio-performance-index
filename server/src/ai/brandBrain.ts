@@ -13,7 +13,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { config, ROOT } from '../config.js';
 import { runMetricsQuery } from '../semantic/engine.js';
-import { appDb } from '../store/app.js';
+import { appDb, ddl } from '../store/app.js';
 import { fmtVal } from '../report/build.js';
 import { log } from '../util/log.js';
 
@@ -115,7 +115,7 @@ export async function learnedKnowledge(force = false): Promise<string> {
 export type Note = { id: string; text: string; category: string; source: string; created_by: string; created_at: string };
 async function notesDb() {
   const db = await appDb();
-  await db.exec(`create table if not exists knowledge_notes(id varchar primary key, text varchar, category varchar, source varchar, created_by varchar, created_at timestamp default now())`);
+  await ddl(db, `create table if not exists knowledge_notes(id varchar primary key, text varchar, category varchar, source varchar, created_by varchar, created_at timestamp default now())`);
   return db;
 }
 export async function listNotes(): Promise<Note[]> { return (await notesDb()).all<Note>(`select id, text, category, source, created_by, created_at::varchar created_at from knowledge_notes order by created_at desc`); }

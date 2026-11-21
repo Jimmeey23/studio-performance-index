@@ -7,15 +7,15 @@
  * Executive and custom reports were already persisted in exec_reports; conversations in messages/results.
  */
 import crypto from 'node:crypto';
-import { appDb, parseJson } from './app.js';
+import { appDb, parseJson, ddl } from './app.js';
 
 let ready: Promise<void> | null = null;
 async function db() {
   const d = await appDb();
   ready ??= (async () => {
-    await d.exec(`create table if not exists report_designs(id varchar primary key, user_id varchar, title varchar, design json, rendered json, rendered_at timestamp, created_at timestamp default now(), updated_at timestamp default now())`);
-    await d.exec(`create table if not exists dashboard_cache(key varchar primary key, data json, created_at timestamp default now())`);
-    await d.exec(`create table if not exists user_prefs(user_id varchar, key varchar, value json, updated_at timestamp default now(), primary key (user_id, key))`);
+    await ddl(d, `create table if not exists report_designs(id varchar primary key, user_id varchar, title varchar, design json, rendered json, rendered_at timestamp, created_at timestamp default now(), updated_at timestamp default now())`);
+    await ddl(d, `create table if not exists dashboard_cache(key varchar primary key, data json, created_at timestamp default now())`);
+    await ddl(d, `create table if not exists user_prefs(user_id varchar, key varchar, value json, updated_at timestamp default now(), primary key (user_id, key))`);
   })();
   await ready;
   return d;

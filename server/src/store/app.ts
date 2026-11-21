@@ -3,11 +3,22 @@ import bcrypt from 'bcryptjs';
 import { Db } from '../warehouse/db.js';
 import { config } from '../config.js';
 
+import { openPostgresApp } from './pg.js';
+
 let _db: Db | null = null;
-export async function appDb(): Promise<Db> {
-  if (_db) return _db;
-  _db = await Db.open(config.appDbPath);
-  await _db.exec(`
+/** True when app data lives in Neon/Postgres (DATABASE_URL); table DDL is then managed centrally in store/pg.ts. */
+export const usingPostgres = () => !!config.databaseUrl;
+/** Run a module's local DuckDB DDL — skipped on Postgres, where pg.ts owns the schema. */
+export async function ddl(d: Db, sql: string) { if (!usingPostgres()) await d.exec(sql); }
+let _opening: Promise<Db> | null = null;
+/** Opened once; concurrent first callers share the same open (avoids double attach / migration). */
+export function appDb(): Promise<Db> {
+  if (_db) return Promise.resolve(_db);
+  return (_opening ??= openApp().catch((e) => { _opening = null; _db = null; throw e; }));
+}
+async function openApp(): Promise<Db> {
+  _db = usingPostgres() ? await openPostgresApp(config.databaseUrl, config.appDbPath) : await Db.open(config.appDbPath);
+  await ddl(_db, `
     create table if not exists users(id varchar primary key, email varchar unique, name varchar, role varchar, password_hash varchar, created_at timestamp default now());
     create table if not exists conversations(id varchar primary key, user_id varchar, title varchar, pinned boolean default false, created_at timestamp default now(), updated_at timestamp default now());
     create table if not exists messages(id varchar primary key, conversation_id varchar, role varchar, display json, llm json, created_at timestamp default now());
@@ -42,7 +53,8 @@ export async function audit(userId: string, action: string, detail: unknown) {
 
 export async function saveResult(conversationId: string, payload: { id: string }) {
   const db = await appDb();
-  await db.all(`insert or replace into results(id, conversation_id, payload) values (?, ?, ?)`, [payload.id, conversationId, JSON.stringify(payload)]);
+  await db.all(`delete from results where id = ?`, [payload.id]);
+  await db.all(`insert into results(id, conversation_id, payload) values (?, ?, ?)`, [payload.id, conversationId, JSON.stringify(payload)]);
 }
 export async function getResult(id: string) {
   const db = await appDb();

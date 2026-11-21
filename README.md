@@ -44,6 +44,8 @@ The sync is incremental. A spreadsheet whose Drive modified-time hasn't changed 
 
 You don't need Google access to get going: Settings › "Upload .xlsx exports" (or `npm run import -- <folder>`) loads exported workbooks. Each one is matched to its source automatically.
 
+**3. Database (Neon).** Set `DATABASE_URL` to your Neon Postgres connection string (`...?sslmode=require`). Users, conversations, saved executive reports and their layouts, performance reviews and AI commentary, report designs, preferences, admin configuration, brand knowledge notes and targets are then stored in Neon and survive redeploys. The schema is created automatically on start-up, and any data already in a local `data/app.duckdb` is copied across once (only into empty tables). Without `DATABASE_URL` everything stays in the local file. The synced studio data (warehouse) stays in local DuckDB and is rebuilt from Google Sheets.
+
 ## What's ingested, and what isn't
 
 | Workbook | Tabs used → model | Source of truth for |

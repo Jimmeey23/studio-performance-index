@@ -3,7 +3,7 @@
  * layout / styling choices. Re-opening a report never re-spends AI tokens;
  * only an explicit "fresh report" rebuilds data and commentary.
  */
-import { appDb, parseJson } from '../store/app.js';
+import { appDb, parseJson, ddl } from '../store/app.js';
 import type { Report } from './build.js';
 import { repairInsights, type ReportInsights } from './insights.js';
 
@@ -11,8 +11,8 @@ let ready = false;
 async function db() {
   const d = await appDb();
   if (!ready) {
-    await d.exec(`create table if not exists exec_reports(id varchar primary key, user_id varchar, req_key varchar, label varchar, scope varchar, data json, insights json, layout json, created_at timestamp default now(), updated_at timestamp default now());`);
-    await d.exec(`alter table exec_reports add column if not exists kind varchar default 'executive';`);
+    await ddl(d, `create table if not exists exec_reports(id varchar primary key, user_id varchar, req_key varchar, label varchar, scope varchar, data json, insights json, layout json, created_at timestamp default now(), updated_at timestamp default now());`);
+    await ddl(d, `alter table exec_reports add column if not exists kind varchar default 'executive';`);
     ready = true;
   }
   return d;
