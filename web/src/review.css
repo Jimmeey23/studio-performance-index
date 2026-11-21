@@ -546,3 +546,9 @@
   .epr-rv, .epr-build-in { filter: none !important; animation: none !important; }
   .epr-card, .epr-kpi, .epr-signals { break-inside: avoid; }
 }
+
+/* width guard: grids must never size to their widest table/chart */
+.epr-main, .epr-sec, .epr-feature, .epr-grid-1, .epr-land { grid-template-columns: minmax(0, 1fr); }
+.epr-main > *, .epr-sec > *, .epr-feature > *, .epr-grid-1 > *, .epr-grid-2 > *, .epr-split > *, .epr-close > *, .epr-analysis > *, .epr-signals > *, .epr-highlights > *, .epr-spot > *, .epr-formats > * { min-width: 0; }
+.epr-wrap { width: 100%; overflow-x: clip; }
+.epr-table, .epr-score-wrap, .epr-heat-wrap { max-width: 100%; overflow-x: auto; }
