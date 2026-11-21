@@ -10,9 +10,9 @@ import { usePolarity } from '../../lib/catalog';
 import { drillFor, useDrill } from '../../lib/drill';
 import { LIGHT_THEME } from '../../lib/echarts';
 import { ChartBlock, colorFor } from '../blocks/Charts';
-import { DEFAULT_LAYOUT, fmtDelta, fmtK, shortLabels, tone, type Kpi, type ReportData, type ReportInsights, type ReportLayout, type ReportPeriod, type ReportSection, type ReportTable } from '../../lib/report';
+import { DEFAULT_LAYOUT, fmtDelta, fmtK, shortLabels, tone, type Kpi, type ReportData, type ReportInsights, type ReportLayout, type ReportPeriod, type ReportSection, type ReportTable, type Spotlight } from '../../lib/report';
 import { ACCENTS, currentAccent, mix, type AccentPair } from '../../lib/theme';
-import { BRAND, coverPhotoFor, photoForSection } from '../../lib/brand';
+import { BRAND, coverPhotoFor, photoByKey, photoForSection } from '../../lib/brand';
 import type { ThemeColors } from '../../lib/echarts';
 
 const ICONS: Record<string, LucideIcon> = { IndianRupee, UserPlus, Megaphone, GraduationCap, CalendarRange, Shapes, UserMinus, CalendarX, Compass, Building2, Users, HeartPulse, Lightbulb, Trophy, MapPin, BookOpen, Target };
@@ -390,6 +390,34 @@ function Filler({ k, quote, P, L, label = 'In focus' }: { k?: Kpi; quote?: strin
   );
 }
 
+/** Reads a chart for the reader: latest, peak, low and average of its main series. */
+function ChartFacts({ c }: { c: ReportSection['charts'][number] }) {
+  const r = c.result;
+  const dim = r.columns.find((x) => x.kind === 'period') ?? r.columns.find((x) => x.kind === 'dimension' && x.key !== c.seriesBy);
+  const m = r.columns.find((x) => x.kind === 'metric' && (!c.y?.length || c.y.includes(x.key))) ?? r.columns.find((x) => x.kind === 'metric');
+  if (!dim || !m) return <div />;
+  const f = (m.format ?? 'number') as Format;
+  // series charts: total the metric per x value
+  const by = new Map<string, number>();
+  for (const row of r.rows) { const v = Number(row[m.key]); if (!isFinite(v)) continue; const k = String(row[dim.key] ?? '—'); by.set(k, (c.seriesBy && f !== 'percent' ? (by.get(k) ?? 0) : 0) + v); }
+  const pts = [...by.entries()];
+  if (pts.length < 2) return <div />;
+  const lab = (k: string) => (/^\d{4}-\d{2}/.test(k) ? fmtPeriod(k, 'month') : k);
+  const hi = pts.reduce((a, b) => (b[1] > a[1] ? b : a)), lo = pts.reduce((a, b) => (b[1] < a[1] ? b : a));
+  const time = /^\d{4}-\d{2}/.test(pts[0][0]);
+  const avg = pts.reduce((a, b) => a + b[1], 0) / pts.length;
+  const total = pts.reduce((a, b) => a + b[1], 0);
+  const rows: [string, string, string][] = time
+    ? [['Latest', lab(pts[pts.length - 1][0]), fmt(pts[pts.length - 1][1], f)], ['Peak', lab(hi[0]), fmt(hi[1], f)], ['Low', lab(lo[0]), fmt(lo[1], f)], ['Average', `${pts.length} months`, fmt(avg, f)]]
+    : [['Leader', hi[0], fmt(hi[1], f)], ...(f !== 'percent' && total ? [['Leader share', `of ${pts.length}`, `${((hi[1] / total) * 100).toFixed(0)}%`] as [string, string, string]] : []), ['Lowest', lo[0], fmt(lo[1], f)], ['Average', `${pts.length} items`, fmt(avg, f)]];
+  return (
+    <Panel title="Reading the chart" icon={TrendingUp} className="rp-tint rp-facts">
+      <div className="rp-facts-l">{m.label}</div>
+      {rows.map(([a, b, v]) => <div key={a} className="rp-facts-r"><span>{a}<em>{b}</em></span><b>{v}</b></div>)}
+    </Panel>
+  );
+}
+
 /* ═════════ pagination ═════════ */
 const PX = 96 / 25.4;
 const GAP_MM = { compact: 3.8, balanced: 5.2, airy: 6.8 };
@@ -409,7 +437,7 @@ function paginate(lps: LP[], hs: Heights, gap: number): Sheet[] {
     const contH = lp.cont ? hs[`${lp.key}/__cont`]?.h ?? 0 : 0;
     let pg = { idx: 0, items: [] as { key: string; zoom: number }[], used: 0, real: 0 };
     const flush = () => {
-      out.push({ lp: lp.key, idx: pg.idx, items: pg.items, filler: !!lp.fill && avail - pg.used > 26 * PX });
+      out.push({ lp: lp.key, idx: pg.idx, items: pg.items, filler: !!lp.fill && avail - pg.used > 44 * PX });
       pg = { idx: pg.idx + 1, items: lp.cont ? [{ key: '__cont', zoom: 1 }] : [], used: lp.cont ? contH : 0, real: 0 };
     };
     lp.blocks.forEach((b, i) => {
@@ -429,10 +457,21 @@ function paginate(lps: LP[], hs: Heights, gap: number): Sheet[] {
 
 const rgbOf = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ');
 export function reportAccent(l: ReportLayout): AccentPair { return l.accent === 'app' ? currentAccent() : ACCENTS.find((a) => a.name === l.accent) ?? currentAccent(); }
-/** Report charts use at most three accent hues — deep navy, brand blue and warm gold — with lighter tints for extra series. */
+/** Report charts use at most three hues drawn from the report's accent — a deep shade, the accent and warm gold — with lighter tints for extra series. */
 export const REPORT_PALETTE = ['#123a72', '#3fa9dc', '#c8a46a', '#6f8fbf', '#9fd6f0', '#e2cc9f', '#0a2148', '#2a7fb0'];
-export function reportChartTheme(_l: ReportLayout): ThemeColors {
-  return { ...LIGHT_THEME, accent: '#123a72', series: REPORT_PALETTE };
+export function reportChartTheme(l: ReportLayout): ThemeColors {
+  const a = reportAccent(l);
+  if (a.name === 'Physique 57') return { ...LIGHT_THEME, accent: '#123a72', series: REPORT_PALETTE };
+  const deep = mix(a.a, '#07081a', 0.45);
+  return { ...LIGHT_THEME, accent: deep, series: [deep, a.a, '#c8a46a', mix(a.b, '#ffffff', 0.15), mix(a.a, '#ffffff', 0.55), '#e2cc9f', mix(a.a, '#07081a', 0.7), mix(a.b, '#07081a', 0.25)] };
+}
+/** The layout with the AI's art direction applied — only where the reader hasn't set the option themselves. */
+export function designedLayout(l: ReportLayout, ins: ReportInsights | null): ReportLayout {
+  const d = l.autoDesign !== false ? ins?.design : undefined;
+  if (!d) return l;
+  const D = DEFAULT_LAYOUT;
+  const style = l.cover === D.cover && l.photos === D.photos ? (d.cover_style === 'photo' ? { photos: true } : { photos: false, cover: d.cover_style }) : {};
+  return { ...l, ...(l.accent === D.accent && ACCENTS.some((x) => x.name === d.accent) ? { accent: d.accent } : {}), ...style };
 }
 function paperVars(l: ReportLayout): CSSProperties {
   const a = reportAccent(l);
@@ -440,7 +479,7 @@ function paperVars(l: ReportLayout): CSSProperties {
   return {
     '--accent': a.a, '--violet': a.b, '--acc-rgb': rgbOf(a.a), '--rb-a': mix(a.a, '#ffffff', 0.35), '--rb-b': mix(a.b, '#ffffff', 0.3),
     '--navy': mix(a.a, '#07081a', 0.8), '--navy-2': mix(a.a, '#0b0c1e', 0.42), '--paper-tint': mix(a.a, '#ffffff', 0.955), '--acc-soft': mix(a.a, '#ffffff', 0.9),
-    '--grad': 'linear-gradient(130deg, #030a1a 0%, #071731 42%, #0b2550 78%, #123a72 100%)',
+    '--grad': a.name === 'Physique 57' ? 'linear-gradient(130deg, #030a1a 0%, #071731 42%, #0b2550 78%, #123a72 100%)' : `linear-gradient(130deg, ${mix(a.a, '#02030a', 0.92)} 0%, ${mix(a.a, '#05060f', 0.8)} 42%, ${mix(a.a, '#07081a', 0.62)} 78%, ${mix(a.a, '#07081a', 0.4)} 100%)`,
     '--gap': d[0], '--rowpad': d[1], '--pad': d[2],
     ...(l.headingFont === 'sans' ? { '--serif': 'var(--font-display)' } : {}),
   } as CSSProperties;
@@ -448,9 +487,16 @@ function paperVars(l: ReportLayout): CSSProperties {
 
 
 /* ═════════ document ═════════ */
-export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAYOUT }: { data: ReportData; insights: ReportInsights | null; aiLoading: boolean; layout?: ReportLayout }) {
+export function ReportDocument({ data: raw, insights, aiLoading, layout = DEFAULT_LAYOUT }: { data: ReportData; insights: ReportInsights | null; aiLoading: boolean; layout?: ReportLayout }) {
   const drill = useDrill();
-  const lay = layout;
+  const lay = designedLayout(layout, insights);
+  const design = layout.autoDesign !== false ? insights?.design : undefined;
+  // the AI tells the story in its own order (road ahead stays last); the reader's own reordering switches this off
+  const data = design?.section_order?.length ? { ...raw, sections: [...raw.sections].sort((a, b) => { const p = (id: string) => id === 'road' ? 999 : (design.section_order.indexOf(id) + 1 || 500); return p(a.id) - p(b.id); }) } : raw;
+  const condensed = new Set(design?.condense ?? []);
+  const chartAs = new Map((design?.chart_types ?? []).map((c) => [c.chart_id, c.chart as ReportSection['charts'][number]['chart']]));
+  const allCharts = new Map(data.sections.flatMap((s) => s.charts.map((c) => [c.id, c] as const)));
+  const allKpis = new Map([...data.scorecard, ...data.headline, ...data.sections.flatMap((s) => s.kpis)].map((k) => [k.id, k] as const));
   const theme = reportChartTheme(lay);
   const P = data.period;
   const L = shortLabels(P);
@@ -465,9 +511,22 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
   const fillFrom = (ks: Kpi[], quotes: (string | undefined)[], label = 'In focus') => (i: number) => { const m = movers(ks); return <Filler k={m[i % Math.max(1, m.length)] ?? ks[0]} quote={quotes.filter(Boolean)[i] ?? undefined} P={P} L={L} label={i ? 'Also worth watching' : label} />; };
   const B = (key: string, node: ReactNode, keep?: boolean): Blk => ({ key, node, keep });
   const kpiGrid = (ks: Kpi[], extra?: { dimension: string; values: string[] }[]) => <div className={clsx('rp-kpi-grid', lay.kpiCols === 3 ? 'g3' : lay.kpiCols === 4 ? 'g4' : ks.length > 6 || ks.length === 4 ? 'g4' : 'g3')}>{ks.map((k) => <KpiTile key={k.id} k={k} L={L} onDrill={kd(k, extra)} />)}</div>;
-  const chart = (c: ReportSection['charts'][number], h = 200) => {
+  const chart = (c0: ReportSection['charts'][number], h = 200) => {
+    const c = chartAs.has(c0.id) ? { ...c0, chart: chartAs.get(c0.id)! } : c0;
     const hh = c.chart === 'horizontal_bar' ? Math.min(300, Math.max(150, 40 + c.result.rows.length * 15)) : c.chart === 'pie' ? Math.min(h, 210) : h; // bars sized to their rows; pies kept round
     return <Panel key={c.id} title={c.title} className="rp-chart"><div data-chart-id={c.id}><ChartBlock result={c.result} chart={c.chart} seriesBy={c.seriesBy} y={c.y} height={hh} theme={theme} bare /></div></Panel>;
+  };
+  /** A lone chart is never stretched across the page: it sits beside a panel that reads it (peak, low, latest, average). */
+  const soloChart = (c: ReportSection['charts'][number], h = 200) => <div className="rp-grid-62">{chart(c, h)}<ChartFacts c={c} /></div>;
+  const spotBlock = (sp: Spotlight, i: number) => {
+    const c = sp.chart_id ? allCharts.get(sp.chart_id) : undefined;
+    const ks = sp.kpis.map((id) => allKpis.get(id)).filter((k): k is Kpi => !!k);
+    return B(`spot${i}`, <div className={clsx('rp-spotlight', sp.tone)}>
+      <div className="rp-spotlight-t"><div className="rp-kicker"><Sparkles size={10} />{sp.kicker}</div><h3>{sp.title}</h3><p><Figs text={sp.body} /></p>
+        {ks.length > 0 && <div className="rp-spotlight-k">{ks.map((k) => { const t = tone(k, k.chg); return <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(k.chg, k.format)} vs {L.prev}</em></div>; })}</div>}
+      </div>
+      {c && <div className="rp-spotlight-c">{chart(c, 190)}</div>}
+    </div>);
   };
   const isNarrow = (t: ReportTable) => t.result.columns.filter((c) => c.kind !== 'comparison').length <= 5 && t.result.columns.filter((c) => c.kind === 'dimension').length <= 1;
   /** Detail tables as blocks: wide tables alone, narrow ones paired side by side. */
@@ -559,18 +618,19 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
         {analysis}
         <Panel title={aiOn ? 'AI recommended actions' : 'Actions'} icon={Flag} className="rp-tint">{c?.actions?.length ? <Numbered items={c.actions} tone="gold" /> : aiLoading ? <Pending lines={3} /> : <p className="rp-narr muted">See the recommendations at the end of the report.</p>}</Panel>
       </div> : analysis)];
-    if (lay.detail) {
+    if (lay.detail && !condensed.has(s.id)) {
       const showFind = findings.length && (aiOn || !s.answer || findings.join() !== s.answer.points.join());
       if (showFind) blocks.push(B('find', <Panel title={aiOn ? 'AI findings' : 'Key findings'} icon={Lightbulb} className="rp-findings"><Numbered items={findings} /></Panel>));
       blocks.push(...tableBlocks('t', s.tables));
     }
+    (ins?.spotlights ?? []).forEach((sp, i) => { if (sp.section === s.id) blocks.push(spotBlock(sp, i)); });
     lps.push({ key: s.id, toc: s.title, blocks, cont: <MiniHead title={`${s.title} — continued`} sub={s.answer || s.id.startsWith('lead_channels') || s.id.startsWith('trainer_ranking') ? P.label : `${P.label}; Δ = change vs ${P.prevLabel}.`} icon={ICONS[s.icon]} />, fill: fillFrom(s.kpis, [findings[0], findings[1], c?.actions?.[0]]) });
   };
   const R = lay.tableRows;
   const builders: Record<string, (s: ReportSection) => void> = {
     sales: (s) => section(s, [B('kpis', kpiGrid(s.kpis)), B('charts', <div className="rp-grid-62">{chart(s.charts[0], 210)}{s.charts[1] && chart(s.charts[1], 210)}</div>)]),
-    new_clients: (s) => section(s, [B('kpis', kpiGrid(s.kpis)), B('viz', <div className="rp-grid-2">{s.visuals?.funnel && <Panel title="Newcomer journey" icon={UserPlus}><Funnel steps={s.visuals.funnel} /></Panel>}{s.charts[0] && chart(s.charts[0], 200)}</div>), ...(s.charts.length > 1 ? [B('charts2', <div className={clsx('rp-grid-2', s.charts.length === 2 && 'solo')}>{s.charts.slice(1, 3).map((c) => chart(c, 190))}</div>)] : [])]),
-    leads: (s) => section(s, [B('kpis', kpiGrid(s.kpis)), B('viz', <div className="rp-grid-2">{s.visuals?.funnel && <Panel title="Lead funnel" icon={Megaphone}><Funnel steps={s.visuals.funnel} /></Panel>}{s.charts[0] && chart(s.charts[0], 200)}</div>), ...(s.charts[1] ? [B('charts2', chart(s.charts[1], 190))] : [])]),
+    new_clients: (s) => section(s, [B('kpis', kpiGrid(s.kpis)), B('viz', <div className="rp-grid-2">{s.visuals?.funnel && <Panel title="Newcomer journey" icon={UserPlus}><Funnel steps={s.visuals.funnel} /></Panel>}{s.charts[0] && chart(s.charts[0], 200)}</div>), ...(s.charts.length > 1 ? [B('charts2', s.charts.length === 2 ? soloChart(s.charts[1], 200) : <div className="rp-grid-2">{s.charts.slice(1, 3).map((c) => chart(c, 190))}</div>)] : [])]),
+    leads: (s) => section(s, [B('kpis', kpiGrid(s.kpis)), B('viz', <div className="rp-grid-2">{s.visuals?.funnel && <Panel title="Lead funnel" icon={Megaphone}><Funnel steps={s.visuals.funnel} /></Panel>}{s.charts[0] && chart(s.charts[0], 200)}</div>), ...(s.charts[1] ? [B('charts2', soloChart(s.charts[1], 200))] : [])]),
     trainers: (s) => section(s, [B('kpis', kpiGrid(s.kpis)),
       ...(s.visuals?.spotlight?.length ? [B('spot', <div className="rp-spot">{s.visuals.spotlight.map((t, i) => (
         <div key={t.name} className={clsx('rp-spot-c', `r${i + 1}`)}><div className="rp-medal"><Trophy size={13} /><span>#{i + 1}</span></div><div className="nm">{t.name}</div>
@@ -595,11 +655,11 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
             })}</tbody></table>
           </div>
         );
-      })}</div>), B('charts', <div className={clsx('rp-grid-2', s.charts.length === 1 && 'solo')}>{s.charts.map((c) => chart(c, 180))}</div>)]);
+      })}</div>), B('charts', s.charts.length === 1 ? soloChart(s.charts[0], 200) : <div className="rp-grid-2">{s.charts.map((c) => chart(c, 180))}</div>)]);
     },
     churn: (s) => section(s, [B('kpis', kpiGrid(s.kpis)),
       ...(s.visuals?.strict ? [B('strict', <div className="rp-note"><b>Strict renewal rate</b> (membership / package repurchased within 30 days of expiry): <b>{fmt(s.visuals.strict.renewal_rate, 'percent')}</b> — {s.visuals.strict.renewed} renewed of {Number(s.visuals.strict.expiring) - Number(s.visuals.strict.pending)} closed windows, {s.visuals.strict.pending} still open. Zero-value and non-recurring memberships are excluded.</div>)] : []),
-      B('charts', <div className={clsx('rp-grid-2', s.charts.length === 1 && 'solo')}>{s.charts.map((c) => chart(c, 190))}</div>)]),
+      B('charts', s.charts.length === 1 ? soloChart(s.charts[0], 200) : <div className="rp-grid-2">{s.charts.map((c) => chart(c, 190))}</div>)]),
     late: (s) => section(s, [B('kpis', kpiGrid(s.kpis)), B('charts', <div className="rp-grid-62">{s.charts[0] && chart(s.charts[0], 200)}{s.charts[1] && chart(s.charts[1], 200)}</div>)]),
     road: (s) => {
       const ra = ins?.road_ahead;
@@ -638,10 +698,10 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
     ...(s.notes?.length ? [B('notes', <div className="rp-note rp-brief-note">{s.notes.map((x, i) => <div key={i}>{x}</div>)}</div>)] : []),
     ...(s.kpis.length ? [B('kpis', kpiGrid(s.kpis))] : []),
     ...(s.visuals?.funnel ? [B('funnel', <div className="rp-grid-2"><Panel title="Lead funnel" icon={Megaphone}><Funnel steps={s.visuals.funnel} /></Panel>{s.charts[0] && chart(s.charts[0], 205)}</div>)] : []),
-    ...(s.visuals?.funnel ? (s.charts.length > 1 ? [B('charts', <div className="rp-grid-2 solo">{chart(s.charts[1], 230)}</div>)] : [])
-      : s.charts.length ? [B('charts', <div className={clsx(s.charts.length > 1 ? 'rp-grid-62' : s.charts[0].chart === 'pie' ? 'rp-grid-2' : 'rp-grid-2 solo')}>{s.charts.slice(0, 2).map((c) => chart(c, 205))}</div>)] : []),
+    ...(s.visuals?.funnel ? (s.charts.length > 1 ? [B('charts', soloChart(s.charts[1], 210))] : [])
+      : s.charts.length ? [B('charts', s.charts.length > 1 ? <div className="rp-grid-62">{s.charts.slice(0, 2).map((c) => chart(c, 205))}</div> : soloChart(s.charts[0], 210))] : []),
     ...(s.visuals?.trainers?.length ? [B('profiles', <TrainerCards ts={s.visuals.trainers} />)] : []),
-    ...(!s.visuals?.funnel && s.charts.length > 2 ? [B('charts2', <div className={clsx('rp-grid-2', s.charts.length === 3 && 'solo')}>{s.charts.slice(2, 4).map((c) => chart(c, 190))}</div>)] : []),
+    ...(!s.visuals?.funnel && s.charts.length > 2 ? [B('charts2', s.charts.length === 3 ? soloChart(s.charts[2], 200) : <div className="rp-grid-2">{s.charts.slice(2, 4).map((c) => chart(c, 190))}</div>)] : []),
     ...(s.definitions?.length ? [B('defs', <Panel title="Definitions" icon={BookOpen} className="rp-tint"><div className="rp-defs-list">{s.definitions.map((d) => <div key={d.term}><b>{d.term}</b><DefText text={d.text} /></div>)}</div></Panel>)] : []),
   ]);
   for (const s of data.sections) (builders[s.id] ?? generic)(s);
@@ -715,7 +775,7 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
   const cover = lay.pages.cover && (
     <section className="a4 a4-bleed" data-page={1}><div className="a4-inner">
       <div className={clsx('rp-cover', lay.photos ? 'has-photo' : lay.cover)}>
-        {lay.photos && <img className="rp-cover-bg" src={coverPhotoFor(custom ? data.sections[0]?.id ?? 'cover' : 'cover')} alt="" />}
+        {lay.photos && <img className="rp-cover-bg" src={design?.cover_photo ? photoByKey(design.cover_photo) : coverPhotoFor(custom ? data.sections[0]?.id ?? 'cover' : 'cover')} alt="" />}
         {lay.photos && <div className="rp-cover-shade" />}
         {!lay.photos && lay.cover !== 'minimal' && <Ribbons />}
         {!lay.photos && lay.cover !== 'minimal' && <div className="rp-cover-57">57</div>}
@@ -730,7 +790,7 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
         </div>
         <div className="rp-cover-quote"><Sparkles size={13} />{ins ? <p>{ins.headline}</p> : <div className="flex-1 opacity-60"><Pending lines={2} /></div>}</div>
         <div className="rp-cover-kpis">
-          {data.headline.slice(0, 4).map((k) => {
+          {(design?.cover_kpis?.length ? [...design.cover_kpis.map((id) => allKpis.get(id)).filter((k): k is Kpi => !!k), ...data.headline.filter((k) => !design.cover_kpis.includes(k.id))] : data.headline).slice(0, 4).map((k) => {
             const t = tone(k, k.chg);
             return (
               <div key={k.id} className="rp-cover-kpi">
@@ -760,7 +820,8 @@ export function ReportDocument({ data, insights, aiLoading, layout = DEFAULT_LAY
                 const node = it.key === '__cont' ? lp.cont : blk.get(it.key)?.node;
                 return node ? <div key={it.key} className="rp-blk" style={it.zoom < 0.999 ? { zoom: it.zoom } : undefined}>{node}</div> : null;
               })}
-              {sh.filler && lp.fill ? lp.fill(sh.idx) : <div className="rp-fill-spacer" />}
+              {sh.filler && lp.fill && lp.fill(sh.idx)}
+              <div className="rp-fill-spacer" />
             </Page>
           );
         })}

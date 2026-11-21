@@ -32,8 +32,14 @@ export interface ReportInsights {
   themes: { title: string; detail: string }[]; sections: Record<string, SectionCommentary>;
   road_ahead: { summary: string; priorities: Priority[]; risks: string[]; opportunities: string[]; targets: { metric: string; target: string; rationale: string }[] };
   recommendations?: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; impact?: string }[];
+  design?: ReportDesign; spotlights?: Spotlight[];
   model?: string; source: 'ai' | 'rules'; verification?: { checked: number; unmatched: string[] };
 }
+export interface ReportDesign {
+  mood: 'momentum' | 'steady' | 'caution' | 'recovery' | 'turnaround'; accent: string; cover_photo: string; cover_style: 'photo' | 'gradient' | 'light';
+  section_order: string[]; condense: string[]; cover_kpis: string[]; chart_types: { chart_id: string; chart: string }[]; rationale?: string;
+}
+export interface Spotlight { section: string; kicker: string; title: string; body: string; chart_id?: string; kpis: string[]; tone: 'good' | 'bad' | 'neutral' }
 /** Short baseline labels for tight spaces: "Sep-26", "'26 avg", "Oct-25". */
 export function shortLabels(p: ReportPeriod) {
   const sh = (l: string) => l.replace(/-(\d{2})(\d{2})\b/g, '-$2');
@@ -70,13 +76,15 @@ export interface ReportLayout {
   photos: boolean;                   // Physique 57 studio photography on the cover and section bands
   tableRows: number;
   title: string; subtitle: string; preparedFor: string;
+  /** let the AI art-direct the report: palette, cover, section order, condensed sections, chart forms */
+  autoDesign: boolean;
   v?: number;
 }
 export const SECTION_IDS = ['sales', 'new_clients', 'leads', 'trainers', 'classes', 'formats', 'churn', 'late', 'studios', 'associates', 'clients', 'road'];
 export const DEFAULT_LAYOUT: ReportLayout = {
   accent: 'Physique 57', cover: 'gradient', headingFont: 'sans', density: 'balanced', kpiCols: 'auto', sparklines: true,
   cmp: { prev: true, ytd: true, ly: true }, order: SECTION_IDS, hidden: [], detail: true,
-  pages: { cover: true, exec: true, score: true, mom: true, defs: true }, fillers: true, photos: true, v: 3, tableRows: 10, title: '', subtitle: '', preparedFor: '',
+  pages: { cover: true, exec: true, score: true, mom: true, defs: true }, fillers: true, photos: true, v: 3, tableRows: 10, title: '', subtitle: '', preparedFor: '', autoDesign: true,
 };
 export function normLayout(x: unknown): ReportLayout {
   const l = { ...(x && typeof x === 'object' ? x : {}) } as Partial<ReportLayout> & { v?: number };

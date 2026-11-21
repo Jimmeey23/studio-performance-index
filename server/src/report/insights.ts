@@ -29,8 +29,23 @@ export interface ReportInsights {
   };
   /** recommendations & suggestions shown on their own page */
   recommendations: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; impact?: string }[];
+  /** art direction: the model shapes the look and structure of this report from its story */
+  design?: ReportDesign;
+  /** model-composed deep-dive panels, each anchored to a section */
+  spotlights?: Spotlight[];
   model?: string; verification?: { checked: number; unmatched: string[] }; source: 'ai' | 'rules';
 }
+export const MOODS = ['momentum', 'steady', 'caution', 'recovery', 'turnaround'] as const;
+export const DESIGN_ACCENTS = ['Physique 57', 'Indigo', 'Emerald', 'Rose', 'Ocean', 'Violet', 'Amber', 'Teal', 'Fuchsia', 'Cobalt', 'Coral'] as const;
+export const COVER_PHOTOS = ['barre-group', 'cycle-group', 'studio-barre', 'strength-kettlebell', 'cycle-ride', 'trainers-pair', 'strength-lunge', 'cycle-mono', 'trainers-duo'] as const;
+export const CHART_TYPES = ['bar', 'line', 'area', 'stacked_bar', 'pie', 'horizontal_bar'] as const;
+export interface ReportDesign {
+  mood: typeof MOODS[number]; accent: string; cover_photo: string; cover_style: 'photo' | 'gradient' | 'light';
+  section_order: string[]; condense: string[]; cover_kpis: string[];
+  chart_types: { chart_id: string; chart: typeof CHART_TYPES[number] }[];
+  rationale?: string;
+}
+export interface Spotlight { section: string; kicker: string; title: string; body: string; chart_id?: string; kpis: string[]; tone: 'good' | 'bad' | 'neutral' }
 
 const SECTION_IDS = ['sales', 'new_clients', 'leads', 'trainers', 'classes', 'formats', 'churn', 'late', 'studios', 'associates', 'clients'];
 /** Section ids that need commentary in this report (custom reports cover only some). */
@@ -42,7 +57,26 @@ const sectionSchema = { type: 'object', properties: {
   actions: { type: 'array', items: { type: 'string' }, description: '2–3 concrete actions for this area.' },
 }, required: ['headline', 'narrative', 'findings', 'actions'] };
 
-const toolFor = (ids: string[]): Anthropic.Tool => ({
+const designSchema = (ids: string[], charts: string[], kpis: string[]) => ({ type: 'object', description: 'Art direction for THIS report, chosen from its story. Vary it: no two periods should look alike.', properties: {
+  mood: { type: 'string', enum: [...MOODS], description: 'The overall tone of the period.' },
+  accent: { type: 'string', enum: [...DESIGN_ACCENTS], description: 'Accent palette that suits the mood (e.g. Emerald/Teal for momentum, Amber/Coral for caution, Cobalt/Ocean for steady, Violet/Indigo for turnaround).' },
+  cover_photo: { type: 'string', enum: [...COVER_PHOTOS], description: 'Studio photograph that best fits the lead story (cycle = powerCycle, barre, strength = Strength Lab, trainers = people stories).' },
+  cover_style: { type: 'string', enum: ['photo', 'gradient', 'light'] },
+  section_order: { type: 'array', items: { type: 'string', enum: ids }, description: 'Sections in the order the story should be told — the most important first. Include every section.' },
+  condense: { type: 'array', items: { type: 'string', enum: ids }, description: 'Sections with little news this period — shown briefly, without detail tables. 0–4 ids.' },
+  cover_kpis: { type: 'array', items: { type: 'string', enum: kpis }, description: 'Exactly 4 metric ids for the cover — the ones that tell this period\'s story.' },
+  chart_types: { type: 'array', description: 'Optional: change how a chart is drawn when another form reads better (e.g. a 14-month series as line/area, a share as pie, a long category list as horizontal_bar).', items: { type: 'object', properties: { chart_id: { type: 'string', enum: charts.length ? charts : ['none'] }, chart: { type: 'string', enum: [...CHART_TYPES] } }, required: ['chart_id', 'chart'] } },
+  rationale: { type: 'string', description: 'One sentence on why this direction.' },
+}, required: ['mood', 'accent', 'cover_photo', 'cover_style', 'section_order', 'condense', 'cover_kpis'] });
+const spotlightSchema = (ids: string[], charts: string[], kpis: string[]) => ({ type: 'array', description: '1–3 deep-dive spotlights on the most important stories of the period — the ones a fixed template would miss (a connection across areas, an outlier, an inflection). Each is placed at the end of its section.', items: { type: 'object', properties: {
+  section: { type: 'string', enum: ids }, kicker: { type: 'string', description: '2–4 words, e.g. "Hidden driver".' }, title: { type: 'string', description: 'Punchy headline with the key number.' },
+  body: { type: 'string', description: '60–90 words of analysis with figures from the digest.' },
+  chart_id: { type: 'string', enum: charts.length ? charts : ['none'], description: 'Optional chart that best evidences the story.' },
+  kpis: { type: 'array', items: { type: 'string', enum: kpis }, description: '0–3 metric ids to show beside it.' },
+  tone: { type: 'string', enum: ['good', 'bad', 'neutral'] },
+}, required: ['section', 'kicker', 'title', 'body', 'kpis', 'tone'] } });
+
+const toolFor = (ids: string[], charts: string[] = [], kpis: string[] = []): Anthropic.Tool => ({
   name: 'write_report',
   description: 'Write the senior-management commentary for the executive report.',
   input_schema: {
@@ -57,6 +91,8 @@ const toolFor = (ids: string[]): Anthropic.Tool => ({
       sections: { type: 'object', description: `Commentary per section id: ${ids.join(', ')}.`, properties: Object.fromEntries(ids.map((id) => [id, sectionSchema])), required: ids },
       recommendations: { type: 'array', description: '5–8 specific, evidence-based recommendations and suggestions for the reader, each naming who should act. In a trainer report, most should name individual trainers.', items: { type: 'object', properties: {
         title: { type: 'string' }, detail: { type: 'string', description: 'What to do, why (cite the figure) and how.' }, owner: { type: 'string' }, priority: { type: 'string', enum: ['high', 'medium', 'low'] }, impact: { type: 'string', description: 'Expected effect, clearly an estimate.' } }, required: ['title', 'detail', 'owner', 'priority'] } },
+      design: designSchema(ids, charts, kpis),
+      spotlights: spotlightSchema(ids, charts, kpis),
       road_ahead: { type: 'object', properties: {
         summary: { type: 'string', description: '70–100 words: outlook for next month using the forecasts, renewals due and pipeline.' },
         priorities: { type: 'array', description: '5–7 prioritised actions for next month.', items: { type: 'object', properties: {
@@ -68,7 +104,7 @@ const toolFor = (ids: string[]): Anthropic.Tool => ({
         targets: { type: 'array', description: '4–6 suggested targets for next month.', items: { type: 'object', properties: { metric: { type: 'string' }, target: { type: 'string' }, rationale: { type: 'string' } }, required: ['metric', 'target', 'rationale'] } },
       }, required: ['summary', 'priorities', 'risks', 'opportunities', 'targets'] },
     },
-    required: ['headline', 'executive_summary', 'at_a_glance', 'wins', 'watch_outs', 'themes', 'sections', 'recommendations', 'road_ahead'],
+    required: ['headline', 'executive_summary', 'at_a_glance', 'wins', 'watch_outs', 'themes', 'sections', 'recommendations', 'road_ahead', 'design', 'spotlights'],
   },
 });
 /** Pull a JSON object out of a text reply (used when a model answers in text instead of calling the tool). */
@@ -114,6 +150,7 @@ export function digest(r: Report): string {
     }
     if (v?.forecasts) v.forecasts.forEach((f) => L.push(`  FORECAST ${f.label} ${f.month}: ${fmtVal(f.value, f.format)} (80% range ${fmtVal(f.lo, f.format)}–${fmtVal(f.hi, f.format)}, ${f.method ?? 'model'})`));
     if (v?.pipeline) v.pipeline.forEach((p) => L.push(`  PIPELINE ${p.label}: ${fmtVal(p.value, p.format)} (${p.note})`));
+    for (const c of s.charts) L.push(`  CHART ${c.id} [${c.chart}] "${c.title}" (${c.result.rows.length} points)`);
     for (const t of s.tables) L.push(tableLines(t));
     s.insights.forEach((x) => L.push(`  NOTE ${x}`));
   }
@@ -130,6 +167,7 @@ Rules:
 - Connect areas: e.g. leads up but conversion down; fill up but late cancels up; renewals vs churn value.
 - Mind polarity: for metrics marked [lower is better], a decrease is good.
 - Write for a CEO: elegant, crisp, confident, British/Indian English, no jargon, no emojis, no markdown.
+- You are also the report's editor and art director: order the sections so the story leads with what matters most this period, condense quiet areas, pick the cover metrics, palette and photograph that fit the mood, re-draw charts where another form reads better, and add spotlights for the stories a fixed template would miss.
 Call write_report exactly once.`;
 
 const AUD: Record<string, string> = { leadership: 'the leadership team (CEO / founders)', managers: 'studio managers, who need operational, studio-floor actions', sales: 'the sales and client-services team, who need client-facing, conversion and renewal actions', investors: 'investors and partners — strategic, measured and concise' };
@@ -154,7 +192,7 @@ export async function generateInsights(r: Report, tier: Tier = 'balanced'): Prom
   while (order.length) {
     const model = MODELS[order[0]];
     try {
-      const tool = toolFor(idsOf(r));
+      const tool = toolFor(idsOf(r), chartIds(r), kpiIds(r));
       const content = `${brief(r)}Write the commentary for this report by calling the write_report tool exactly once.\n\n${digest(r)}`;
       // think first (auto tool choice — thinking can't be combined with a forced tool), then forced, then auto.
       // Always streamed: long thinking + a long tool call can exceed the SDK's non-streaming limit.
@@ -206,8 +244,8 @@ export async function generateInsights(r: Report, tier: Tier = 'balanced'): Prom
  * Models occasionally return a nested field as a JSON-encoded string ("[{...}]") or a single item where a list
  * is expected. Repair those shapes so the report never receives a string where it needs a list or object.
  */
-const LISTS = new Set(['at_a_glance', 'wins', 'watch_outs', 'themes', 'recommendations', 'priorities', 'risks', 'opportunities', 'targets', 'findings', 'actions']);
-const OBJECTS = new Set(['sections', 'road_ahead', 'verification']);
+const LISTS = new Set(['at_a_glance', 'wins', 'watch_outs', 'themes', 'recommendations', 'priorities', 'risks', 'opportunities', 'targets', 'findings', 'actions', 'spotlights', 'section_order', 'condense', 'cover_kpis', 'chart_types', 'kpis']);
+const OBJECTS = new Set(['sections', 'road_ahead', 'verification', 'design']);
 export function repairInsights<T>(v: T, key = ''): T {
   let x: unknown = v;
   if (typeof x === 'string' && (LISTS.has(key) || OBJECTS.has(key))) {
@@ -237,8 +275,50 @@ function normalise(raw: Partial<ReportInsights>, r: Report): ReportInsights {
     themes: o.themes?.length ? o.themes : fb.themes, sections, recommendations: o.recommendations?.length ? o.recommendations : fb.recommendations,
     road_ahead: { summary: ra?.summary ?? fb.road_ahead.summary, priorities: ra?.priorities?.length ? ra.priorities : fb.road_ahead.priorities,
       risks: ra?.risks ?? fb.road_ahead.risks, opportunities: ra?.opportunities ?? fb.road_ahead.opportunities, targets: ra?.targets ?? fb.road_ahead.targets },
+    design: cleanDesign(o.design, r) ?? fb.design, spotlights: cleanSpotlights(o.spotlights, r),
     source: 'ai',
   };
+}
+const chartIds = (r: Report) => r.sections.flatMap((s) => s.charts.map((c) => c.id));
+const kpiIds = (r: Report) => [...new Set([...r.scorecard, ...r.headline, ...r.sections.flatMap((s) => s.kpis)].map((k) => k.id))];
+const pick = <T extends string>(v: unknown, ok: readonly T[], fb: T): T => (ok.includes(v as T) ? (v as T) : fb);
+function cleanDesign(d: Partial<ReportDesign> | undefined, r: Report): ReportDesign | undefined {
+  if (!d || typeof d !== 'object') return undefined;
+  const ids = idsOf(r), charts = new Set(chartIds(r)), kpis = new Set(kpiIds(r));
+  const base = seededDesign(r);
+  const arr = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string') : []);
+  const order = [...new Set(arr(d.section_order).filter((x) => ids.includes(x)))];
+  return {
+    mood: pick(d.mood, MOODS, base.mood), accent: pick(d.accent, DESIGN_ACCENTS, base.accent), cover_photo: pick(d.cover_photo, COVER_PHOTOS, base.cover_photo),
+    cover_style: pick(d.cover_style, ['photo', 'gradient', 'light'] as const, base.cover_style),
+    section_order: [...order, ...ids.filter((x) => !order.includes(x))],
+    condense: arr(d.condense).filter((x) => ids.includes(x)).slice(0, 4),
+    cover_kpis: arr(d.cover_kpis).filter((x) => kpis.has(x)).slice(0, 4),
+    chart_types: (Array.isArray(d.chart_types) ? d.chart_types : []).filter((c) => c && charts.has(c.chart_id) && (CHART_TYPES as readonly string[]).includes(c.chart)),
+    rationale: typeof d.rationale === 'string' ? d.rationale : undefined,
+  };
+}
+function cleanSpotlights(x: unknown, r: Report): Spotlight[] {
+  if (!Array.isArray(x)) return [];
+  const ids = idsOf(r), charts = new Set(chartIds(r)), kpis = new Set(kpiIds(r));
+  return x.filter((s) => s && typeof s.title === 'string' && typeof s.body === 'string').slice(0, 3).map((s) => ({
+    section: ids.includes(s.section) ? s.section : ids[0] ?? 'exec', kicker: String(s.kicker ?? 'Spotlight'), title: s.title, body: s.body,
+    chart_id: charts.has(s.chart_id) ? s.chart_id : undefined, kpis: (Array.isArray(s.kpis) ? s.kpis : []).filter((k: string) => kpis.has(k)).slice(0, 3),
+    tone: pick(s.tone, ['good', 'bad', 'neutral'] as const, 'neutral'),
+  }));
+}
+/** Rule-based art direction so even reports without AI vary with their data: mood from the headline movers, the rest seeded by the report. */
+function seededDesign(r: Report): ReportDesign {
+  const h = [...`${r.id}|${r.period.start}|${r.scope}`].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const moves = r.headline.filter((k) => k.chg !== null && k.higherIsBetter !== undefined).map((k) => ((k.chg! > 0) === k.higherIsBetter ? 1 : -1));
+  const net = moves.reduce((a, b) => a + b, 0);
+  const mood: ReportDesign['mood'] = net >= 3 ? 'momentum' : net <= -3 ? 'caution' : net > 0 ? 'recovery' : net < 0 ? 'turnaround' : 'steady';
+  const pal: Record<string, string[]> = { momentum: ['Emerald', 'Teal', 'Physique 57'], steady: ['Physique 57', 'Cobalt', 'Ocean'], caution: ['Amber', 'Coral', 'Rose'], recovery: ['Teal', 'Ocean', 'Cobalt'], turnaround: ['Indigo', 'Violet', 'Fuchsia'] };
+  const lead = r.sections.find((s) => s.id !== 'road')?.id ?? '';
+  const photos: string[] = /trainer|associate/.test(lead) ? ['trainers-pair', 'trainers-duo'] : /lead|clients|new_clients/.test(lead) ? ['cycle-group', 'barre-group', 'cycle-ride'] : [...COVER_PHOTOS];
+  const ids = idsOf(r);
+  return { mood, accent: pal[mood][h % 3], cover_photo: photos[(h >> 3) % photos.length], cover_style: (['photo', 'photo', 'gradient', 'light'] as const)[(h >> 6) % 4],
+    section_order: ids, condense: [], cover_kpis: [], chart_types: [] };
 }
 
 /** Deterministic commentary when the AI engine isn't configured (or as a fallback). */
@@ -303,6 +383,7 @@ function rulesBase(r: Report): ReportInsights {
       priorities: recs, risks: r.autoInsights.concerns.slice(0, 3), opportunities: r.autoInsights.highlights.slice(0, 3),
       targets: r.scorecard.filter((x) => ['revenue', 'new_clients', 'conversion_rate', 'fill_rate'].includes(x.id)).map((x) => ({ metric: x.label, target: `≥ ${fmtVal(x.ytd !== null && x.value !== null ? Math.max(x.ytd, x.value) : x.value, x.format)}`, rationale: `Hold the better of ${P.label} and the ${P.ytdLabel}.` })),
     },
+    design: seededDesign(r), spotlights: [],
     source: 'rules',
   };
 }
