@@ -20,7 +20,7 @@ import { buildDashboard } from './ai/dashboard.js';
 import { buildReport, getReport, ReportRequestSchema, TOPICS } from './report/build.js';
 import * as reportStore from './report/store.js';
 import { generateInsights, rulesInsights } from './report/insights.js';
-import { buildReview, writeGlance, writeSection, planReview, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
+import { buildReview, writeGlance, writeSection, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
@@ -240,27 +240,8 @@ app.get('/api/review/:id', wrap(async (req, res) => {
   res.json(s);
 }));
 app.delete('/api/review/:id', wrap(async (req, res) => { await reviewStore.remove(req.user!.id, String(req.params.id)); res.json({ ok: true }); }));
-const reviewLocks = new Map<string, Promise<unknown>>();
-/** The AI thinks over the whole review and commits to a plan first; thinking is streamed live (SSE). */
-app.post('/api/review/:id/plan', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache, no-transform'); res.setHeader('Connection', 'keep-alive'); res.flushHeaders();
-  const emit = (e: Record<string, unknown>) => res.write(`data: ${JSON.stringify(e)}\n\n`);
-  const ping = setInterval(() => res.write(': ping\n\n'), 15000);
-  try {
-    const uid = req.user!.id; const id = String(req.params.id);
-    const first = await reviewStore.byId(uid, id);
-    if (!first) emit({ type: 'error', message: 'Review not found' });
-    else if (first.ai.plan && !req.body?.fresh) emit({ type: 'plan', plan: first.ai.plan, cached: true });
-    else {
-      const plan = await planReview(first.review, (d) => emit({ type: 'thinking', delta: d }));
-      const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => { const cur = (await reviewStore.byId(uid, id))!; await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, plan }); });
-      reviewLocks.set(id, run.catch(() => {})); await run;
-      emit({ type: 'plan', plan });
-    }
-  } catch (e) { emit({ type: 'error', message: (e as Error).message }); }
-  clearInterval(ping); res.end();
-});
 /** AI commentary per part ('glance' or a section id): written once and reused; `fresh` rewrites that part only. */
+const reviewLocks = new Map<string, Promise<unknown>>();
 app.post('/api/review/:id/ai', wrap(async (req, res) => {
   const uid = req.user!.id; const id = String(req.params.id); const part = String(req.body?.part ?? '');
   const tier = ['fast', 'balanced', 'deep'].includes(req.body?.tier) ? req.body.tier : 'balanced';
@@ -268,7 +249,7 @@ app.post('/api/review/:id/ai', wrap(async (req, res) => {
   if (!first) return res.status(404).json({ error: 'Review not found' });
   const have = part === 'glance' ? first.ai.glance : first.ai.sections?.[part];
   if (have && !req.body?.fresh && have.source === 'ai') return res.json({ part, content: have, cached: true });
-  const content = part === 'glance' ? await writeGlance(first.review, tier, first.ai.plan) : await writeSection(first.review, part, tier, first.ai.plan);
+  const content = part === 'glance' ? await writeGlance(first.review, tier) : await writeSection(first.review, part, tier);
   // serialise writes per review: parts are generated in parallel but merged one at a time
   const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
     const cur = (await reviewStore.byId(uid, id))!; const ai: ReviewAI = { ...cur.ai, sections: cur.ai.sections ?? {} };

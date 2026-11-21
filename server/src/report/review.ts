@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { MODELS, fallbackOrder, type Tier } from '../ai/router.js';
-import { isNotFound, markMissing, thinkParams, noteThinkingError } from '../ai/models.js';
+import { isNotFound, markMissing } from '../ai/models.js';
 import { verifyNarrative } from '../ai/verify.js';
 import { runMetricsQuery } from '../semantic/engine.js';
 import { log } from '../util/log.js';
@@ -35,7 +35,7 @@ export const REVIEW_SECTIONS = [
 ] as const;
 export type ReviewSectionId = typeof REVIEW_SECTIONS[number]['id'];
 
-export interface ReviewList { id: string; title: string; metric: string; format: string; dimension: string; metricKey?: string; dimKey?: string; top: { name: string; value: number | null; sub?: string }[]; bottom: { name: string; value: number | null; sub?: string }[] }
+export interface ReviewList { id: string; title: string; metric: string; format: string; dimension: string; top: { name: string; value: number | null; sub?: string }[]; bottom: { name: string; value: number | null; sub?: string }[] }
 export interface ReviewSection {
   id: ReviewSectionId; title: string; icon: string; lead: string; kicker: string;
   kpis: Kpi[]; charts: ReportChart[]; tables: ReportTable[];
@@ -58,9 +58,7 @@ export interface Review {
 /* ── AI commentary (stored per part) ── */
 export interface ReviewSectionAI { headline: string; summary: string; insights: string[]; findings: string[]; recommendations: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low' }[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
 export interface ReviewGlanceAI { headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
-/** The AI's plan for the whole review, written (after thinking) before any commentary. */
-export interface ReviewPlan { storyline: string; headline: string; themes: string[]; sections: { id: string; angle: string; focus: string[] }[]; thinking?: string; model?: string; source: 'ai' | 'rules'; at: string }
-export interface ReviewAI { plan?: ReviewPlan; glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; verification?: { checked: number; unmatched: string[] } }
+export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; verification?: { checked: number; unmatched: string[] } }
 
 const cache = new Map<string, { review: Review; report: Report }>();
 export const getReview = (id: string) => cache.get(id);
@@ -114,7 +112,7 @@ function listFrom(t: ReportTable | undefined, title: string, sub?: string): Revi
   const rows = r.rows.filter((x) => isFinite(Number(x[m.key]))).map((x) => ({ name: String(x[dim.key]), value: Number(x[m.key]), sub: s ? `${s.label} ${fmtVal(Number(x[s.key]), s.format ?? 'number')}` : undefined }));
   if (rows.length < 2) return null;
   const sorted = [...rows].sort((a, b) => b.value - a.value);
-  return { id: t.id, title, metric: m.label, format: m.format ?? 'number', dimension: dim.label, metricKey: m.key, dimKey: dim.key, top: sorted.slice(0, 5), bottom: sorted.slice(-5).reverse() };
+  return { id: t.id, title, metric: m.label, format: m.format ?? 'number', dimension: dim.label, top: sorted.slice(0, 5), bottom: sorted.slice(-5).reverse() };
 }
 
 async function trainerCharts(req: ReviewRequest): Promise<ReportChart[]> {
@@ -223,28 +221,7 @@ function glanceDigest(rv: Review) {
   if (rv.studios) L.push(`STUDIOS: ${tLines(rv.studios)}`);
   return L.join('\n');
 }
-const noteItem = { type: 'object', properties: {
-  reading: { type: 'string', description: 'What the visual shows: the main pattern with its key figures (1–2 sentences).' },
-  driver: { type: 'string', description: 'Why: the driver behind it — volume vs rate, mix, timing, a named entity, sample size (1–2 sentences).' },
-  implication: { type: 'string', description: 'So what: what it means for the business, with the size of the prize or risk (1 sentence).' },
-  action: { type: 'string', description: 'Now what: one concrete next step and who owns it (1 sentence).' },
-}, required: ['reading', 'driver', 'implication', 'action'] };
-const notesSchema = (ids: string[]) => ({ type: 'object', description: 'A detailed "What this tells us" note for EVERY chart/table id (70–120 words in total per note).', properties: Object.fromEntries(ids.map((id) => [id, noteItem])), required: ids });
-/** Structured notes are stored as labelled lines so older string notes keep working. */
-const NOTE_LABELS: [string, string][] = [['reading', 'What it shows'], ['driver', 'Why'], ['implication', 'So what'], ['action', 'Next step']];
-function noteText(v: unknown): string | null {
-  if (typeof v === 'string') return v;
-  if (!v || typeof v !== 'object') return null;
-  const o = v as Record<string, unknown>;
-  const lines = NOTE_LABELS.filter(([k]) => typeof o[k] === 'string' && (o[k] as string).trim()).map(([k, l]) => `${l}: ${(o[k] as string).trim()}`);
-  return lines.length ? lines.join('\n') : null;
-}
-const pickNotes = (o: unknown, ids: string[]) => (o && typeof o === 'object' ? Object.fromEntries(Object.entries(o as Record<string, unknown>).filter(([k]) => ids.includes(k)).map(([k, v]) => [k, noteText(v)]).filter(([, v]) => v)) as Record<string, string> : {});
-function planText(plan?: ReviewPlan, sid?: string) {
-  if (!plan) return '';
-  const s = sid ? plan.sections.find((x) => x.id === sid) : undefined;
-  return `\n\nREVIEW PLAN (written by you after studying every section — stay consistent with it):\nStoryline: ${plan.storyline}\nThemes: ${plan.themes.join('; ')}${s ? `\nThis section's angle: ${s.angle}\nFocus on: ${s.focus.join('; ')}` : `\nSection angles: ${plan.sections.map((x) => `${x.id}: ${x.angle}`).join(' | ')}`}`;
-}
+const notesSchema = (ids: string[]) => ({ type: 'object', description: 'One insightful note (30–55 words) per chart/table id: what it shows, why it matters, what to do.', properties: Object.fromEntries(ids.map((id) => [id, { type: 'string' }])), required: ids });
 const recSchema = { type: 'array', description: '3–5 recommendations, each naming who should act.', items: { type: 'object', properties: { title: { type: 'string' }, detail: { type: 'string' }, owner: { type: 'string' }, priority: { type: 'string', enum: ['high', 'medium', 'low'] } }, required: ['title', 'detail', 'owner', 'priority'] } };
 const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India (premium barre, powerCycle and Strength Lab studios), writing a senior-management Executive Performance Review for a studio.
 Rules: use ONLY figures in the digest, copied exactly as formatted; never invent numbers; estimates must be labelled "~"/"estimate". Every KPI has three baselines (previous period, current-year monthly average, same period last year) — use them. Be specific: name products, trainers, classes, slots, sources, memberships. Explain drivers (volume vs rate, mix, seasonality, small samples). Mind polarity ([lower is better]). Elegant, decisive British/Indian English for a CEO; no markdown, no emojis. Call the tool exactly once.`;
@@ -282,41 +259,41 @@ export function rulesGlance(rv: Review): ReviewGlanceAI {
     highlights: rv.sections.map((s) => ({ section: s.id, text: s.ruleFindings[0] ?? s.lead })), watch: rv.sections.flatMap((s) => s.ruleFindings.filter((f) => /attention/.test(f))).slice(0, 4), notes: rv.glance.notes, source: 'rules', at: now() };
 }
 
-export async function writeSection(rv: Review, sid: string, tier: Tier = 'balanced', plan?: ReviewPlan): Promise<ReviewSectionAI> {
+export async function writeSection(rv: Review, sid: string, tier: Tier = 'balanced'): Promise<ReviewSectionAI> {
   const s = rv.sections.find((x) => x.id === sid);
   if (!s) throw new Error('Unknown section');
   const ids = [...s.charts.map((c) => c.id), ...s.tables.map((t) => t.id)];
   const tool: Anthropic.Tool = { name: 'write_section', description: 'Write the commentary for one review section.', input_schema: { type: 'object', properties: {
-    headline: { type: 'string', description: 'One decisive sentence with the key number.' }, summary: { type: 'string', description: '150–220 words in exactly 3 short paragraphs separated by a blank line: (1) performance vs all three baselines, (2) the drivers behind it, (3) implications and what to watch. Plain, readable sentences.' },
+    headline: { type: 'string', description: 'One decisive sentence with the key number.' }, summary: { type: 'string', description: '90–140 words: performance vs all three baselines, drivers, implications.' },
     insights: { type: 'array', items: { type: 'string' }, description: '3–4 sharp insights a template would miss (connections, outliers, inflections).' },
     findings: { type: 'array', items: { type: 'string' }, description: '4–6 evidence findings with numbers and named entities.' },
     recommendations: recSchema, notes: notesSchema(ids),
   }, required: ['headline', 'summary', 'insights', 'findings', 'recommendations', 'notes'] } as Anthropic.Tool['input_schema'] };
-  const res = await callTool<Partial<ReviewSectionAI>>(tool, sectionDigest(rv, s) + planText(plan, sid), tier);
+  const res = await callTool<Partial<ReviewSectionAI>>(tool, sectionDigest(rv, s), tier);
   if (!res) return rulesSection(s);
   const o = res.out; const fb = rulesSection(s);
-  const notes = pickNotes(o.notes, ids);
+  const notes = typeof o.notes === 'object' && o.notes ? Object.fromEntries(Object.entries(o.notes).filter(([k, v]) => ids.includes(k) && typeof v === 'string')) : {};
   return { headline: o.headline || fb.headline, summary: o.summary || fb.summary, insights: strs(o.insights), findings: strs(o.findings).length ? strs(o.findings) : fb.findings,
     recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).filter((r) => r && r.title), notes: { ...s.notes, ...notes }, model: res.model, source: 'ai', at: now() };
 }
-export async function writeGlance(rv: Review, tier: Tier = 'balanced', plan?: ReviewPlan): Promise<ReviewGlanceAI> {
+export async function writeGlance(rv: Review, tier: Tier = 'balanced'): Promise<ReviewGlanceAI> {
   const ids = [...rv.glance.charts.map((c) => c.id), ...rv.glance.tables.map((t) => t.id)];
   const secIds = rv.sections.map((s) => s.id);
   const tool: Anthropic.Tool = { name: 'write_glance', description: 'Write the cover headline and the At a glance page.', input_schema: { type: 'object', properties: {
     headline: { type: 'string', description: 'The review\'s main headline: one sentence, the single most important story with its number.' },
     tagline: { type: 'string', description: '4–8 words capturing the period\'s mood.' },
-    summary: { type: 'string', description: '220–300 words in exactly 3 short paragraphs separated by a blank line: (1) the overall verdict and the numbers behind it, (2) what drove it across sales, attendance, funnel, classes, trainers, formats and churn, (3) what it means for the next period. Plain, readable sentences.' },
+    summary: { type: 'string', description: '160–220 words in 2 short paragraphs (blank line between): the whole studio story across sales, attendance, funnel, classes, trainers, formats and churn.' },
     insights: { type: 'array', items: { type: 'string' }, description: '5–7 very useful, non-obvious insights connecting areas.' },
     highlights: { type: 'array', description: 'One key finding per section, in order.', items: { type: 'object', properties: { section: { type: 'string', enum: secIds }, text: { type: 'string' } }, required: ['section', 'text'] } },
     watch: { type: 'array', items: { type: 'string' }, description: '3–4 watch-outs.' }, notes: notesSchema(ids),
   }, required: ['headline', 'tagline', 'summary', 'insights', 'highlights', 'watch', 'notes'] } as Anthropic.Tool['input_schema'] };
-  const res = await callTool<Partial<ReviewGlanceAI>>(tool, glanceDigest(rv) + planText(plan), tier);
+  const res = await callTool<Partial<ReviewGlanceAI>>(tool, glanceDigest(rv), tier);
   const fb = rulesGlance(rv);
   if (!res) return fb;
   const o = res.out;
   return { headline: o.headline || fb.headline, tagline: o.tagline || fb.tagline, summary: o.summary || fb.summary, insights: strs(o.insights).length ? strs(o.insights) : fb.insights,
     highlights: (Array.isArray(o.highlights) ? o.highlights : []).filter((h) => h && secIds.includes(h.section as ReviewSectionId)), watch: strs(o.watch),
-    notes: { ...rv.glance.notes, ...pickNotes(o.notes, ids) }, model: res.model, source: 'ai', at: now() };
+    notes: { ...rv.glance.notes, ...(typeof o.notes === 'object' && o.notes ? Object.fromEntries(Object.entries(o.notes).filter(([k, v]) => ids.includes(k) && typeof v === 'string')) : {}) }, model: res.model, source: 'ai', at: now() };
 }
 export function verify(rv: Review, ai: ReviewAI) {
   const entry = cache.get(rv.id); if (!entry) return undefined;
@@ -324,44 +301,3 @@ export function verify(rv: Review, ai: ReviewAI) {
   return verifyNarrative(text, entry.report.results);
 }
 export function remember(rv: Review) { if (!cache.has(rv.id)) cache.set(rv.id, { review: rv, report: { results: [] } as unknown as Report }); }
-
-/* ── planning: the AI thinks over the whole review first, then commits to a plan ── */
-export function rulesPlan(rv: Review): ReviewPlan {
-  const g = rulesGlance(rv);
-  return { storyline: g.summary || g.headline, headline: g.headline, themes: rv.sections.map((s) => s.title),
-    sections: rv.sections.map((s) => ({ id: s.id, angle: s.ruleFindings[0] ?? s.lead, focus: s.ruleFindings.slice(1, 4) })), source: 'rules', at: now() };
-}
-export async function planReview(rv: Review, onThinking: (t: string) => void, tier: Tier = 'balanced'): Promise<ReviewPlan> {
-  if (!config.anthropicKey) return rulesPlan(rv);
-  const client = new Anthropic({ apiKey: config.anthropicKey });
-  const secIds: string[] = rv.sections.map((s) => s.id);
-  const tool: Anthropic.Tool = { name: 'plan_review', description: 'Commit to the plan for the whole review.', input_schema: { type: 'object', properties: {
-    storyline: { type: 'string', description: '3–5 sentences: the single story this review tells, with the numbers that prove it.' },
-    headline: { type: 'string', description: 'Working headline for the cover, with its key number.' },
-    themes: { type: 'array', items: { type: 'string' }, description: '3–5 cross-cutting themes that connect the sections.' },
-    sections: { type: 'array', description: 'One entry per section, in order.', items: { type: 'object', properties: { id: { type: 'string', enum: secIds }, angle: { type: 'string', description: 'The angle this section should take, in one sentence.' }, focus: { type: 'array', items: { type: 'string' }, description: '2–4 specific things to examine (entities, figures, anomalies).' } }, required: ['id', 'angle', 'focus'] } },
-  }, required: ['storyline', 'headline', 'themes', 'sections'] } as Anthropic.Tool['input_schema'] };
-  const digest = [glanceDigest(rv), ...rv.sections.map((s) => sectionDigest(rv, s).split('\n').slice(1).join('\n'))].join('\n\n');
-  const content = `${digest}\n\nThink carefully across ALL sections before writing anything: find the real story, the connections between areas, the anomalies, what is volume vs rate, and what management must act on. Then call plan_review once.`;
-  let order = fallbackOrder(tier); let thinking = '';
-  while (order.length) {
-    const model = MODELS[order[0]];
-    try {
-      thinking = '';
-      const stream = client.messages.stream({ model: model.id, ...thinkParams(model.id, order[0], 6000), system: SYSTEM.replace('Call the tool exactly once.', 'Call the plan_review tool exactly once.'), tools: [tool], tool_choice: { type: 'auto' }, messages: [{ role: 'user', content }] } as Anthropic.MessageStreamParams);
-      stream.on('thinking', (d: string) => { thinking += d; onThinking(d); });
-      const msg = await stream.finalMessage();
-      const tu = msg.content.find((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use');
-      if (!tu) throw new Error('no plan');
-      const o = tu.input as Partial<ReviewPlan>; const fb = rulesPlan(rv);
-      const secs = (Array.isArray(o.sections) ? o.sections : []).filter((x) => x && secIds.includes(x.id)).map((x) => ({ id: x.id, angle: String(x.angle ?? ''), focus: strs(x.focus) }));
-      return { storyline: o.storyline || fb.storyline, headline: o.headline || fb.headline, themes: strs(o.themes), sections: secs.length ? secs : fb.sections, thinking: thinking.slice(0, 20000), model: model.label, source: 'ai', at: now() };
-    } catch (e) {
-      const m = (e as Error).message; log.warn({ model: model.id, err: m.slice(0, 200) }, 'review plan failed');
-      if (noteThinkingError(model.id, m)) continue;
-      if (isNotFound(m)) { if (markMissing(model.id, order[0])) continue; }
-      order = order.slice(1);
-    }
-  }
-  return rulesPlan(rv);
-}
