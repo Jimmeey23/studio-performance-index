@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
+import Review from './Review';
 import clsx from 'clsx';
-import { RefreshCw, MessageSquareText, LayoutDashboard, History, Sparkles, ArrowRight, SlidersHorizontal, ChevronDown, MapPin, CalendarRange, GitCompare, Clock, AlertTriangle, MousePointerClick } from 'lucide-react';
+import { RefreshCw, MessageSquareText, LayoutDashboard, History, Sparkles, ArrowRight, SlidersHorizontal, ChevronDown, MapPin, CalendarRange, GitCompare, Clock, AlertTriangle, MousePointerClick, Gauge } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Block, Conversation, DomainMeta, Result } from '../lib/types';
 import { BlockView, KpiCards } from '../components/blocks/Blocks';
@@ -52,7 +53,11 @@ export default function Domain({ onConversationsChange }: { onConversationsChang
   const [d, setD] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'ask' | 'history'>('overview');
+  const [params, setParams] = useSearchParams();
+  type Tab = 'overview' | 'ask' | 'history' | 'review';
+  const tab = (['overview', 'ask', 'history', 'review'].includes(params.get('tab') ?? '') ? params.get('tab') : 'overview') as Tab;
+  // the tab lives in the URL so every tab — including the performance review — has a direct link
+  const setTab = useCallback((t: Tab) => setParams((p) => { const n = new URLSearchParams(p); if (t === 'overview') n.delete('tab'); else n.set('tab', t); return n; }, { replace: true }), [setParams]);
   const [seed, setSeed] = useState<{ q: string; n: number } | undefined>();
   const [conv, setConv] = useState<string | undefined>();
   const [chatKey, setChatKey] = useState(0);
@@ -69,7 +74,7 @@ export default function Domain({ onConversationsChange }: { onConversationsChang
     api<Dashboard>(`/api/domains/${domainId}`, { method: 'POST', json: { filters: f, refresh } }).then(setD).catch((e) => setErr((e as Error).message)).finally(() => setLoading(false));
   }, [domainId]);
   useEffect(() => {
-    setD(null); setTab('overview'); setConv(undefined); setSeed(undefined); setChatKey((k) => k + 1);
+    setD(null); setConv(undefined); setSeed(undefined); setChatKey((k) => k + 1);
     apiGet<Record<string, unknown>>('/api/prefs').catch(() => ({} as Record<string, unknown>)).then((prefs) => {
       const st = prefs['workspace.filters'] as (Filters & { preset?: string }) | undefined;
       const pr = st?.preset ?? 'l3';
@@ -111,12 +116,14 @@ export default function Domain({ onConversationsChange }: { onConversationsChang
             <p className="mt-0.5 max-w-2xl text-[13.5px] text-ink-3">{d?.domain.blurb}</p>
           </div>
           <div className="ml-auto tabs-pill">
-            {([['overview', 'Overview', LayoutDashboard], ['ask', 'Ask the expert', MessageSquareText], ['history', `History${history.length ? ` · ${history.length}` : ''}`, History]] as const).map(([k, label, I]) => (
+            {([['overview', 'Overview', LayoutDashboard], ['ask', 'Ask the expert', MessageSquareText], ['history', `History${history.length ? ` · ${history.length}` : ''}`, History], ['review', 'Executive Performance Review', Gauge]] as const).map(([k, label, I]) => (
               <button key={k} onClick={() => setTab(k)} className={clsx(tab === k && 'on')}><I size={14} />{label}</button>
             ))}
           </div>
         </div>
       </div>
+
+      {tab === 'review' && <div className="min-h-0 flex-1"><Review embedded /></div>}
 
       {tab === 'overview' && (
         <div className="flex-1 overflow-y-auto">

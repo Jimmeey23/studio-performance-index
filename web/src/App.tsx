@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { FileText, BookMarked, Database, LogOut, Moon, Plus, Settings as SettingsIcon, Sigma, Sun, TrendingUp, Pin, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, LayoutTemplate, ChevronDown, Search, Layers, PenTool, ShieldCheck } from 'lucide-react';
+import { FileText, BookMarked, Database, LogOut, Moon, Plus, Settings as SettingsIcon, Sigma, Sun, TrendingUp, Pin, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, LayoutTemplate, ChevronDown, Search, Layers, PenTool, ShieldCheck, Gauge } from 'lucide-react';
 import { api } from './lib/api';
 import type { Conversation, Me, DomainMeta } from './lib/types';
 import Domain from './pages/Domain';
@@ -20,6 +20,7 @@ import Report from './pages/Report';
 import CustomReports from './pages/CustomReports';
 import Designer from './pages/Designer';
 import Admin from './pages/Admin';
+import Review from './pages/Review';
 import { loadAppConfig, useAppConfig, applyNav } from './lib/appConfig';
 import { DrillProvider } from './lib/drill';
 import { DrillDrawer } from './components/DrillDrawer';
@@ -57,6 +58,8 @@ function Shell() {
           <Route path="/c/:id" element={<Analyst onConversationsChange={refresh} />} />
           <Route path="/w/:domainId" element={<Domain onConversationsChange={refresh} />} />
           <Route path="/report" element={<Report />} />
+          <Route path="/review" element={<Review />} />
+          <Route path="/review/:reviewId" element={<Review />} />
           <Route path="/custom-reports" element={<CustomReports />} />
           <Route path="/designer" element={<Designer />} />
           <Route path="/designer/:id" element={<Designer />} />
@@ -87,6 +90,7 @@ function Sidebar({ convs, refresh, collapsed, setCollapsed }: { convs: Conversat
   const cfg = useAppConfig();
   useEffect(() => { api<DomainMeta[]>('/api/domains').then(setDomains).catch(() => {}); }, [cfg]);
   const libraryAll = [
+    { to: '/review', icon: Gauge, label: 'Performance review' },
     { to: '/report', icon: FileText, label: 'Executive report' },
     { to: '/custom-reports', icon: Layers, label: 'Custom reports' },
     { to: '/designer', icon: PenTool, label: 'Report designer' },
