@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, FileText } from 'lucide-react';
-import { REPORT_TEMPLATES } from './CustomReports';
+import { REPORT_TEMPLATES } from '../lib/reportTemplates';
 import { TEMPLATES, TEMPLATE_CATEGORIES } from '../lib/templates';
 import { PageHeader } from '../components/ui';
 

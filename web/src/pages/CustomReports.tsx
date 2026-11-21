@@ -29,13 +29,8 @@ const BUNDLES: { name: string; topics: string[]; title: string }[] = [
   { name: 'Studio operations', topics: ['classes', 'trainers', 'formats'], title: 'Studio operations review' },
   { name: 'Sales team', topics: ['associates', 'leads', 'churn'], title: 'Sales team performance' },
 ];
-/** One-click report templates: a fixed recipe of topics, period and audience. */
-export const REPORT_TEMPLATES = [
-  { id: 'trainers', name: 'Trainer Scorecard — YTD', icon: Trophy, topics: ['trainer_ranking'], preset: 'ytd', title: 'Trainer Performance Scorecard — YTD', audience: 'leadership' as const, depth: 'standard' as const,
-    blurb: 'Five questions answered: who our top trainers are, revenue contribution, conversion and retention vs their client mix (net + %), top earners\u2019 conversion, and each studio — tiers A–D from a fair composite score.' },
-  { id: 'lead_channels', name: 'Lead Channel & Source Analysis — YTD', icon: Megaphone, topics: ['lead_channels'], preset: 'ytd', title: 'Lead Channel & Source Analysis — YTD', audience: 'leadership' as const, depth: 'standard' as const,
-    blurb: 'Leads → trials → purchasing members by channel and source, LTV, a studio × channel heatmap, then each studio with sources, monthly trends and AI recommendations.' },
-];
+import { REPORT_TEMPLATES } from '../lib/reportTemplates';
+export { REPORT_TEMPLATES };
 const DEPTH: Record<Depth, Partial<ReportLayout>> = {
   summary: { detail: false, tableRows: 6, pages: { cover: true, exec: true, score: false, mom: false, defs: false } },
   standard: { detail: true, tableRows: 10, pages: { cover: true, exec: true, score: true, mom: false, defs: true } },

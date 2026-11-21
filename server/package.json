@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "start": "node --max-old-space-size=${NODE_HEAP_MB:-768} --import tsx src/index.ts",
     "sync": "tsx scripts/sync.ts",
     "validate": "tsx scripts/validate.ts",
     "fixture": "tsx scripts/make-fixture.ts",
@@ -19,6 +19,7 @@
     "@anthropic-ai/sdk": "^1.10.0",
     "@duckdb/node-api": "^2.0.0-r.1",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "express": "^5.3.0",
     "googleapis": "^190.0.0",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",

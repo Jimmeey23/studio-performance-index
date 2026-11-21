@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { FileText, BookMarked, Database, LogOut, Moon, Plus, Settings as SettingsIcon, Sigma, Sun, TrendingUp, Pin, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, LayoutTemplate, ChevronDown, Search, Layers, PenTool } from 'lucide-react';
+import { FileText, BookMarked, Database, LogOut, Moon, Plus, Settings as SettingsIcon, Sigma, Sun, TrendingUp, Pin, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, LayoutTemplate, ChevronDown, Search, Layers, PenTool, ShieldCheck } from 'lucide-react';
 import { api } from './lib/api';
 import type { Conversation, Me, DomainMeta } from './lib/types';
 import Domain from './pages/Domain';
@@ -19,6 +19,8 @@ import Settings from './pages/Settings';
 import Report from './pages/Report';
 import CustomReports from './pages/CustomReports';
 import Designer from './pages/Designer';
+import Admin from './pages/Admin';
+import { loadAppConfig, useAppConfig, applyNav } from './lib/appConfig';
 import { DrillProvider } from './lib/drill';
 import { DrillDrawer } from './components/DrillDrawer';
 import { CommandPalette } from './components/CommandPalette';
@@ -28,7 +30,7 @@ export const useMe = () => useContext(MeCtx);
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const load = useCallback(() => api<Me>('/api/me').then(setMe).catch(() => setMe(null)), []);
+  const load = useCallback(() => api<Me>('/api/me').then(async (m) => { await loadAppConfig(); setMe(m); }).catch(() => setMe(null)), []);
   useEffect(() => { load(); const h = () => setMe(null); window.addEventListener('p57:unauthorised', h); return () => window.removeEventListener('p57:unauthorised', h); }, [load]);
   if (me === undefined) return <div className="flex h-full items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-line border-t-accent" /></div>;
   if (me === null) return <Login onLogin={load} />;
@@ -65,6 +67,7 @@ function Shell() {
           <Route path="/data" element={<Page><DataSources /></Page>} />
           <Route path="/metrics" element={<Page><Metrics /></Page>} />
           <Route path="/settings" element={<Page><Settings /></Page>} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </main>
     </div>
@@ -78,11 +81,12 @@ function Sidebar({ convs, refresh, collapsed, setCollapsed }: { convs: Conversat
   const [domains, setDomains] = useState<DomainMeta[]>([]);
   const [histOpen, setHistOpen] = useState(true);
   const [q, setQ] = useState('');
-  useEffect(() => { api<DomainMeta[]>('/api/domains').then(setDomains).catch(() => {}); }, []);
   const [dark, setDark] = useState(document.documentElement.dataset.theme === 'dark');
   const [palette, setPalette] = useState(false);
   const toggleTheme = () => { const d = !dark; setDark(d); document.documentElement.dataset.theme = d ? 'dark' : 'light'; try { localStorage.setItem('theme', d ? 'dark' : 'light'); } catch { /* */ } };
-  const library = [
+  const cfg = useAppConfig();
+  useEffect(() => { api<DomainMeta[]>('/api/domains').then(setDomains).catch(() => {}); }, [cfg]);
+  const libraryAll = [
     { to: '/report', icon: FileText, label: 'Executive report' },
     { to: '/custom-reports', icon: Layers, label: 'Custom reports' },
     { to: '/designer', icon: PenTool, label: 'Report designer' },
@@ -90,11 +94,14 @@ function Sidebar({ convs, refresh, collapsed, setCollapsed }: { convs: Conversat
     { to: '/templates', icon: LayoutTemplate, label: 'Templates' },
     { to: '/reports', icon: BookMarked, label: 'Saved reports' },
   ];
-  const data = [
+  const dataAll = [
     { to: '/data', icon: Database, label: 'Data sources' },
     { to: '/metrics', icon: Sigma, label: 'Metrics & definitions' },
     { to: '/settings', icon: SettingsIcon, label: 'Settings' },
+    ...(me?.role === 'admin' ? [{ to: '/admin', icon: ShieldCheck, label: 'Admin console' }] : []),
   ];
+  const library = applyNav(libraryAll, cfg);
+  const data = applyNav(dataAll, cfg).concat(me?.role === 'admin' && cfg.nav.hidden?.includes('/admin') ? [{ to: '/admin', icon: ShieldCheck, label: 'Admin console' }] : []);
   const link = ({ isActive }: { isActive: boolean }) => clsx('side-link', isActive && 'side-link-active active');
   const pal = <CommandPalette open={palette} setOpen={setPalette} domains={domains} convs={convs} toggleTheme={toggleTheme} />;
   const Section = ({ title }: { title: string }) => <div className="side-section">{title}</div>;

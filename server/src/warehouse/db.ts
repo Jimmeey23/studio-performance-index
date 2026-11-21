@@ -19,7 +19,9 @@ export class Db {
   private constructor(private inst: DuckDBInstance, private conn: DuckDBConnection) {}
 
   static async open(path: string, readOnly = false): Promise<Db> {
-    const inst = await DuckDBInstance.create(path, readOnly ? { access_mode: 'READ_ONLY' } : {});
+    // Keep the database engine lean on small hosts (Railway): bounded memory and threads, configurable by env.
+    const limits = { memory_limit: process.env.DUCKDB_MEMORY_LIMIT || '512MB', threads: process.env.DUCKDB_THREADS || '2' };
+    const inst = await DuckDBInstance.create(path, readOnly ? { access_mode: 'READ_ONLY', ...limits } : limits);
     const conn = await inst.connect();
     return new Db(inst, conn);
   }

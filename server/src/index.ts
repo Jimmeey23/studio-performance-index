@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import compression from 'compression';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
@@ -12,6 +13,7 @@ import { appDb, createUser, newId, parseJson, getResult, audit } from './store/a
 import { answer, hydrateMessage, type StreamEvent } from './ai/orchestrator.js';
 import { clearCoverageCache } from './ai/prompt.js';
 import { DOMAINS, domainById } from './ai/domains.js';
+import { loadAppConfig, saveAppConfig, appConfig, defaults as configDefaults, visibleDomains, type AppConfig } from './store/appConfig.js';
 import { MODELS as TIER_MODELS } from './ai/router.js';
 import { catalog, runMetricsQuery, runDrill, QueryError } from './semantic/engine.js';
 import { buildDashboard } from './ai/dashboard.js';
@@ -32,6 +34,8 @@ type User = { id: string; email: string; name: string; role: "admin" | "analyst"
 declare module 'express-serve-static-core' { interface Request { user?: User } }
 
 const app = express();
+// gzip responses (less egress, faster pages) — but never buffer the streamed AI answers
+app.use(compression({ filter: (req, res) => !req.path.startsWith('/api/chat') && !String(res.getHeader('Content-Type') ?? '').includes('event-stream') && compression.filter(req, res) }));
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -126,7 +130,7 @@ app.get('/api/results/:id/csv', wrap(async (req, res) => {
   res.send('﻿' + csv);
 }));
 app.post('/api/query', wrap(async (req, res) => res.json(await runMetricsQuery(req.body))));
-app.get('/api/catalog', wrap(async (_req, res) => res.json({ ...catalog(), rules: loadRules() })));
+app.get('/api/catalog', wrap(async (_req, res) => { const c = catalog(); res.json({ ...c, metrics: c.metrics.filter((m) => !appConfig().metrics?.[m.id]?.hidden), rules: loadRules() }); }));
 
 /* ── insights overview (cached) ───────────────────────────────────────── */
 let insightsCache: { at: number; data: unknown } | null = null;
@@ -149,7 +153,7 @@ app.get('/api/insights', wrap(async (req, res) => {
 }));
 
 /* ── domain workspaces ────────────────────────────────────────────────── */
-app.get('/api/domains', (_req, res) => res.json(DOMAINS.map(({ expert, ...d }) => d)));
+app.get('/api/domains', (_req, res) => res.json(visibleDomains().map(({ expert, ...d }) => d)));
 const domainCache = new Map<string, { at: number; data: unknown }>();
 /** Workspace dashboards: memory first, then the database (survives restarts), then computed and stored. Cleared on data refresh. */
 async function domainHandler(req: Request, res: Response) {
@@ -160,9 +164,10 @@ async function domainHandler(req: Request, res: Response) {
   const fresh = !!req.query.refresh || !!req.body?.refresh;
   const hit = domainCache.get(key);
   if (!fresh && hit && Date.now() - hit.at < 12 * 3600e3) return res.json(hit.data);
-  if (!fresh) { const stored = await cachedDashboard(key, 24 * 60).catch(() => null); if (stored) { domainCache.set(key, { at: Date.now(), data: stored }); return res.json(stored); } }
+  if (!fresh) { const stored = await cachedDashboard(key, 24 * 60).catch(() => null); if (stored) { domainCache.set(key, { at: Date.now(), data: stored }); while (domainCache.size > 40) domainCache.delete(domainCache.keys().next().value!); return res.json(stored); } }
   const data = await buildDashboard(d, filters);
   domainCache.set(key, { at: Date.now(), data });
+  while (domainCache.size > 40) domainCache.delete(domainCache.keys().next().value!); // bounded memory
   storeDashboard(key, data).catch(() => {});
   res.json(data);
 }
@@ -183,7 +188,7 @@ app.post('/api/report', wrap(async (req, res) => {
   const { results, ...out } = r;
   res.json({ ...out, saved: { insights: null, layout: req.body?.layout ?? prev?.layout ?? null, created_at: r.generatedAt, reused: false } });
 }));
-app.get('/api/report/topics', (_req, res) => res.json(TOPICS));
+app.get('/api/report/topics', (_req, res) => { const o = appConfig().topics ?? {}; res.json(TOPICS.filter((t) => !o[t.id]?.hidden).map((t) => ({ ...t, title: o[t.id]?.title || t.title, blurb: o[t.id]?.blurb || t.blurb }))); });
 app.get('/api/report/latest', wrap(async (req, res) => {
   const s = await reportStore.latest(req.user!.id, req.query.kind === 'custom' ? 'custom' : 'executive');
   res.json(s ? { ...s.data, id: s.id, saved: { insights: s.insights, layout: s.layout, created_at: s.created_at, reused: true } } : null);
@@ -216,6 +221,64 @@ app.post('/api/report/:id/insights', wrap(async (req, res) => {
 
 /* ── drill-through: item-level records behind any number ──────────────── */
 app.post('/api/drill', wrap(async (req, res) => res.json(await runDrill(req.body))));
+/* app configuration (admin can change every item; everyone gets the applied view) */
+app.get('/api/app-config', (_req, res) => { const c = appConfig(); res.json({ nav: c.nav ?? {}, reportTemplates: c.reportTemplates ?? null, analystTemplates: c.analystTemplates ?? null, appName: c.appName ?? null }); });
+app.get('/api/admin/config', adminOnly, (_req, res) => { const c = catalog(); res.json({ config: appConfig(), defaults: configDefaults(), topics: TOPICS, dimensions: c.dimensions, datasets: c.datasets }); });
+app.put('/api/admin/config', adminOnly, wrap(async (req, res) => {
+  await saveAppConfig((req.body?.config ?? {}) as AppConfig, req.user!.email);
+  domainCache.clear(); await clearDashboards().catch(() => {});
+  await audit(req.user!.id, 'app_config', {});
+  res.json({ ok: true, config: appConfig() });
+}));
+/* every saved item across all users (admin) */
+app.get('/api/admin/content', adminOnly, wrap(async (_req, res) => {
+  const db = await appDb();
+  const [reports, designs, conversations, saved, users] = await Promise.all([
+    db.all(`select id, user_id, coalesce(kind, 'executive') kind, coalesce(json_extract_string(data, '$.request.title'), label) title, scope, created_at::varchar created_at from exec_reports order by created_at desc limit 500`).catch(() => []),
+    db.all(`select id, user_id, title, updated_at::varchar created_at from report_designs order by updated_at desc limit 500`).catch(() => []),
+    db.all(`select id, user_id, title, updated_at::varchar created_at from conversations order by updated_at desc limit 500`).catch(() => []),
+    db.all(`select id, user_id, title, created_at::varchar created_at from saved_reports order by created_at desc limit 500`).catch(() => []),
+    db.all(`select id, email from users`),
+  ]);
+  res.json({ reports, designs, conversations, saved, users });
+}));
+const CONTENT: Record<string, { table: string; title: string; extra?: string[] }> = {
+  reports: { table: 'exec_reports', title: 'label' }, designs: { table: 'report_designs', title: 'title' },
+  conversations: { table: 'conversations', title: 'title', extra: ['delete from messages where conversation_id = ?', 'delete from results where conversation_id = ?'] }, saved: { table: 'saved_reports', title: 'title' },
+};
+app.put('/api/admin/content/:type/:id', adminOnly, wrap(async (req, res) => {
+  const c = CONTENT[String(req.params.type)]; if (!c) return res.status(404).json({ error: 'Unknown type' });
+  await (await appDb()).all(`update ${c.table} set ${c.title} = ? where id = ?`, [String(req.body?.title ?? '').slice(0, 160), String(req.params.id)]);
+  res.json({ ok: true });
+}));
+app.delete('/api/admin/content/:type/:id', adminOnly, wrap(async (req, res) => {
+  const c = CONTENT[String(req.params.type)]; if (!c) return res.status(404).json({ error: 'Unknown type' });
+  const db = await appDb(); const id = String(req.params.id);
+  for (const q of c.extra ?? []) await db.all(q, [id]);
+  await db.all(`delete from ${c.table} where id = ?`, [id]);
+  await audit(req.user!.id, 'admin_delete', { type: req.params.type, id });
+  res.json({ ok: true });
+}));
+/* users: edit and remove */
+app.put('/api/users/:id', adminOnly, wrap(async (req, res) => {
+  const db = await appDb(); const id = String(req.params.id); const b = req.body ?? {};
+  if (b.role && !['admin', 'analyst', 'viewer'].includes(b.role)) return res.status(400).json({ error: 'Invalid role' });
+  if (b.role && b.role !== 'admin' && id === req.user!.id) return res.status(400).json({ error: "You can't remove your own admin rights" });
+  if (b.name) await db.all(`update users set name = ? where id = ?`, [String(b.name), id]);
+  if (b.email) await db.all(`update users set email = ? where id = ?`, [String(b.email).toLowerCase(), id]);
+  if (b.role) await db.all(`update users set role = ? where id = ?`, [b.role, id]);
+  if (b.password) { if (String(b.password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' }); await db.all(`update users set password_hash = ? where id = ?`, [await bcrypt.hash(String(b.password), 10), id]); }
+  await audit(req.user!.id, 'user_update', { id, fields: Object.keys(b).filter((k) => k !== 'password') });
+  res.json({ ok: true });
+}));
+app.delete('/api/users/:id', adminOnly, wrap(async (req, res) => {
+  const id = String(req.params.id);
+  if (id === req.user!.id) return res.status(400).json({ error: "You can't delete your own account" });
+  await (await appDb()).all(`delete from users where id = ?`, [id]);
+  await audit(req.user!.id, 'user_delete', { id });
+  res.json({ ok: true });
+}));
+
 /* report designer (wireframe reports) */
 app.get('/api/designer/catalog', (_req, res) => res.json(designerCatalog()));
 app.get('/api/designs', wrap(async (req, res) => { res.json(await listDesigns(req.user!.id)); }));
@@ -354,7 +417,9 @@ app.post('/api/users', adminOnly, wrap(async (req, res) => {
 
 /* ── static web app ───────────────────────────────────────────────────── */
 if (fs.existsSync(config.webDist)) {
-  app.use(express.static(config.webDist));
+  // hashed build assets never change → let browsers cache them for a year; index.html always revalidates
+  app.use('/assets', express.static(path.join(config.webDist, 'assets'), { immutable: true, maxAge: '365d' }));
+  app.use(express.static(config.webDist, { maxAge: '1h', setHeaders: (res, p) => { if (p.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache'); } }));
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(config.webDist, 'index.html')));
 }
 
@@ -378,6 +443,7 @@ app.listen(config.port, () => log.info(`Physique 57 BI listening on http://local
  * rebuild the models from the already-synced raw sheets (no re-download) so no one has to
  * remember Settings → Rebuild models.
  */
+loadAppConfig().catch((e) => log.warn({ err: (e as Error).message }, 'app config not loaded'));
 const REQUIRED_COLUMNS: Record<string, string[]> = { fct_new_clients: ['is_trial', 'is_new_client'], fct_sessions: ['session_title'] };
 (async () => {
   try {
@@ -398,17 +464,22 @@ const REQUIRED_COLUMNS: Record<string, string[]> = { fct_new_clients: ['is_trial
 })();
 
 const minutes = Number(config.syncCron);
+const changedSomething = (r: { models?: unknown[]; tabs?: { changed?: boolean }[] }) => (r.models?.length ?? 0) > 0 || (r.tabs ?? []).some((t) => t.changed);
 if (minutes > 0 && fs.existsSync(config.googleCredentialsFile)) {
-  setInterval(() => { syncFromGoogle().then(afterSync).catch((e) => log.error({ err: e.message }, 'scheduled sync failed')); }, minutes * 60e3);
+  // Unchanged spreadsheets are skipped cheaply; caches and the brand brain are only rebuilt when data actually changed.
+  setInterval(() => { syncFromGoogle().then((r) => { if (changedSomething(r)) afterSync(); }).catch((e) => log.error({ err: e.message }, 'scheduled sync failed')); }, minutes * 60e3);
   log.info(`Scheduled Google Sheets sync every ${minutes} minutes`);
-  // fresh deployment (empty data disk): sync straight away instead of waiting for the first interval
+  // On start (first deploy, or waking from sleep): sync now if there's no data yet or the last sync is older than the interval.
   (async () => {
     try {
       const db = await warehouse();
-      if (await db.tableExists('fct_sales')) return;
-      log.info('no data yet — running the first Google Sheets sync now');
-      const r = await syncFromGoogle({ force: true }); afterSync();
-      log.info({ status: r.status }, 'first sync finished');
-    } catch (e) { log.error({ err: (e as Error).message }, 'first sync failed — use Settings → Sync from Google Sheets'); }
+      const empty = !(await db.tableExists('fct_sales'));
+      const last = empty ? null : await db.one<{ age: number }>(`select date_diff('minute', max(finished_at)::timestamp, now()::timestamp)::int age from _sync_log`).catch(() => null);
+      if (!empty && last?.age !== undefined && last.age !== null && last.age < minutes) return;
+      log.info({ empty, minutesSinceLastSync: last?.age ?? null }, 'data missing or stale — syncing now');
+      const r = await syncFromGoogle({ force: empty });
+      if (empty || changedSomething(r)) afterSync();
+      log.info({ status: r.status }, 'start-up sync finished');
+    } catch (e) { log.error({ err: (e as Error).message }, 'start-up sync failed — use Settings → Sync from Google Sheets'); }
   })();
 }
