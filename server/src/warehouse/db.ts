@@ -66,7 +66,24 @@ export class Db {
 
 let _wh: Db | null = null;
 export async function warehouse(): Promise<Db> {
-  if (!_wh) _wh = await Db.open(config.warehousePath);
+  if (!_wh) {
+    const d = await Db.open(config.warehousePath);
+    // A model is skipped when its source tab was never synced. Turn DuckDB's catalog error into a clear, actionable one.
+    const raw = d.all.bind(d);
+    (d as { all: Db['all'] }).all = (async (sql: string, params?: unknown[]) => {
+      try { return await raw(sql, params); } catch (e) {
+        const m = String((e as Error)?.message ?? e).match(/Table with name (\w+) does not exist/);
+        if (!m) throw e;
+        const { MODELS } = await import('./models.js');
+        const model = MODELS.find((x) => x.name === m[1]);
+        const src = model?.sourceOfTruth ? ` "${model.sourceOfTruth}"` : '';
+        const err = new Error(`Data not loaded: ${m[1]} is missing because its source${src} hasn't been synced into this server's warehouse. Run Settings › Sync from Google Sheets (force), and check that sheet is shared with the service account. See the sync report for the skipped model.`);
+        (err as Error & { status?: number }).status = 409;
+        throw err;
+      }
+    }) as Db['all'];
+    _wh = d;
+  }
   return _wh;
 }
 
