@@ -1,0 +1,15 @@
+import { buildReport } from '../src/report/build.js';
+import { rulesInsights, digest } from '../src/report/insights.js';
+const t = Date.now();
+const r = await buildReport({ start: '2026-10-01', end: '2026-10-31', locations: ['Kwality House, Kemps Corner'] });
+console.log('ms', Date.now() - t, JSON.stringify(r.period));
+console.log(r.headline.slice(0, 3).map((k) => `${k.label}=${k.value} prev=${k.prev} ytd=${k.ytd} ly=${k.ly} series=${k.series.length}`).join('\n'));
+for (const s of r.sections) console.log(s.id, 'kpis', s.kpis.length, 'charts', s.charts.map((c) => c.result.rows.length), 'tables', s.tables.map((x) => x.result.rows.length), 'visuals', Object.keys(s.visuals ?? {}).join(','));
+const road = r.sections.find((s) => s.id === 'road')!; console.log(JSON.stringify(road.visuals));
+console.log(digest(r).length, 'chars digest');
+const ri = rulesInsights(r); console.log(ri.headline, '\n', ri.executive_summary.slice(0, 400));
+const r2 = await buildReport({ start: '2026-01-01', end: '2026-01-31', locations: [] });
+console.log('jan ok', r2.period.ytdLabel, r2.headline[0].ytd);
+const r3 = await buildReport({ start: '2026-07-01', end: '2026-09-30', locations: [] });
+console.log('quarter ok', r3.period.label, r3.period.prevLabel, r3.period.ytdLabel, r3.headline[0].value, r3.headline[0].ytd);
+process.exit(0);

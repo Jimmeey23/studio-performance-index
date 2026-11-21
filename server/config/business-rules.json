@@ -1,0 +1,481 @@
+{
+  "_doc": "Editable business rules. Changes apply on the next model rebuild (Settings › Rebuild models, or npm run sync).",
+  "hosts": {
+    "13752": {
+      "brand": "Physique 57 Mumbai",
+      "city": "Mumbai"
+    },
+    "33905": {
+      "brand": "Physique 57 Bengaluru",
+      "city": "Bengaluru"
+    }
+  },
+  "locations": [
+    {
+      "match": [
+        "kwality",
+        "kemps"
+      ],
+      "location": "Kwality House, Kemps Corner",
+      "city": "Mumbai",
+      "type": "studio",
+      "short": "Kemps"
+    },
+    {
+      "match": [
+        "supreme",
+        "bandra"
+      ],
+      "location": "Supreme HQ, Bandra",
+      "city": "Mumbai",
+      "type": "studio",
+      "short": "Bandra"
+    },
+    {
+      "match": [
+        "kenkere"
+      ],
+      "location": "Kenkere House",
+      "city": "Bengaluru",
+      "type": "studio",
+      "short": "Kenkere"
+    },
+    {
+      "match": [
+        "copper"
+      ],
+      "location": "The Studio by Copper + Cloves",
+      "city": "Bengaluru",
+      "type": "partner",
+      "short": "Copper + Cloves"
+    },
+    {
+      "match": [
+        "plash"
+      ],
+      "location": "Plash Pilates",
+      "city": "Bengaluru",
+      "type": "partner",
+      "short": "Plash"
+    },
+    {
+      "match": [
+        "pop-up",
+        "pop up",
+        "popup"
+      ],
+      "location": "Pop-up",
+      "city": null,
+      "type": "pop-up",
+      "short": "Pop-up"
+    },
+    {
+      "match": [
+        "wework galaxy"
+      ],
+      "location": "WeWork Galaxy",
+      "city": "Bengaluru",
+      "type": "corporate",
+      "short": "WeWork Galaxy"
+    },
+    {
+      "match": [
+        "wework prestige"
+      ],
+      "location": "WeWork Prestige Central",
+      "city": "Bengaluru",
+      "type": "corporate",
+      "short": "WeWork Prestige"
+    },
+    {
+      "match": [
+        "depot18"
+      ],
+      "location": "Depot18 - Sports",
+      "city": null,
+      "type": "pop-up",
+      "short": "Depot18"
+    },
+    {
+      "match": [
+        "south united"
+      ],
+      "location": "South United Football Club",
+      "city": "Bengaluru",
+      "type": "pop-up",
+      "short": "SUFC"
+    },
+    {
+      "match": [
+        "taj wellington"
+      ],
+      "location": "Taj Wellington Mews, Colaba",
+      "city": "Mumbai",
+      "type": "legacy",
+      "short": "Colaba (legacy)"
+    },
+    {
+      "match": [
+        "ldi"
+      ],
+      "location": "LDI",
+      "city": "Mumbai",
+      "type": "legacy",
+      "short": "LDI (legacy)"
+    },
+    {
+      "match": [
+        "kitab mahal"
+      ],
+      "location": "Kitab Mahal",
+      "city": "Mumbai",
+      "type": "legacy",
+      "short": "Kitab Mahal (legacy)"
+    },
+    {
+      "match": [
+        "online"
+      ],
+      "location": "Online",
+      "city": null,
+      "type": "online",
+      "short": "Online"
+    }
+  ],
+  "revenue": {
+    "default_basis": "gross",
+    "_basis_doc": "gross = Payment Value as charged (incl. GST). net = Payment Value − Payment VAT (ex-GST).",
+    "valid_payment_statuses": [
+      "succeeded"
+    ],
+    "exclude_voided": true
+  },
+  "status_values": {
+    "new_client_excluded_conversion_status": [
+      "not new"
+    ],
+    "converted_values": [
+      "converted"
+    ],
+    "retained_values": [
+      "retained"
+    ],
+    "trial_completed_patterns": [
+      "%complet%"
+    ],
+    "trial_scheduled_patterns": [
+      "%schedul%",
+      "%booked%"
+    ],
+    "lead_converted_values": [
+      "converted"
+    ],
+    "new_client_is_new_contains": "new",
+    "_new_client_doc": "New clients = rows in the New sheet whose \"Is New\" value contains new_client_is_new_contains (e.g. \"New - Trial Class\"). Trials = every member in the New sheet who attended a session (Is New not in trial_not_attended_values).",
+    "trial_not_attended_values": [
+      "not attended"
+    ]
+  },
+  "renewal": {
+    "_doc": "A paid membership/package ending in the period is 'renewed' if the same member buys a product in renewal_categories after the membership started (+1 day) and no later than window_after_days after it ends. Scope = memberships matching include patterns and not matching exclude patterns.",
+    "_scope_doc": "Lapsed / renewal / churn scope: memberships with zero (or blank) amount paid, and every membership named in exclude_memberships_exact (exact name match, case-insensitive, surrounding spaces ignored), are out of scope everywhere — they are not recurring.",
+    "exclude_zero_value": true,
+    "exclude_memberships_exact": [
+      "Virtual Single Class.",
+      "Virtual Single Private Class.",
+      "TEST",
+      "Studio Staff Family / Friend",
+      "Studio Single Private.",
+      "Studio Single Class",
+      "Studio Private Class",
+      "Studio Free Influencer Class",
+      "Studio Free Staff/Family",
+      "Studio Add-on Single Private.",
+      "Scoop Sign Up link",
+      "Pop-up Free Staff/Family.",
+      "Pop up Studio Single class",
+      "Plash Pilates Single Class Package",
+      "Plash Pilates Free Class",
+      "Plash Pilates Credit",
+      "Newcomers 2 For 1",
+      "New Client Intro Pack",
+      "Juniors Single Class",
+      "Juniors 4 Class Package",
+      "Copper + Cloves Single Class Package",
+      "Copper + Cloves Credit",
+      "Copper + Cloves Free Class",
+      "Bold & Beyond x Copper + Cloves Free Class",
+      "1st Anniversary Sign up link",
+      "Physique 57 Complimentary Class - Sign up Link",
+      "2nd Anniversary Sign Up link",
+      "Aakansha & Pooja Complimentary Class",
+      "Aishwarya x P57",
+      "Aishwarya's Complimentary Class  Sign up Link",
+      "Akshitha Basavaraju Complimentary Class",
+      "Alekha x P57",
+      "Anmol Bajaj Complimentary Class",
+      "Anniversary Special: 45 minutes Semi Private",
+      "Aveda's Sign-up Link",
+      "Bhavana Rameskumar Complimentary Class",
+      "ByTwo Sign Up Link",
+      "Cava complimentary class",
+      "Complimentary 150 Class Milestone 2 Week Unlimited.",
+      "Complimentary Class",
+      "Copper + Cloves Complimentary Class",
+      "Dhanya Ramkumar Complimentary Class",
+      "FF Membership.",
+      "Foodstories Complimentary class",
+      "Free Class Trial at Physique",
+      "Free Influencer Class",
+      "Ishna's Free Trial Link",
+      "Karthika Anand Complimentary Class",
+      "Lakshya Sood Complimentary Class",
+      "Lapsed Complimentary Class",
+      "LRS x Physique 57 - powerCycle",
+      "Men's Health Complimentary Class",
+      "Nilu Thapa Complimentary Class",
+      "OOO Sign Up link",
+      "Open Barre Complimentary Class",
+      "Outdoor Complimentary Class.",
+      "P57 Bandra x Amrita Thakur -  Sign up link",
+      "P57 Bandra X Anu Jasani - Sign Up link",
+      "P57 Bandra x BPB -  Sign up link",
+      "P57 Bandra X Livingroom Story - Sign Up link",
+      "P57 Bandra x Tasheen -  Sign up link",
+      "P57 x Scoup -  Sign up link",
+      "P57 X Shoparty - Sign Up link",
+      "P57 x Simran -  Sign up link",
+      "P57 x SIS Sign up link",
+      "P57 x TIRA -  Free Class Link",
+      "Peakst8 Complimentary Class",
+      "Physique 57 - powerCycle Sign up Link",
+      "Physique 57 x Kshirija's Sign Up link",
+      "Physique 57 x Nivedita Rohera Complimentary Class",
+      "Physique 57 x Saachi's Sign up link Test",
+      "Pop-up Complimentary Class.",
+      "Pop-up Free Influencer Class.",
+      "Pop-up Open Barre Complimentary Class.",
+      "Prarthana Chandani Complimentary Class",
+      "Protima Tiwari Complimentary Class",
+      "Recovery Complimentary Class",
+      "Renewal Complimentary Class",
+      "Saanchi's Sign up link",
+      "Saksha Narayan Complimentary Class",
+      "Shraddha & Khushi Complimentary Class",
+      "Sisters in Sweat Complimentary Class",
+      "Studio Anniversary 4 Complimentary Class Package",
+      "Studio Complimentary Birthday Class.",
+      "Studio Complimentary Class",
+      "Studio Complimentary Referral Class",
+      "Studio Complimentary Referrer Class",
+      "Studio Extended 10 Single Class Pack",
+      "Studio Happy Hour Complimentary Class.",
+      "Studio Happy Hour Private Class",
+      "Studio Newcomer 2 for 1",
+      "Studio Open Barre Class",
+      "Studio Open Barre Complimentary Class",
+      "Studio Private - Anisha (Single Class)",
+      "Studio Private Class X 10",
+      "Studio Referral Comp Class.",
+      "Studio Referrer Complimentary Class",
+      "Studio Referrer Complimentary Class Package",
+      "Studio Shared 2 Week Unlimited",
+      "Studio Staff/Family Class",
+      "Summer Bootcamp - Studio 6 Week Unlimited",
+      "Sweat Fest Complimentary Class",
+      "TEST - NUTRITION X 4",
+      "The BURN Pacakge",
+      "Twain x Physique 57 - powerCycle",
+      "Virtual Complimentary Class.",
+      "Virtual Free Influencer Class.",
+      "Virtual Open Barre Complimentary Class.",
+      "Virtual Private Class",
+      "WeWork Complimentary Class!",
+      "Women's Day Complimentary Class",
+      "Yashita's Sign up link"
+    ],
+    "window_after_days": 30,
+    "renewal_categories": [
+      "Memberships",
+      "Class Packages"
+    ],
+    "include_membership_patterns": [
+      "%unlimited%",
+      "%class package%",
+      "%membership%"
+    ],
+    "exclude_membership_patterns": [
+      "%intro%",
+      "%newcomer%",
+      "%trial%",
+      "%complimentary%",
+      "%open barre%",
+      "%staff%",
+      "%referral%",
+      "%referrer%"
+    ]
+  },
+  "winback": {
+    "inactive_days": 90
+  },
+  "churn": {
+    "inactive_days": 60
+  },
+  "reporting": {
+    "default_trailing_months": 14,
+    "exclude_incomplete_current_month_from_trends": true,
+    "week_start": "monday",
+    "location_groups": {
+      "Pop-ups": [
+        "Pop-up",
+        "The Studio by Copper + Cloves",
+        "Plash Pilates"
+      ]
+    },
+    "_location_groups_doc": "Locations reported together as one consolidated location in the trainer scorecard (each group appears as a single studio section)."
+  },
+  "leads": {
+    "_doc": "Lead status definitions and the governed source → channel grouping used everywhere leads are reported. Sources are matched case-insensitively: exact names first, then regex patterns, in the order listed; anything unmatched falls into channel_fallback.",
+    "qualified_statuses": [
+      "Trial Scheduled",
+      "Trial Completed",
+      "Won"
+    ],
+    "qualified_definition": "A lead is qualified once it shows genuine buying intent: it has a trial scheduled or completed, has bought (Won / converted), or its trial status shows a completed trial.",
+    "disqualified_statuses": [
+      "Disqualified"
+    ],
+    "disqualified_definition": "A lead is disqualified when the team has marked it as not a fit (CRM status Disqualified) — typically invalid contact details, outside the studio's catchment, language barrier or a non-relevant enquiry.",
+    "lost_statuses": [
+      "Lost"
+    ],
+    "lost_definition": "A lead is lost when it was a genuine prospect but did not proceed (CRM status Lost) — e.g. not interested, pricing, timings or chose another option.",
+    "unresponsive_statuses": [
+      "Unresponsive"
+    ],
+    "unresponsive_definition": "The lead has not responded to follow-ups (CRM status Unresponsive).",
+    "channels": [
+      {
+        "channel": "Website Form",
+        "sources": [
+          "website form"
+        ],
+        "patterns": [
+          "^website form"
+        ]
+      },
+      {
+        "channel": "Website",
+        "sources": [
+          "website",
+          "website - ac"
+        ],
+        "patterns": [
+          "website"
+        ]
+      },
+      {
+        "channel": "Calls, WhatsApp & Messages",
+        "sources": [
+          "yellow messenger/whatsapp enquiry",
+          "enquiry on call",
+          "incoming call",
+          "incoming sms",
+          "broadcast message",
+          "dashboard"
+        ],
+        "patterns": [
+          "whatsapp",
+          "call",
+          "sms",
+          "message",
+          "messenger"
+        ]
+      },
+      {
+        "channel": "Paid Media",
+        "sources": [
+          "paid meta ads (fb/instagram)"
+        ],
+        "patterns": [
+          "paid",
+          "meta ads",
+          "google ads",
+          "\\bads?\\b"
+        ]
+      },
+      {
+        "channel": "Social Media & Influencers",
+        "sources": [
+          "social - instagram",
+          "social",
+          "social media",
+          "influencer marketing",
+          "influencer sign-up"
+        ],
+        "patterns": [
+          "influencer",
+          "instagram",
+          "social",
+          "facebook"
+        ]
+      },
+      {
+        "channel": "Referrals & Word of Mouth",
+        "sources": [
+          "client referral",
+          "staff referral"
+        ],
+        "patterns": [
+          "referr",
+          "word of mouth"
+        ]
+      },
+      {
+        "channel": "Walk-ins",
+        "sources": [
+          "walkin",
+          "walk-in",
+          "walk in"
+        ],
+        "patterns": [
+          "walk ?-?in"
+        ]
+      },
+      {
+        "channel": "Events & Hosted Classes",
+        "sources": [
+          "hosted class",
+          "outdoor class",
+          "the amazing race signups"
+        ],
+        "patterns": [
+          "hosted",
+          "outdoor",
+          "event",
+          "race",
+          "workshop",
+          "pop-?up"
+        ]
+      },
+      {
+        "channel": "Other",
+        "sources": [
+          "abandoned checkout",
+          "endpoint (api)",
+          "the studio by copper + cloves",
+          "plash pilates",
+          "physique kids",
+          "other"
+        ],
+        "patterns": [
+          "abandon",
+          "endpoint",
+          "copper",
+          "plash"
+        ]
+      }
+    ],
+    "channel_fallback": "Other"
+  }
+}

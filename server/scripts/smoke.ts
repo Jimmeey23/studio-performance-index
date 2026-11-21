@@ -1,0 +1,18 @@
+import { runMetricsQuery } from '../src/semantic/engine.js';
+import * as A from '../src/analytics/analyses.js';
+const show = (label: string, r: any) => { console.log('\n## ' + label, r.verified === false ? '(UNVERIFIED)' : ''); console.log(JSON.stringify(r.rows?.slice(0, 8) ?? r, null, 0).slice(0, 1500)); if (r.totals) console.log('totals', JSON.stringify(r.totals).slice(0, 400)); if (r.notes) console.log('notes', r.notes.join(' | ').slice(0, 600)); if (r.checks?.length) console.log('checks', JSON.stringify(r.checks).slice(0,400)); };
+const t = async (l: string, f: () => Promise<any>) => { try { show(l, await f()); } catch (e: any) { console.log('\n## ' + l + ' ERROR: ' + e.message); } };
+await t('rev by loc Oct-26 vs LY', () => runMetricsQuery({ metrics: ['revenue', 'paying_clients', 'atv'], dimensions: ['location'], start: '2026-10-01', end: '2026-10-31', compare: 'previous_year' }));
+await t('multi-model monthly', () => runMetricsQuery({ metrics: ['revenue', 'visits', 'new_clients', 'fill_rate', 'leads'], grain: 'month', start: '2026-05-01', end: '2026-10-31' }));
+await t('bad dim', () => runMetricsQuery({ metrics: ['revenue'], dimensions: ['teacher'] }));
+await t('forecast', () => A.forecast({ metric: 'revenue', horizon: 3 }));
+await t('anomalies', () => A.detectAnomalies({ split_by: 'location' }));
+await t('cohort', () => A.cohortRetention({ months: 6 }));
+await t('funnel', () => A.funnel({ type: 'leads', split_by: 'location' }));
+await t('renewals', () => A.renewalAnalysis({ group_by: 'location', start: '2026-05-01', end: '2026-10-31' }));
+await t('winback', () => A.winbackAnalysis({}));
+await t('targets', () => A.targetVsActual({ metric: 'revenue' }));
+await t('values', () => A.findValues({ dimension: 'product', search: 'annual' }));
+await t('sql', () => A.runSql({ sql: "select location, count(*) n from fct_sessions where is_past group by 1", purpose: 'x' }));
+await t('sql bad', () => A.runSql({ sql: "select * from raw_sales", purpose: 'x' }));
+process.exit(0);

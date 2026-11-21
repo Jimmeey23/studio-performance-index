@@ -1,0 +1,18 @@
+# dependencies & builds
+node_modules/
+web/dist/
+# local data, databases and secrets — never commit
+server/data/
+*.duckdb
+*.duckdb.wal
+server/.env
+.env
+server/config/service-account.json
+*.pem
+# update archives and scratch
+*.tgz
+*.tar.gz
+_to_delete/
+# OS / editor
+.DS_Store
+*.log

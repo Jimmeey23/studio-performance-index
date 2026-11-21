@@ -1,0 +1,525 @@
+/**
+ * Semantic layer: the single place where business metrics are defined.
+ * The AI never writes these formulas itself — it selects metrics/dimensions
+ * and the compiler turns them into SQL. Each metric belongs to exactly one
+ * model, so multi-metric questions are aggregated per model and joined at the
+ * same grain (no fan-out double counting).
+ */
+import { membershipScopeSql, membershipScopeLabel, leadChannelSql, leadStatusSql, leadRules } from '../warehouse/rules.js';
+
+export type Format = 'currency' | 'number' | 'percent' | 'decimal' | 'days';
+
+export interface SemanticModel {
+  id: string;
+  table: string;
+  label: string;
+  timeColumn: string;
+  timeLabel: string;
+  defaultWhere?: string;      // always applied (documented in provenance)
+  defaultRuleLabel?: string;  // human description of defaultWhere for notes
+  dims: Record<string, string>; // dimension id -> SQL expression
+  source: string;
+  drill: { columns: [string, string, string][]; order: string }; // [sql, key, label] for item-level records
+}
+
+export interface Metric {
+  id: string;
+  label: string;
+  model: string;
+  sql: string;               // aggregate SQL expression over the model table
+  format: Format;
+  description: string;
+  higherIsBetter?: boolean;
+  caveat?: string;
+  additive?: boolean;        // can be summed across rows of a breakdown
+}
+
+export const DIMENSIONS: Record<string, { label: string; description: string }> = {
+  location: { label: 'Location', description: 'Canonical studio / partner / pop-up location' },
+  city: { label: 'City', description: 'Mumbai or Bengaluru (from location, else Momence host)' },
+  category: { label: 'Category', description: 'Cleaned product category (Memberships, Class Packages, …)' },
+  product: { label: 'Product', description: 'Cleaned product / membership name' },
+  sold_by: { label: 'Sold by', description: 'Associate who made the sale ("Online / self-serve" when blank)' },
+  payment_method: { label: 'Payment method', description: 'How the client paid' },
+  discount_code: { label: 'Discount code', description: 'Discount / promo code applied' },
+  teacher: { label: 'Teacher', description: 'Instructor' },
+  class_name: { label: 'Class', description: 'Cleaned class format name' },
+  class_type: { label: 'Class type', description: 'Session type (Barre 57, PowerCycle, Strength …)' },
+  day_of_week: { label: 'Day of week', description: 'Day of the week' },
+  time_slot: { label: 'Time slot', description: 'Morning (<12:00), Afternoon (<17:00), Evening' },
+  start_time: { label: 'Start time', description: 'Class start time (HH:MM)' },
+  source: { label: 'Lead source', description: 'Lead / client acquisition source' },
+  channel: { label: 'Channel', description: 'Acquisition channel — lead sources grouped by the governed mapping in config/business-rules.json (leads.channels)' },
+  associate: { label: 'Associate', description: 'Sales associate owning the lead' },
+  stage: { label: 'Lead stage', description: 'CRM pipeline stage' },
+  status: { label: 'Status', description: 'Record status (lead status / membership status)' },
+  membership: { label: 'Membership', description: 'Membership / package name' },
+  campaign: { label: 'Campaign', description: 'Ad campaign name' },
+  platform: { label: 'Platform', description: 'Ad platform (Facebook, Instagram …)' },
+  trial_product: { label: 'Trial product', description: 'Product used for the first visit' },
+  visit_type: { label: 'Visit type', description: 'Momence first-visit label (New - Trial Class, New - Paid First Visit, …)' },
+  client: { label: 'Client ID', description: 'Momence member ID' },
+  weekpart: { label: 'Weekday / weekend', description: 'Weekday or weekend' },
+  hour: { label: 'Hour', description: 'Hour of day (HH:00)' },
+  prime_time: { label: 'Prime time', description: 'Prime (06–10, 18–21) vs off-peak' },
+  slot: { label: 'Slot', description: 'Day + start time (e.g. Mon 07:15)' },
+  recurring_class: { label: 'Recurring class', description: 'Class + day + time at a studio' },
+  class_teacher: { label: 'Class × teacher', description: 'Class format paired with teacher' },
+  studio_class: { label: 'Studio × class', description: 'Location paired with class format' },
+  room_size: { label: 'Room size', description: 'Capacity band: Small ≤8, Medium 9–12, Large 13+' },
+  product_family: { label: 'Product family', description: 'Unlimited / time-based, Class packs, Single class, Newcomer offers, Privates, Retail, Other' },
+  seller_type: { label: 'Sold by staff or online', description: 'Staff-assisted vs online / self-serve sale' },
+  notice: { label: 'Notice given', description: 'Hours between cancellation and class (late-cancel notice band)' },
+  first_visit_type: { label: 'First visit type', description: 'Momence label of the visit (trial, paid first visit, repeat…)' },
+  new_client_type: { label: 'New client type', description: 'The New sheet\'s “Is New” label — New - Trial Class / Hosted Class / Referral Class / Paid First Visit / Others / Influencer Sign Up / Complimentary. Conversion differs hugely by type.' },
+  format: { label: 'Format', description: 'Barre / powerCycle / Strength Lab (Other = hosted / unknown), derived from the class name' },
+  crm_channel: { label: 'Channel (as in CRM sheet)', description: 'Channel exactly as entered in the leads sheet, before the governed source → channel grouping' },
+  status_group: { label: 'Outcome', description: 'Converted / not converted (new clients) or lead status' },
+};
+
+const WEEKPART = (ts: string) => `case when dayofweek(${ts}) in (0, 6) then 'Weekend' else 'Weekday' end`;
+const HOUR = (ts: string) => `lpad(cast(hour(${ts}) as varchar), 2, '0') || ':00'`;
+const PRIME = (ts: string) => `case when (hour(${ts}) >= 6 and hour(${ts}) < 10) or (hour(${ts}) >= 18 and hour(${ts}) < 21) then 'Prime time' else 'Off-peak' end`;
+/** Barre vs powerCycle vs Strength Lab, from a class-name column. */
+export const FORMAT = (c: string) => `case when ${c} is null or trim(${c}) = '' then null when lower(${c}) similar to '.*(power ?cycle|cycle).*' then 'powerCycle' when lower(${c}) like '%strength%' then 'Strength Lab' when lower(${c}) similar to '.*(hosted|unknown|nutrition|event|workshop).*' then 'Other' else 'Barre' end`;
+const SLOT = (ts: string) => `strftime(${ts}, '%a %H:%M')`;
+const PRODUCT_FAMILY = `case when lower(coalesce(product,'')) similar to '.*(newcomer|intro|2 for 1|trial).*' then 'Newcomer offers'
+  when category = 'Privates' then 'Privates' when category = 'Retail' then 'Retail' when category in ('Money Credits', 'Gift Cards') then 'Credits & gift cards'
+  when lower(coalesce(product,'')) similar to '.*(unlimited|annual|month|week).*' then 'Unlimited / time-based'
+  when lower(coalesce(product,'')) similar to '.*(package|pack|class x|[0-9]+ class).*' then 'Class packs'
+  when lower(coalesce(product,'')) similar to '.*(single|session).*' then 'Single class' else 'Other' end`;
+
+export const MODELS: SemanticModel[] = [
+  {
+    id: 'sales', table: 'fct_sales', label: 'Sales', timeColumn: 'payment_ts', timeLabel: 'payment date',
+    source: 'Sales - Raw › Sales',
+    dims: {
+      location: 'location', city: 'city', category: 'category', product: 'product', sold_by: 'sold_by',
+      payment_method: 'payment_method', discount_code: 'discount_code', membership: 'product',
+      day_of_week: 'dayname(payment_ts)', client: 'member_id', weekpart: WEEKPART('payment_ts'), hour: HOUR('payment_ts'),
+      product_family: PRODUCT_FAMILY, seller_type: `case when is_self_serve then 'Online / self-serve' else 'Staff' end`,
+    },
+    drill: { order: 'payment_ts desc', columns: [
+      ['payment_ts::varchar', 'payment_ts', 'Paid at'], ['customer_name', 'customer_name', 'Client'], ['member_id', 'member_id', 'Member ID'],
+      ['product', 'product', 'Product'], ['category', 'category', 'Category'], ['gross_amount', 'gross_amount', 'Amount (gross)'],
+      ['tax_amount', 'tax_amount', 'GST'], ['discount_amount', 'discount_amount', 'Discount'], ['discount_code', 'discount_code', 'Code'],
+      ['payment_method', 'payment_method', 'Method'], ['sold_by', 'sold_by', 'Sold by'], ['location', 'location', 'Location'], ['sale_id', 'sale_id', 'Sale ID'],
+    ] },
+  },
+  {
+    id: 'visits', table: 'fct_visits', label: 'Bookings & visits', timeColumn: 'session_ts', timeLabel: 'class date',
+    source: 'Day End Report - Part 4 › Checkins (2024+) and Bookings Data (history)',
+    defaultWhere: "not is_imported and session_ts <= (now() at time zone 'Asia/Kolkata')",
+    dims: {
+      location: 'location', city: 'city', teacher: 'teacher', class_name: 'class_name', product: 'product',
+      category: 'category', day_of_week: 'day_of_week', time_slot: 'time_slot', visit_type: 'new_label', client: 'member_id',
+      membership: 'product', weekpart: WEEKPART('session_ts'), hour: HOUR('session_ts'), prime_time: PRIME('session_ts'), slot: SLOT('session_ts'),
+      recurring_class: `coalesce(location,'') || ' · ' || coalesce(class_name,'') || ' · ' || strftime(session_ts, '%a %H:%M')`,
+      class_teacher: `coalesce(class_name,'') || ' · ' || coalesce(teacher,'')`, studio_class: `coalesce(location,'') || ' · ' || coalesce(class_name,'')`,
+      first_visit_type: 'new_label', format: FORMAT('class_name'),
+    },
+    drill: { order: 'session_ts desc', columns: [
+      ['session_ts::varchar', 'session_ts', 'Class time'], ['member_id', 'member_id', 'Member ID'], ['class_name', 'class_name', 'Class'],
+      ['teacher', 'teacher', 'Teacher'], ['location', 'location', 'Location'], ['product', 'product', 'Paid with'], ['category', 'category', 'Category'],
+      ['attended', 'attended', 'Attended'], ['late_cancelled', 'late_cancelled', 'Late cancel'], ['complimentary', 'complimentary', 'Complimentary'],
+      ['paid_amount', 'paid_amount', 'Visit value'], ['new_label', 'new_label', 'Visit type'], ['source', 'source', 'Source'],
+    ] },
+  },
+  {
+    id: 'sessions', table: 'fct_sessions', label: 'Classes', timeColumn: 'session_ts', timeLabel: 'class date',
+    source: 'Day End Report - Part 3 › Sessions', defaultWhere: 'is_past',
+    dims: {
+      location: 'location', city: 'city', teacher: 'teacher', class_type: 'class_type', class_name: 'session_name',
+      day_of_week: 'day_of_week', time_slot: 'time_slot', start_time: 'start_time', weekpart: WEEKPART('session_ts'), hour: HOUR('session_ts'),
+      prime_time: PRIME('session_ts'), slot: SLOT('session_ts'),
+      recurring_class: `coalesce(location,'') || ' · ' || coalesce(session_name,'') || ' · ' || strftime(session_ts, '%a %H:%M')`,
+      class_teacher: `coalesce(session_name,'') || ' · ' || coalesce(teacher,'')`, studio_class: `coalesce(location,'') || ' · ' || coalesce(session_name,'')`,
+      format: FORMAT('session_name'),
+      room_size: `case when capacity <= 8 then 'Small (≤8)' when capacity <= 12 then 'Medium (9–12)' else 'Large (13+)' end`,
+    },
+    drill: { order: 'session_ts desc', columns: [
+      ['session_ts::varchar', 'session_ts', 'Class time'], ['session_name', 'session_name', 'Class'], ['session_title', 'session_title', 'Session name'], ['class_type', 'class_type', 'Type'],
+      ['teacher', 'teacher', 'Teacher'], ['location', 'location', 'Location'], ['capacity', 'capacity', 'Capacity'], ['booked', 'booked', 'Booked'],
+      ['checked_in', 'checked_in', 'Checked in'], ['late_cancelled', 'late_cancelled', 'Late cancels'], ['round(checked_in / nullif(capacity, 0), 4)', 'fill', 'Fill'],
+      ['revenue', 'revenue', 'Revenue'], ['complimentary', 'complimentary', 'Comp'], ['session_id', 'session_id', 'Session ID'],
+    ] },
+  },
+  {
+    id: 'new_clients', table: 'fct_new_clients', label: 'New clients', timeColumn: 'first_visit_ts', timeLabel: 'first visit date',
+    source: 'Day End Report - Part 1 › New', defaultWhere: 'is_new_client',
+    dims: {
+      location: 'first_visit_location', city: 'city', trial_product: 'trial_product', teacher: 'first_visit_teacher',
+      source: 'source', channel: 'lead_channel', associate: 'lead_associate', client: 'member_id',
+      weekpart: WEEKPART('first_visit_ts'), hour: HOUR('first_visit_ts'), prime_time: PRIME('first_visit_ts'), day_of_week: 'dayname(first_visit_ts)',
+      status_group: `case when is_converted then 'Converted' else 'Not converted' end`, first_visit_type: 'first_visit_type', new_client_type: 'is_new_label',
+      format: FORMAT('first_visit_class'), class_name: 'first_visit_class',
+    },
+    drill: { order: 'first_visit_ts desc', columns: [
+      ['first_visit_ts::varchar', 'first_visit_ts', 'First visit'], ['client_name', 'client_name', 'Client'], ['member_id', 'member_id', 'Member ID'],
+      ['first_visit_location', 'first_visit_location', 'Location'], ['trial_product', 'trial_product', 'Trial product'], ['first_visit_teacher', 'first_visit_teacher', 'Teacher'],
+      ['conversion_status', 'conversion_status', 'Conversion'], ['retention_status', 'retention_status', 'Retention'], ['first_purchase_product', 'first_purchase_product', 'First purchase'],
+      ['first_purchase_value', 'first_purchase_value', 'First purchase value'], ['days_to_convert', 'days_to_convert', 'Days to convert'], ['visits_post_trial', 'visits_post_trial', 'Visits after trial'],
+      ['ltv', 'ltv', 'LTV'], ['source', 'source', 'Source'],
+    ] },
+  },
+  {
+    id: 'trials', table: 'fct_new_clients', label: 'Trials (all first-visit attendees)', timeColumn: 'first_visit_ts', timeLabel: 'first visit date',
+    source: 'Day End Report - Part 1 › New', defaultWhere: 'is_trial',
+    dims: {
+      location: 'first_visit_location', city: 'city', trial_product: 'trial_product', teacher: 'first_visit_teacher',
+      source: 'source', channel: 'lead_channel', associate: 'lead_associate', client: 'member_id',
+      weekpart: WEEKPART('first_visit_ts'), hour: HOUR('first_visit_ts'), prime_time: PRIME('first_visit_ts'), day_of_week: 'dayname(first_visit_ts)',
+      status_group: `case when is_converted then 'Converted' else 'Not converted' end`, first_visit_type: 'first_visit_type',
+      format: FORMAT('first_visit_class'), class_name: 'first_visit_class',
+    },
+    drill: { order: 'first_visit_ts desc', columns: [
+      ['first_visit_ts::varchar', 'first_visit_ts', 'First visit'], ['client_name', 'client_name', 'Client'], ['member_id', 'member_id', 'Member ID'],
+      ['first_visit_location', 'first_visit_location', 'Location'], ['trial_product', 'trial_product', 'Trial product'], ['first_visit_teacher', 'first_visit_teacher', 'Teacher'],
+      ['conversion_status', 'conversion_status', 'Conversion'], ['retention_status', 'retention_status', 'Retention'], ['first_purchase_product', 'first_purchase_product', 'First purchase'],
+      ['first_purchase_value', 'first_purchase_value', 'First purchase value'], ['days_to_convert', 'days_to_convert', 'Days to convert'], ['visits_post_trial', 'visits_post_trial', 'Visits after trial'],
+      ['ltv', 'ltv', 'LTV'], ['source', 'source', 'Source'],
+    ] },
+  },
+  {
+    id: 'leads', table: 'fct_leads', label: 'Leads', timeColumn: 'created_ts', timeLabel: 'lead created date',
+    source: '❖ PM - Leads ❖ › ◉ Leads',
+    dims: {
+      location: 'location', city: 'city', source: 'source', channel: leadChannelSql('source'), crm_channel: 'channel', associate: 'associate', stage: 'stage',
+      status: 'status', class_type: 'class_type', campaign: 'utm_campaign', weekpart: WEEKPART('created_ts'), day_of_week: 'dayname(created_ts)',
+      status_group: `case when is_converted then 'Converted' when is_trial_completed then 'Trial completed' else 'No trial' end`,
+    },
+    drill: { order: 'created_ts desc', columns: [
+      ['created_date::varchar', 'created_date', 'Created'], ['lead_name', 'lead_name', 'Lead'], ['phone', 'phone', 'Phone'], ['source', 'source', 'Source'],
+      [leadChannelSql('source'), 'channel', 'Channel'], ['stage', 'stage', 'Stage'], ['status', 'status', 'Status'], ['associate', 'associate', 'Associate'],
+      ['location', 'location', 'Centre'], ['trial_status', 'trial_status', 'Trial'], ['conversion_status', 'conversion_status', 'Conversion'],
+      ['ltv', 'ltv', 'LTV'], ['visits', 'visits', 'Visits'], ['member_id', 'member_id', 'Member ID'],
+    ] },
+  },
+  {
+    id: 'ads', table: 'fct_ad_spend', label: 'Meta ads', timeColumn: 'ad_date', timeLabel: 'ad delivery date',
+    source: '❖ PM - Leads ❖ › Meta_Daily_Data',
+    dims: { city: 'city', location: 'location', campaign: 'campaign', platform: 'platform', weekpart: WEEKPART('ad_date'), day_of_week: 'dayname(ad_date)' },
+    drill: { order: 'ad_date desc', columns: [
+      ['ad_date::varchar', 'ad_date', 'Date'], ['campaign', 'campaign', 'Campaign'], ['platform', 'platform', 'Platform'], ['city', 'city', 'City'],
+      ['spend', 'spend', 'Spend'], ['impressions', 'impressions', 'Impressions'], ['clicks', 'clicks', 'Clicks'], ['ad_leads', 'ad_leads', 'Leads'],
+      ['round(spend / nullif(ad_leads, 0), 2)', 'cpl', 'CPL'],
+    ] },
+  },
+  {
+    id: 'memberships', table: 'fct_memberships', label: 'Membership expiries', timeColumn: 'end_ts', timeLabel: 'membership end date',
+    source: 'Lapsed New › Lapsed',
+    // recurring memberships only — rules editable in config/business-rules.json (renewal.exclude_*)
+    get defaultWhere() { return membershipScopeSql('membership', 'amount_paid'); },
+    get defaultRuleLabel() { return membershipScopeLabel(); },
+    dims: {
+      location: 'location', city: 'city', membership: 'membership', status: 'status', sold_by: 'sold_by',
+      product_family: `case when lower(coalesce(membership,'')) similar to '.*(newcomer|intro|2 for 1|trial).*' then 'Newcomer offers' when lower(coalesce(membership,'')) similar to '.*(unlimited|annual|month|week).*' then 'Unlimited / time-based' when lower(coalesce(membership,'')) similar to '.*(package|pack|[0-9]+ class).*' then 'Class packs' when lower(coalesce(membership,'')) similar to '.*(single|class).*' then 'Single / complimentary class' else 'Other' end`,
+    },
+    drill: { order: 'end_ts desc', columns: [
+      ['client_name', 'client_name', 'Client'], ['member_id', 'member_id', 'Member ID'], ['membership', 'membership', 'Membership'], ['status', 'status', 'Status'],
+      ['start_date::varchar', 'start_date', 'Start'], ['end_date::varchar', 'end_date', 'End'], ['amount_paid', 'amount_paid', 'Paid'], ['location', 'location', 'Location'],
+      ['total_sessions', 'total_sessions', 'Sessions used'], ['remaining_sessions', 'remaining_sessions', 'Remaining'], ['last_visit_ts::varchar', 'last_visit_ts', 'Last visit'], ['sold_by', 'sold_by', 'Sold by'],
+    ] },
+  },
+  {
+    id: 'late_cancels', table: 'fct_late_cancellations', label: 'Late cancellations', timeColumn: 'session_ts', timeLabel: 'class date',
+    source: 'Day End Report - Part 1 › Late Cancellations',
+    dims: {
+      location: 'home_location', city: 'city', class_name: 'class_name', membership: 'membership', day_of_week: 'dayname(session_ts)', format: FORMAT('class_name'),
+      hour: HOUR('session_ts'), weekpart: WEEKPART('session_ts'),
+      notice: `case when hours_before_class < 1 then '< 1 hour' when hours_before_class < 3 then '1–3 hours' when hours_before_class < 6 then '3–6 hours' when hours_before_class < 12 then '6–12 hours' else '12+ hours' end`,
+    },
+    drill: { order: 'session_ts desc', columns: [
+      ['session_ts::varchar', 'session_ts', 'Class time'], ['cancelled_ts::varchar', 'cancelled_ts', 'Cancelled at'], ['round(hours_before_class, 1)', 'hours_before_class', 'Hours notice'],
+      ['member_id', 'member_id', 'Member ID'], ['class_name', 'class_name', 'Class'], ['membership', 'membership', 'Membership'], ['home_location', 'home_location', 'Home location'],
+      ['penalty_amount', 'penalty_amount', 'Penalty'],
+    ] },
+  },
+  {
+    id: 'teacher_month', table: 'fct_teacher_month', label: 'Teacher payroll', timeColumn: 'month', timeLabel: 'payroll month',
+    source: 'Day End Report - Part 1 › Payroll',
+    dims: { teacher: 'teacher', location: 'location', city: 'city' },
+    drill: { order: 'month desc', columns: [
+      ['month::varchar', 'month', 'Month'], ['teacher', 'teacher', 'Teacher'], ['location', 'location', 'Location'], ['sessions', 'sessions', 'Sessions'],
+      ['empty_sessions', 'empty_sessions', 'Empty'], ['customers', 'customers', 'Customers'], ['paid_amount', 'paid_amount', 'Paid'],
+      ['new_clients', 'new_clients', 'New clients'], ['converted', 'converted', 'Converted'], ['retained', 'retained', 'Retained'],
+    ] },
+  },
+];
+
+const m = (x: Metric) => x;
+
+export const METRICS: Metric[] = [
+  // ── Sales ────────────────────────────────────────────────────────────────
+  m({ id: 'revenue', label: 'Revenue (gross)', model: 'sales', sql: 'sum(gross_amount)', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Cash collected (Payment Value) on successful, non-voided sale items, including GST. Amounts settled with previously bought money credits are not counted again.' }),
+  m({ id: 'net_revenue', label: 'Revenue (net of GST)', model: 'sales', sql: 'sum(net_amount)', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Gross revenue minus GST (Payment VAT).' }),
+  m({ id: 'gst', label: 'GST collected', model: 'sales', sql: 'sum(tax_amount)', format: 'currency', additive: true,
+    description: 'Sum of Payment VAT on valid sale items.' }),
+  m({ id: 'transactions', label: 'Transactions', model: 'sales', sql: 'count(distinct coalesce(sale_id, sale_item_id))', format: 'number', higherIsBetter: true,
+    description: 'Distinct sales (a sale can contain several items; items without a sale id count as their own sale).' }),
+  m({ id: 'units_sold', label: 'Units sold', model: 'sales', sql: 'sum(quantity)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Sale item quantity.' }),
+  m({ id: 'paying_clients', label: 'Paying clients', model: 'sales', sql: 'count(distinct member_id)', format: 'number', higherIsBetter: true,
+    description: 'Distinct clients with at least one valid purchase.' }),
+  m({ id: 'atv', label: 'Avg transaction value', model: 'sales', sql: 'sum(gross_amount) / nullif(count(distinct coalesce(sale_id, sale_item_id)), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Gross revenue ÷ transactions.' }),
+  m({ id: 'revenue_per_client', label: 'Revenue per paying client', model: 'sales', sql: 'sum(gross_amount) / nullif(count(distinct member_id), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Gross revenue ÷ distinct paying clients.' }),
+  m({ id: 'discount_amount', label: 'Discount value', model: 'sales', sql: 'sum(discount_amount)', format: 'currency', additive: true, higherIsBetter: false,
+    description: 'Sum of discount value on valid sale items.' }),
+  m({ id: 'discount_rate', label: 'Discount %', model: 'sales', sql: 'sum(discount_amount) / nullif(sum(gross_amount) + sum(discount_amount), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Discounts ÷ (gross revenue + discounts), i.e. share of list value given away.' }),
+  m({ id: 'list_value', label: 'List value (before discount)', model: 'sales', sql: 'sum(gross_amount) + sum(coalesce(discount_amount, 0))', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Gross revenue plus discounts — what the items would have sold for at list price.' }),
+  m({ id: 'discounted_transactions', label: 'Discounted transactions', model: 'sales', sql: 'count(distinct coalesce(sale_id, sale_item_id)) filter (where coalesce(discount_amount, 0) > 0)', format: 'number', higherIsBetter: false,
+    description: 'Transactions with at least one discounted item.' }),
+  m({ id: 'discounted_txn_share', label: 'Discounted transactions %', model: 'sales', sql: 'count(distinct coalesce(sale_id, sale_item_id)) filter (where coalesce(discount_amount, 0) > 0) / nullif(count(distinct coalesce(sale_id, sale_item_id)), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Share of transactions that carried a discount.' }),
+  m({ id: 'avg_discount', label: 'Avg discount per discounted sale', model: 'sales', sql: 'sum(discount_amount) / nullif(count(distinct coalesce(sale_id, sale_item_id)) filter (where coalesce(discount_amount, 0) > 0), 0)', format: 'currency', higherIsBetter: false,
+    description: 'Discount value ÷ discounted transactions.' }),
+  m({ id: 'units_per_transaction', label: 'Units per transaction', model: 'sales', sql: 'sum(quantity) / nullif(count(distinct coalesce(sale_id, sale_item_id)), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Units sold ÷ transactions.' }),
+  m({ id: 'avg_unit_price', label: 'Avg selling price per unit', model: 'sales', sql: 'sum(gross_amount) / nullif(sum(quantity), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Gross revenue ÷ units sold.' }),
+  m({ id: 'membership_revenue', label: 'Membership revenue', model: 'sales', sql: "sum(gross_amount) filter (where category = 'Memberships')", format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Gross revenue from the Memberships category.' }),
+  m({ id: 'package_revenue', label: 'Class package revenue', model: 'sales', sql: "sum(gross_amount) filter (where category = 'Class Packages')", format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Gross revenue from the Class Packages category.' }),
+
+  // ── Visits ───────────────────────────────────────────────────────────────
+  m({ id: 'visits', label: 'Visits (attended)', model: 'visits', sql: 'count(*) filter (where attended)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Bookings where the client checked in.' }),
+  m({ id: 'bookings', label: 'Bookings', model: 'visits', sql: 'count(*) filter (where not early_cancelled)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Bookings excluding early (free) cancellations.' }),
+  m({ id: 'late_cancellations', label: 'Late cancellations', model: 'visits', sql: 'count(*) filter (where late_cancelled)', format: 'number', additive: true, higherIsBetter: false,
+    description: 'Bookings late-cancelled.' }),
+  m({ id: 'late_cancel_rate', label: 'Late-cancel rate', model: 'visits', sql: 'count(*) filter (where late_cancelled) / nullif(count(*) filter (where not early_cancelled), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Late cancellations ÷ bookings.' }),
+  m({ id: 'visiting_clients', label: 'Visiting clients (total)', model: 'visits', sql: 'count(distinct member_id) filter (where attended)', format: 'number', higherIsBetter: true,
+    description: 'Distinct clients with at least one attended visit (paying + complimentary).' }),
+  m({ id: 'paying_visiting_clients', label: 'Visiting clients (paying)', model: 'visits', sql: 'count(distinct member_id) filter (where attended and not complimentary and coalesce(paid_amount, 0) > 0)', format: 'number', higherIsBetter: true,
+    description: 'Distinct clients with an attended visit paid through a membership, package or single class (excludes complimentary).',
+    caveat: 'Uses per-visit paid value; only reliable from Checkins coverage (2024+).' }),
+  m({ id: 'visits_per_client', label: 'Visits per client', model: 'visits', sql: 'count(*) filter (where attended) / nullif(count(distinct member_id) filter (where attended), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Attended visits ÷ visiting clients.' }),
+  m({ id: 'trial_visits', label: 'Trial visits', model: 'visits', sql: "count(*) filter (where attended and new_label ilike 'new - trial%')", format: 'number', additive: true, higherIsBetter: true,
+    description: 'Attended visits labelled "New - Trial Class" by Momence.' }),
+  m({ id: 'new_client_visits', label: 'First visits (new clients)', model: 'visits', sql: "count(*) filter (where attended and new_label ilike 'new -%')", format: 'number', additive: true, higherIsBetter: true,
+    description: 'Attended visits Momence labels as a client\'s first visit (trial, paid first visit, referral, hosted, influencer, other).' }),
+  m({ id: 'complimentary_visits', label: 'Complimentary visits', model: 'visits', sql: 'count(*) filter (where attended and complimentary)', format: 'number', additive: true,
+    description: 'Attended visits on complimentary/promotional credits.' }),
+  m({ id: 'recognised_visit_value', label: 'Recognised class value', model: 'visits', sql: 'sum(paid_amount) filter (where attended)', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Sum of per-visit value of credits/memberships consumed by attended visits (usage-based, not cash).',
+    caveat: 'Not the same as sales revenue: this spreads membership/package value across visits. Available from 2024.' }),
+
+  // ── Classes ──────────────────────────────────────────────────────────────
+  m({ id: 'classes', label: 'Classes held', model: 'sessions', sql: 'count(*)', format: 'number', additive: true,
+    description: 'Delivered (past) scheduled classes.' }),
+  m({ id: 'class_checkins', label: 'Class check-ins', model: 'sessions', sql: 'sum(checked_in)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Total check-ins across classes.' }),
+  m({ id: 'capacity', label: 'Capacity (spots)', model: 'sessions', sql: 'sum(capacity)', format: 'number', additive: true,
+    description: 'Total available spots across classes.' }),
+  m({ id: 'fill_rate', label: 'Fill rate', model: 'sessions', sql: 'sum(checked_in) / nullif(sum(capacity), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Check-ins ÷ capacity.' }),
+  m({ id: 'class_average', label: 'Class average (excl. empty)', model: 'sessions', sql: 'sum(checked_in) / nullif(count(*) filter (where checked_in > 0), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Check-ins ÷ classes with at least one check-in.' }),
+  m({ id: 'class_average_all', label: 'Class average (incl. empty)', model: 'sessions', sql: 'sum(checked_in) / nullif(count(*), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Check-ins ÷ all classes held.' }),
+  m({ id: 'empty_classes', label: 'Empty classes', model: 'sessions', sql: 'count(*) filter (where checked_in = 0)', format: 'number', additive: true, higherIsBetter: false,
+    description: 'Classes with zero check-ins.' }),
+  m({ id: 'class_revenue', label: 'Class revenue', model: 'sessions', sql: 'sum(revenue)', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Session-level revenue attributed by Momence (per-visit value).',
+    caveat: 'Usage-based value attributed to classes; do not add to sales revenue.' }),
+  m({ id: 'revenue_per_class', label: 'Revenue per class', model: 'sessions', sql: 'sum(revenue) / nullif(count(*), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Class revenue ÷ classes held.' }),
+  m({ id: 'scheduled_classes', label: 'Scheduled classes (all)', model: 'sessions', sql: 'count(*)', format: 'number', additive: true,
+    description: 'All classes incl. future schedule. Use with include_future=true.' }),
+
+  // ── New clients & conversion ─────────────────────────────────────────────
+  m({ id: 'trials', label: 'Trials', model: 'trials', sql: 'count(*)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Every member in the New sheet who attended a session (all first-visit attendees, incl. staff/family and repeat visits).' }),
+  m({ id: 'trial_to_new_share', label: 'New-client share of trials', model: 'trials', sql: 'count(*) filter (where is_new_client) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'New clients (Is New contains "new") ÷ trials.' }),
+  m({ id: 'new_clients', label: 'New clients', model: 'new_clients', sql: 'count(*)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Members in the New sheet whose "Is New" value contains "new" (e.g. New - Trial Class, New - Hosted Class), by first-visit date.' }),
+  m({ id: 'converted_clients', label: 'Converted clients', model: 'new_clients', sql: 'count(*) filter (where is_converted)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'New clients with Conversion Status = Converted (bought after trial).' }),
+  m({ id: 'conversion_rate', label: 'Trial→paid conversion', model: 'new_clients', sql: 'count(*) filter (where is_converted) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Converted ÷ new clients, by first-visit cohort.',
+    caveat: 'Recent cohorts are still maturing — conversion for the last 30–60 days will rise.' }),
+  m({ id: 'retained_clients', label: 'Retained clients', model: 'new_clients', sql: 'count(*) filter (where is_retained)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'New clients with Retention Status = Retained.' }),
+  m({ id: 'retention_rate', label: 'New-client retention', model: 'new_clients', sql: 'count(*) filter (where is_retained) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Retained ÷ new clients, by first-visit cohort.', caveat: 'Recent cohorts are still maturing.' }),
+  m({ id: 'new_client_avg_ltv', label: 'Avg LTV of new clients', model: 'new_clients', sql: 'avg(coalesce(ltv, 0))', format: 'currency', higherIsBetter: true,
+    description: 'Average lifetime value recorded for clients in the cohort.' }),
+  m({ id: 'avg_days_to_convert', label: 'Avg days to convert', model: 'new_clients', sql: 'avg(days_to_convert) filter (where is_converted and days_to_convert >= 0)', format: 'days', higherIsBetter: false,
+    description: 'Mean days from first visit to first purchase, converted clients only.' }),
+
+  // ── Leads ────────────────────────────────────────────────────────────────
+  m({ id: 'leads', label: 'Leads', model: 'leads', sql: 'count(*)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Leads created in the period.' }),
+  m({ id: 'lead_trials', label: 'Lead trials completed', model: 'leads', sql: 'count(*) filter (where is_trial_completed)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Leads whose trial status indicates a completed trial.' }),
+  m({ id: 'lead_to_trial_rate', label: 'Lead→trial rate', model: 'leads', sql: 'count(*) filter (where is_trial_completed) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Trials completed ÷ leads (by lead created date).' }),
+  m({ id: 'lead_conversions', label: 'Lead conversions', model: 'leads', sql: 'count(*) filter (where is_converted)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Leads with Conversion Status = Converted.' }),
+  m({ id: 'lead_conversion_rate', label: 'Lead→member conversion', model: 'leads', sql: 'count(*) filter (where is_converted) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Converted leads ÷ leads (by lead created date).' }),
+  m({ id: 'trial_to_member_rate', label: 'Lead trial→member rate', model: 'leads', sql: 'count(*) filter (where is_converted and is_trial_completed) / nullif(count(*) filter (where is_trial_completed), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Converted ÷ leads who completed a trial.' }),
+  m({ id: 'lead_ltv', label: 'Lead LTV (total)', model: 'leads', sql: 'sum(coalesce(ltv, 0))', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Lifetime value recorded against leads.' }),
+  m({ id: 'lead_ltv_per_conversion', label: 'LTV per converted lead', model: 'leads', sql: 'sum(coalesce(ltv, 0)) filter (where is_converted) / nullif(count(*) filter (where is_converted), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Lifetime value recorded against converted leads ÷ converted leads.' }),
+  m({ id: 'qualified_leads', label: 'Qualified leads', model: 'leads', sql: `count(*) filter (where ${leadStatusSql('qualified')})`, format: 'number', additive: true, higherIsBetter: true,
+    description: leadRules().qualified_definition }),
+  m({ id: 'qualification_rate', label: 'Qualification rate', model: 'leads', sql: `count(*) filter (where ${leadStatusSql('qualified')}) / nullif(count(*), 0)`, format: 'percent', higherIsBetter: true,
+    description: 'Qualified leads ÷ leads.' }),
+  m({ id: 'disqualified_leads', label: 'Disqualified leads', model: 'leads', sql: `count(*) filter (where ${leadStatusSql('disqualified')})`, format: 'number', additive: true, higherIsBetter: false,
+    description: leadRules().disqualified_definition }),
+  m({ id: 'disqualification_rate', label: 'Disqualification rate', model: 'leads', sql: `count(*) filter (where ${leadStatusSql('disqualified')}) / nullif(count(*), 0)`, format: 'percent', higherIsBetter: false,
+    description: 'Disqualified leads ÷ leads.' }),
+  m({ id: 'lost_only_leads', label: 'Lost leads', model: 'leads', sql: `count(*) filter (where ${leadStatusSql('lost')})`, format: 'number', additive: true, higherIsBetter: false,
+    description: leadRules().lost_definition }),
+  m({ id: 'unresponsive_leads', label: 'Unresponsive leads', model: 'leads', sql: `count(*) filter (where ${leadStatusSql('unresponsive')})`, format: 'number', additive: true, higherIsBetter: false,
+    description: leadRules().unresponsive_definition }),
+
+  // ── Ads ──────────────────────────────────────────────────────────────────
+  m({ id: 'ad_spend', label: 'Meta ad spend', model: 'ads', sql: 'sum(spend)', format: 'currency', additive: true,
+    description: 'Meta Ads spend.' }),
+  m({ id: 'ad_leads', label: 'Meta leads', model: 'ads', sql: 'sum(ad_leads)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Leads reported by Meta.' }),
+  m({ id: 'cost_per_lead', label: 'Cost per lead (Meta)', model: 'ads', sql: 'sum(spend) / nullif(sum(ad_leads), 0)', format: 'currency', higherIsBetter: false,
+    description: 'Spend ÷ Meta-reported leads.' }),
+  m({ id: 'impressions', label: 'Impressions', model: 'ads', sql: 'sum(impressions)', format: 'number', additive: true,
+    description: 'Ad impressions.' }),
+  m({ id: 'ctr', label: 'Click-through rate', model: 'ads', sql: 'sum(clicks) / nullif(sum(impressions), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Clicks ÷ impressions.' }),
+  m({ id: 'ad_roas', label: 'ROAS (Meta-reported)', model: 'ads', sql: 'sum(ad_purchase_value) / nullif(sum(spend), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Meta-attributed purchase value ÷ spend.', caveat: 'Platform-attributed; not reconciled with the sales ledger.' }),
+
+  // ── Memberships ──────────────────────────────────────────────────────────
+  m({ id: 'memberships_expiring', label: 'Memberships ending', model: 'memberships', sql: 'count(*)', format: 'number', additive: true,
+    description: 'Membership instances whose end date falls in the period. For renewal rates use the renewal analysis.' }),
+  m({ id: 'members_expiring', label: 'Members with an expiry', model: 'memberships', sql: 'count(distinct member_id)', format: 'number',
+    description: 'Distinct members with a membership ending in the period.' }),
+  m({ id: 'expiring_value', label: 'Value of ending memberships', model: 'memberships', sql: 'sum(coalesce(amount_paid, 0))', format: 'currency', additive: true,
+    description: 'Amount originally paid for memberships ending in the period (renewal revenue at stake).' }),
+
+  m({ id: 'memberships_renewed_flag', label: 'Ending memberships marked Renewed', model: 'memberships', sql: "count(*) filter (where status = 'Renewed')", format: 'number', additive: true, higherIsBetter: true,
+    description: 'Memberships ending in the period whose status in the Lapsed sheet is "Renewed".' }),
+  m({ id: 'sheet_renewal_rate', label: 'Renewal rate (sheet status)', model: 'memberships', sql: "count(*) filter (where status = 'Renewed') / nullif(count(*) filter (where status in ('Renewed', 'Lapsed')), 0)", format: 'percent', higherIsBetter: true,
+    description: 'Renewed ÷ (Renewed + Lapsed) using the status computed in the Lapsed New sheet, by membership end date.',
+    caveat: 'Uses the sheet\'s own renewal logic; the renewal analysis tool recomputes renewals from the sales ledger as a cross-check.' }),
+
+  // ── Late cancellations (penalties) ───────────────────────────────────────
+  m({ id: 'late_cancel_events', label: 'Late cancellations (log)', model: 'late_cancels', sql: 'count(*)', format: 'number', additive: true, higherIsBetter: false,
+    description: 'Late-cancellation events from the dedicated log (by class date).' }),
+  m({ id: 'late_cancel_penalties', label: 'Late-cancel penalties', model: 'late_cancels', sql: 'sum(penalty_amount)', format: 'currency', additive: true,
+    description: 'Penalty amount charged for late cancellations.' }),
+
+  // ── Teachers ─────────────────────────────────────────────────────────────
+  m({ id: 'teacher_sessions', label: 'Teacher sessions', model: 'teacher_month', sql: 'sum(sessions)', format: 'number', additive: true,
+    description: 'Sessions taught (payroll).' }),
+  m({ id: 'teacher_customers', label: 'Teacher customers', model: 'teacher_month', sql: 'sum(customers)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Customers taught (payroll, sum of class attendance).' }),
+  m({ id: 'teacher_avg_class', label: 'Teacher class average', model: 'teacher_month', sql: 'sum(customers) / nullif(sum(non_empty_sessions), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Customers ÷ non-empty sessions (payroll basis).' }),
+  m({ id: 'teacher_new_clients', label: 'New clients taught', model: 'teacher_month', sql: 'sum(new_clients)', format: 'number', additive: true,
+    description: 'First-visit clients taught (payroll basis).' }),
+  m({ id: 'teacher_conversion_rate', label: 'Teacher conversion rate', model: 'teacher_month', sql: 'sum(converted) / nullif(sum(new_clients), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Converted ÷ new clients taught (payroll basis).' }),
+  m({ id: 'teacher_retention_rate', label: 'Teacher retention rate', model: 'teacher_month', sql: 'sum(retained) / nullif(sum(new_clients), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Retained ÷ new clients taught (payroll basis).' }),
+
+  // ── Additional metrics (governed definitions aligned with Atlas / Studio reference apps) ──
+  m({ id: 'membership_rev_share', label: 'Membership revenue share', model: 'sales', sql: "sum(gross_amount) filter (where category = 'Memberships') / nullif(sum(gross_amount), 0)", format: 'percent', higherIsBetter: true,
+    description: 'Membership revenue ÷ total revenue.' }),
+  m({ id: 'purchase_frequency', label: 'Purchases per client', model: 'sales', sql: 'count(distinct coalesce(sale_id, sale_item_id)) / nullif(count(distinct member_id), 0)', format: 'decimal', higherIsBetter: true,
+    description: 'Transactions ÷ paying clients.' }),
+  m({ id: 'product_breadth', label: 'Distinct products sold', model: 'sales', sql: 'count(distinct product)', format: 'number',
+    description: 'Number of different products sold.' }),
+  m({ id: 'self_serve_share', label: 'Online / self-serve share', model: 'sales', sql: 'sum(gross_amount) filter (where is_self_serve) / nullif(sum(gross_amount), 0)', format: 'percent',
+    description: 'Share of revenue sold online without an associate.' }),
+  m({ id: 'unique_bookers', label: 'Unique bookers', model: 'visits', sql: 'count(distinct member_id) filter (where not early_cancelled)', format: 'number', higherIsBetter: true,
+    description: 'Distinct clients with at least one booking (excluding early cancellations).' }),
+  m({ id: 'show_up_rate', label: 'Show-up rate', model: 'visits', sql: 'count(*) filter (where attended) / nullif(count(*) filter (where not early_cancelled), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Attended ÷ bookings.' }),
+  m({ id: 'staff_family_visits', label: 'Staff & family visits', model: 'visits', sql: "count(*) filter (where attended and new_label = 'Staff/Family Visit')", format: 'number', additive: true,
+    description: 'Attended visits labelled Staff/Family.' }),
+  m({ id: 'booked_seats', label: 'Booked seats', model: 'sessions', sql: 'sum(booked)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Seats booked across classes.' }),
+  m({ id: 'booking_fill_rate', label: 'Booking fill', model: 'sessions', sql: 'sum(booked) / nullif(sum(capacity), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Booked seats ÷ capacity.' }),
+  m({ id: 'class_show_up_rate', label: 'Class show-up rate', model: 'sessions', sql: 'sum(checked_in) / nullif(sum(booked), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Check-ins ÷ booked seats.' }),
+  m({ id: 'empty_class_rate', label: 'Empty-class rate', model: 'sessions', sql: 'count(*) filter (where checked_in = 0) / nullif(count(*), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Empty classes ÷ classes held.' }),
+  m({ id: 'unsold_seats', label: 'Unsold seats', model: 'sessions', sql: 'sum(greatest(capacity - checked_in, 0))', format: 'number', additive: true, higherIsBetter: false,
+    description: 'Capacity not used by a check-in.' }),
+  m({ id: 'revenue_per_attendee', label: 'Revenue per attendee', model: 'sessions', sql: 'sum(revenue) / nullif(sum(checked_in), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Class revenue ÷ check-ins (usage-based yield).' }),
+  m({ id: 'revenue_per_seat', label: 'Revenue per seat', model: 'sessions', sql: 'sum(revenue) / nullif(sum(capacity), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Class revenue ÷ capacity offered.' }),
+  m({ id: 'lost_revenue', label: 'Unsold-seat opportunity', model: 'sessions', sql: 'sum(greatest(capacity - checked_in, 0)) * sum(revenue) / nullif(sum(checked_in), 0)', format: 'currency', higherIsBetter: false,
+    description: 'Unsold seats × revenue per attendee — the value of filling empty spots at current yield.', caveat: 'An upper bound; not all seats can realistically be filled.' }),
+  m({ id: 'non_paid_rate', label: 'Non-paid share', model: 'sessions', sql: 'sum(non_paid) / nullif(sum(checked_in), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Non-paid check-ins ÷ check-ins.' }),
+  m({ id: 'membership_att_share', label: 'Membership attendance share', model: 'sessions', sql: 'sum(membership_checkins) / nullif(sum(membership_checkins + package_checkins + intro_offer_checkins + single_class_checkins), 0)', format: 'percent',
+    description: 'Check-ins on memberships ÷ paid check-ins by credit type.' }),
+  m({ id: 'second_visit_rate', label: 'Second-visit rate', model: 'new_clients', sql: 'count(*) filter (where visits_post_trial > 0) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'New clients who came back at least once after their first visit.' }),
+  m({ id: 'zero_return_rate', label: 'Zero-return rate', model: 'new_clients', sql: 'count(*) filter (where coalesce(visits_post_trial, 0) = 0) / nullif(count(*), 0)', format: 'percent', higherIsBetter: false,
+    description: 'New clients who never came back after the first visit.' }),
+  m({ id: 'median_days_to_convert', label: 'Median days to convert', model: 'new_clients', sql: 'median(days_to_convert) filter (where is_converted and days_to_convert >= 0)', format: 'days', higherIsBetter: false,
+    description: 'Median days from first visit to first purchase (converted clients).' }),
+  m({ id: 'avg_first_purchase', label: 'Avg first purchase', model: 'new_clients', sql: 'avg(first_purchase_value) filter (where is_converted and first_purchase_value > 0)', format: 'currency', higherIsBetter: true,
+    description: 'Average value of the first purchase by converted new clients.' }),
+  m({ id: 'open_leads', label: 'Open pipeline', model: 'leads', sql: "count(*) filter (where not is_converted and coalesce(status, '') not in ('Lost', 'Disqualified', 'Won'))", format: 'number',
+    description: 'Leads not converted and not lost/disqualified.' }),
+  m({ id: 'lost_leads', label: 'Lost + disqualified leads', model: 'leads', sql: "count(*) filter (where status in ('Lost', 'Disqualified'))", format: 'number', additive: true, higherIsBetter: false,
+    description: 'Leads marked Lost or Disqualified.' }),
+  m({ id: 'ad_clicks', label: 'Clicks', model: 'ads', sql: 'sum(clicks)', format: 'number', additive: true, higherIsBetter: true, description: 'Ad clicks.' }),
+  m({ id: 'cpc', label: 'Cost per click', model: 'ads', sql: 'sum(spend) / nullif(sum(clicks), 0)', format: 'currency', higherIsBetter: false, description: 'Spend ÷ clicks.' }),
+  m({ id: 'cpm', label: 'Cost per 1,000 impressions', model: 'ads', sql: 'sum(spend) * 1000 / nullif(sum(impressions), 0)', format: 'currency', higherIsBetter: false, description: 'Spend × 1000 ÷ impressions.' }),
+  m({ id: 'churn_rate', label: 'Churn rate (sheet status)', model: 'memberships', sql: "count(*) filter (where status = 'Lapsed') / nullif(count(*) filter (where status in ('Renewed', 'Lapsed')), 0)", format: 'percent', higherIsBetter: false,
+    description: 'Lapsed ÷ (Renewed + Lapsed) by membership end date — the complement of the sheet renewal rate.' }),
+  m({ id: 'lapsed_memberships', label: 'Lapsed memberships', model: 'memberships', sql: "count(*) filter (where status = 'Lapsed')", format: 'number', additive: true, higherIsBetter: false,
+    description: 'Memberships ending in the period with status Lapsed.' }),
+  m({ id: 'lapsed_value', label: 'Lapsed membership value', model: 'memberships', sql: "sum(coalesce(amount_paid, 0)) filter (where status = 'Lapsed')", format: 'currency', additive: true, higherIsBetter: false,
+    description: 'Amount originally paid for memberships that lapsed.' }),
+  m({ id: 'avg_notice_hours', label: 'Avg late-cancel notice', model: 'late_cancels', sql: 'avg(hours_before_class) filter (where hours_before_class >= 0)', format: 'decimal',
+    description: 'Average hours between cancellation and class start for late cancels.' }),
+  m({ id: 'late_cancel_clients', label: 'Clients late-cancelling', model: 'late_cancels', sql: 'count(distinct member_id)', format: 'number', higherIsBetter: false,
+    description: 'Distinct clients with at least one late cancellation.' }),
+  m({ id: 'teacher_paid', label: 'Teacher-attributed revenue', model: 'teacher_month', sql: 'sum(paid_amount)', format: 'currency', additive: true, higherIsBetter: true,
+    description: 'Revenue attributed to classes taught (payroll basis).' }),
+  m({ id: 'teacher_empty_rate', label: 'Teacher empty-class rate', model: 'teacher_month', sql: 'sum(empty_sessions) / nullif(sum(sessions), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Empty sessions ÷ sessions taught.' }),
+  // ── format comparison helpers ──
+  m({ id: 'session_teachers', label: 'Teachers', model: 'sessions', sql: 'count(distinct teacher)', format: 'number',
+    description: 'Distinct teachers who taught at least one class.' }),
+  m({ id: 'classes_per_teacher', label: 'Classes per teacher', model: 'sessions', sql: 'count(*) / nullif(count(distinct teacher), 0)', format: 'decimal',
+    description: 'Classes held ÷ distinct teachers.' }),
+  m({ id: 'avg_capacity', label: 'Avg capacity', model: 'sessions', sql: 'avg(capacity)', format: 'decimal',
+    description: 'Average seats per class.' }),
+  m({ id: 'sold_out_rate', label: 'Sold-out rate', model: 'sessions', sql: 'count(*) filter (where capacity > 0 and booked >= capacity) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Share of classes where bookings reached capacity.' }),
+  m({ id: 'high_fill_rate', label: 'Classes ≥ 75% full', model: 'sessions', sql: 'count(*) filter (where capacity > 0 and checked_in >= 0.75 * capacity) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'Share of classes with check-ins at or above 75% of capacity.' }),
+  m({ id: 'low_fill_rate', label: 'Classes < 35% full', model: 'sessions', sql: 'count(*) filter (where capacity > 0 and checked_in < 0.35 * capacity) / nullif(count(*), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Share of classes with check-ins below 35% of capacity (under-fillers).' }),
+  m({ id: 'class_late_cancels', label: 'Late cancellations (class)', model: 'sessions', sql: 'sum(late_cancelled)', format: 'number', additive: true, higherIsBetter: false,
+    description: 'Late cancellations recorded against classes held.' }),
+  m({ id: 'non_empty_classes', label: 'Non-empty classes', model: 'sessions', sql: 'count(*) filter (where checked_in > 0)', format: 'number', additive: true, higherIsBetter: true,
+    description: 'Classes with at least one check-in.' }),
+  m({ id: 'class_late_cancel_rate', label: 'Class late-cancel rate', model: 'sessions', sql: 'sum(late_cancelled) / nullif(sum(booked) + sum(late_cancelled), 0)', format: 'percent', higherIsBetter: false,
+    description: 'Late cancellations ÷ (booked seats + late cancellations), from the class roster.' }),
+];
+
+export const metricById = new Map(METRICS.map((x) => [x.id, x]));
+export const modelById = new Map(MODELS.map((x) => [x.id, x]));
