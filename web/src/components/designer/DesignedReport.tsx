@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { Brain, AlertTriangle } from 'lucide-react';
 import type { Block } from '../../lib/types';
 import { BlockView, KpiCards } from '../blocks/Blocks';
-import { layoutById, slotLetters, type Rendered, type RenderedSlot, type DPage } from '../../lib/designer';
+import { layoutById, slotLetters, type Rendered, type RenderedSlot } from '../../lib/designer';
 import { BRAND } from '../../lib/brand';
 import { fmtPeriod } from '../../lib/format';
 

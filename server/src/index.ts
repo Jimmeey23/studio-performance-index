@@ -42,6 +42,8 @@ const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Re
     if (!res.headersSent) res.status(e instanceof QueryError ? 400 : 500).json({ error: e.message });
   });
 
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
 /* ── auth ─────────────────────────────────────────────────────────────── */
 function auth(req: Request, res: Response, next: NextFunction) {
   if (config.authDisabled) { req.user = { id: 'dev', email: 'dev@local', name: 'Developer', role: 'admin' }; return next(); }

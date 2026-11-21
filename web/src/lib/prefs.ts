@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 
 let cache: Promise<Record<string, unknown>> | null = null;
-const load = () => (cache ??= api<Record<string, unknown>>('/api/prefs').catch(() => ({})));
+const load = () => (cache ??= api<Record<string, unknown>>('/api/prefs').catch(() => ({} as Record<string, unknown>)));
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 export function savePref(key: string, value: unknown) {
   load().then((c) => { c[key] = value; });

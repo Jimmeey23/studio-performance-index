@@ -8,6 +8,10 @@
     "sync": "npm --prefix server run sync",
     "import": "npm --prefix server run sync -- --from-dir",
     "validate": "npm --prefix server run validate",
-    "build": "npm --prefix web run build"
+    "build": "npm --prefix server ci --include=dev && npm --prefix web ci --include=dev && npm --prefix web run build",
+    "build:web": "npm --prefix web run build"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -39,3 +39,10 @@ export const config = {
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.rawDir, { recursive: true });
+
+// Hosted deployments: paste the Google service-account JSON into GOOGLE_CREDENTIALS_JSON instead of shipping a file.
+if (process.env.GOOGLE_CREDENTIALS_JSON?.trim()) {
+  const file = path.join(config.dataDir, 'service-account.json');
+  fs.writeFileSync(file, process.env.GOOGLE_CREDENTIALS_JSON.trim(), { mode: 0o600 });
+  config.googleCredentialsFile = file;
+}
