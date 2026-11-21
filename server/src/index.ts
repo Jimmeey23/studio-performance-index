@@ -20,6 +20,8 @@ import { buildDashboard } from './ai/dashboard.js';
 import { buildReport, getReport, ReportRequestSchema, TOPICS } from './report/build.js';
 import * as reportStore from './report/store.js';
 import { generateInsights, rulesInsights } from './report/insights.js';
+import { buildReview, writeGlance, writeSection, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
+import * as reviewStore from './report/reviewStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
 import { SOURCES } from './sources.js';
@@ -218,6 +220,47 @@ app.post('/api/report/:id/insights', wrap(async (req, res) => {
   if (saved && !failed) await reportStore.saveInsights(id, ins);
   res.json(ins);
 }));
+
+/* ── executive performance review ─────────────────────────────────────── */
+app.get('/api/review/sections', (_req, res) => res.json(REVIEW_SECTIONS));
+app.post('/api/review', wrap(async (req, res) => {
+  const uid = req.user!.id; const body = { start: req.body?.start, end: req.body?.end, locations: Array.isArray(req.body?.locations) ? req.body.locations : [] };
+  const key = reviewStore.reviewKey(body);
+  if (!req.body?.fresh) { const s = await reviewStore.findByKey(uid, key); if (s) { await reviewStore.touch(uid, s.review.id); return res.json({ ...s, reused: true }); } }
+  const rv = await buildReview(body);
+  await reviewStore.saveNew(uid, key, rv);
+  res.json({ review: rv, ai: { sections: {} }, created_at: rv.generatedAt, updated_at: rv.generatedAt, reused: false });
+}));
+app.get('/api/review/latest', wrap(async (req, res) => res.json(await reviewStore.latest(req.user!.id))));
+app.get('/api/review/saved', wrap(async (req, res) => res.json(await reviewStore.list(req.user!.id))));
+app.get('/api/review/:id', wrap(async (req, res) => {
+  const s = await reviewStore.byId(req.user!.id, String(req.params.id));
+  if (!s) return res.status(404).json({ error: 'Review not found' });
+  await reviewStore.touch(req.user!.id, s.review.id);   // the last one opened is the one shown next time
+  res.json(s);
+}));
+app.delete('/api/review/:id', wrap(async (req, res) => { await reviewStore.remove(req.user!.id, String(req.params.id)); res.json({ ok: true }); }));
+/** AI commentary per part ('glance' or a section id): written once and reused; `fresh` rewrites that part only. */
+const reviewLocks = new Map<string, Promise<unknown>>();
+app.post('/api/review/:id/ai', wrap(async (req, res) => {
+  const uid = req.user!.id; const id = String(req.params.id); const part = String(req.body?.part ?? '');
+  const tier = ['fast', 'balanced', 'deep'].includes(req.body?.tier) ? req.body.tier : 'balanced';
+  const first = await reviewStore.byId(uid, id);
+  if (!first) return res.status(404).json({ error: 'Review not found' });
+  const have = part === 'glance' ? first.ai.glance : first.ai.sections?.[part];
+  if (have && !req.body?.fresh && have.source === 'ai') return res.json({ part, content: have, cached: true });
+  const content = part === 'glance' ? await writeGlance(first.review, tier) : await writeSection(first.review, part, tier);
+  // serialise writes per review: parts are generated in parallel but merged one at a time
+  const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
+    const cur = (await reviewStore.byId(uid, id))!; const ai: ReviewAI = { ...cur.ai, sections: cur.ai.sections ?? {} };
+    if (part === 'glance') ai.glance = content as ReviewAI['glance']; else ai.sections = { ...ai.sections, [part]: content as ReviewAI['sections'][string] };
+    if (content.source === 'ai' || !have) await reviewStore.saveAi(id, ai);
+  });
+  reviewLocks.set(id, run.catch(() => {}));
+  await run;
+  res.json({ part, content, cached: false });
+}));
+
 
 /* ── drill-through: item-level records behind any number ──────────────── */
 app.post('/api/drill', wrap(async (req, res) => res.json(await runDrill(req.body))));
