@@ -86,26 +86,72 @@ function KpiCard({ k, base, P, i = 0, big }: { k: Kpi; base: Base; P: ReportPeri
     </div>
   );
 }
-function Note({ text, loading }: { text?: string; loading?: boolean }) {
+/** Bold every figure (₹ amounts, %, pp, multipliers, plain numbers) so a reader can scan the numbers. */
+const NUM = /(₹\s?[\d,.]+\s?(?:[KkLM]|Cr|L|lakh|crore)?|[+−-]?\d[\d,]*(?:\.\d+)?\s?(?:%|pp|x|×|K|L|Cr)?)/g;
+function Rich({ text }: { text: string }) {
+  const parts = text.split(NUM);
+  return <>{parts.map((p, i) => (i % 2 ? <b key={i} className="epr-num">{p}</b> : p))}</>;
+}
+const sentences = (t: string) => t.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z₹0-9"“(])/).filter(Boolean);
+function Note({ text, loading, label = 'What this tells us' }: { text?: string; loading?: boolean; label?: string }) {
   if (loading && !text) return <div className="epr-note"><Shimmer lines={2} /></div>;
   if (!text) return null;
-  return <div className="epr-note"><Lightbulb size={13} /><p>{text}</p></div>;
+  const [lead, ...rest] = sentences(text);
+  return (
+    <div className="epr-note">
+      <div className="epr-note-h"><Lightbulb size={12} />{label}</div>
+      <p className="epr-note-lead"><Rich text={lead} /></p>
+      {rest.length > 0 && (rest.length > 1
+        ? <ul className="epr-note-pts">{rest.map((x, i) => <li key={i}><Rich text={x} /></li>)}</ul>
+        : <p className="epr-note-body"><Rich text={rest[0]} /></p>)}
+    </div>
+  );
 }
-function ChartCard({ c, note, loading, h = 280, i = 0 }: { c: Chart; note?: string; loading?: boolean; h?: number; i?: number }) {
+function Prose({ text, lines = 6 }: { text?: string; lines?: number }) {
+  if (!text) return <Shimmer lines={lines} />;
+  const paras = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return <>{paras.map((p, i) => <p key={i} className={i === 0 ? 'lead' : ''}><Rich text={p} /></p>)}</>;
+}
+function ChartCard({ c, note, loading, h = 300, i = 0 }: { c: Chart; note?: string; loading?: boolean; h?: number; i?: number }) {
   return (
     <figure className="epr-card epr-rv" style={{ transitionDelay: `${i * 60}ms` }}>
-      <figcaption className="epr-card-h"><TrendingUp size={14} />{c.title}</figcaption>
+      <figcaption className="epr-card-h"><span className="epr-card-ic"><TrendingUp size={13} /></span><span className="epr-card-t">{c.title}</span><span className="epr-card-tag">Chart</span></figcaption>
       <InteractiveChart result={c.result} chart={c.chart} seriesBy={c.seriesBy} y={c.y} height={h} minimal />
       <Note text={note} loading={loading} />
     </figure>
   );
 }
-function TableCard({ t, note, loading, rows = 8 }: { t: Table; note?: string; loading?: boolean; rows?: number }) {
+function TableCard({ t, note, loading, rows = 10 }: { t: Table; note?: string; loading?: boolean; rows?: number }) {
+  const n = t.result.rows.length;
   return (
-    <div className="epr-card epr-rv">
-      <div className="epr-card-h"><BookOpen size={14} />{t.title}</div>
+    <div className="epr-card epr-card-wide epr-rv">
+      <div className="epr-card-h"><span className="epr-card-ic"><BookOpen size={13} /></span><span className="epr-card-t">{t.title}</span><span className="epr-card-tag">{n} row{n === 1 ? '' : 's'} · {t.result.columns.length} columns</span></div>
       <div className="epr-table"><AdvancedTable result={t.result} compact pageSize={rows} /></div>
       <Note text={note ?? t.note} loading={loading} />
+    </div>
+  );
+}
+/** Full board scorecard — every headline metric against all three baselines. */
+function Scorecard({ kpis, P }: { kpis: Kpi[]; P: ReportPeriod }) {
+  const cell = (k: Kpi, ref: number | null, c: number | null) => { const t = tone(k, c); return (
+    <td className="ref"><span>{fmtK(ref, k.format)}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(c, k.format)}</em></td>
+  ); };
+  const status = (k: Kpi) => { const s = [k.chg, k.chgYtd, k.chgLy].map((c) => tone(k, c)).reduce<number>((a, b) => a + b, 0); return s >= 2 ? 'good' : s <= -2 ? 'bad' : 'mixed'; };
+  return (
+    <div className="epr-card epr-card-wide epr-rv">
+      <div className="epr-card-h"><span className="epr-card-ic"><Target size={13} /></span><span className="epr-card-t">Executive scorecard</span><span className="epr-card-tag">{kpis.length} metrics · 3 baselines</span></div>
+      <div className="epr-score-wrap"><table className="epr-score">
+        <thead><tr><th className="m">Metric</th><th>{P.label}</th><th>vs {P.prevLabel}</th><th>vs {P.ytdLabel}</th><th>vs {P.lyLabel}</th><th className="tr">Trend</th><th>Status</th></tr></thead>
+        <tbody>{kpis.map((k) => { const vals = k.series.filter((v): v is number => v !== null); const st = status(k); return (
+          <tr key={k.id} title={k.description}>
+            <td className="m">{k.label}</td>
+            <td className="v">{fmtK(k.value, k.format)}</td>
+            {cell(k, k.prev, k.chg)}{cell(k, k.ytd, k.chgYtd)}{cell(k, k.ly, k.chgLy)}
+            <td className="tr">{vals.length > 2 ? <Sparkline values={vals} height={24} color={st === 'good' ? 'var(--epr-good)' : st === 'bad' ? 'var(--epr-bad)' : 'var(--accent)'} format={(x) => fmtK(x, k.format)} /> : '—'}</td>
+            <td><span className={clsx('epr-pill', st)}>{st === 'good' ? 'On track' : st === 'bad' ? 'At risk' : 'Mixed'}</span></td>
+          </tr>
+        ); })}</tbody>
+      </table></div>
     </div>
   );
 }
@@ -177,7 +223,7 @@ function Recs({ recs }: { recs: Rec[] }) {
   return <div className="epr-recs">{recs.map((r, i) => (
     <div key={i} className={clsx('epr-rec epr-rv', r.priority)} style={{ transitionDelay: `${i * 60}ms` }}>
       <div className="epr-rec-n">{String(i + 1).padStart(2, '0')}</div>
-      <div><div className="epr-rec-t">{r.title}<span className={clsx('pri', r.priority)}>{r.priority}</span></div><p>{r.detail}</p><div className="epr-rec-o"><Target size={11} />{r.owner}</div></div>
+      <div><div className="epr-rec-t">{r.title}<span className={clsx('pri', r.priority)}>{r.priority}</span></div><p><Rich text={r.detail} /></p><div className="epr-rec-o"><Target size={11} />{r.owner}</div></div>
     </div>
   ))}</div>;
 }
@@ -331,44 +377,61 @@ export default function Review({ embedded }: { embedded?: boolean }) {
               <div className="epr-main">
                 {/* ── cover ── */}
                 <section id="epr-cover" data-spy className="epr-cover">
-                  <img className="epr-cover-img" src={BRAND.photos[rv.cover.photo % BRAND.photos.length]} alt="" />
-                  <div className="epr-cover-shade" />
-                  <div className="epr-cover-in">
-                    <div className="epr-cover-top"><img src={BRAND.logoOnDark} alt="Physique 57" /><span>Executive Performance Review<br /><em>Confidential · senior management</em></span></div>
+                  <div className="epr-cover-l">
+                    <div className="epr-cover-top"><img src={BRAND.logoOnDark} alt="Physique 57" /><span className="epr-cover-conf">Confidential</span></div>
                     <div className="epr-cover-mid">
-                      <div className="epr-cover-k">{gl?.tagline ?? 'Studio performance review'}</div>
+                      <div className="epr-cover-eyebrow">Executive Performance Review</div>
+                      <div className="epr-cover-period">{P.label}</div>
+                      <div className="epr-cover-rule" />
                       <h1>{gl ? gl.headline : <Shimmer lines={2} />}</h1>
-                      <div className="epr-cover-meta"><span><MapPin size={13} />{rv.scope}</span><span><CalendarRange size={13} />{P.label}</span><span>Benchmarked vs {P.prevLabel}, {P.ytdLabel} and {P.lyLabel}</span></div>
+                      {gl?.tagline && <p className="epr-cover-tag">{gl.tagline}</p>}
                     </div>
-                    <div className="epr-cover-kpis">{rv.cover.headlineKpis.map((k) => { const t = tone(k, k.chg); return (
-                      <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(k.chg, k.format)} vs {P.prevLabel}</em></div>
-                    ); })}</div>
-                    <div className="epr-cover-foot">Prepared {new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · figures computed from the synced studio data{gl?.source === 'ai' ? ` · commentary by ${gl.model ?? 'Claude'}` : ''}</div>
+                    <dl className="epr-cover-meta">
+                      <div><dt>Scope</dt><dd>{rv.scope}</dd></div>
+                      <div><dt>Prepared for</dt><dd>Senior management</dd></div>
+                      <div><dt>Benchmarks</dt><dd>{P.prevLabel} · {P.ytdLabel} · {P.lyLabel}</dd></div>
+                      <div><dt>Issued</dt><dd>{new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</dd></div>
+                    </dl>
                   </div>
+                  <div className="epr-cover-r">
+                    <img className="epr-cover-img" src={BRAND.photos[rv.cover.photo % BRAND.photos.length]} alt="" />
+                    <div className="epr-cover-shade" />
+                    <ol className="epr-cover-toc">
+                      <li className="h">In this review</li>
+                      <li><button onClick={() => jump('glance')}><span>01</span>At a glance</button></li>
+                      {rv.sections.map((x, i) => <li key={x.id}><button onClick={() => jump(x.id)}><span>{String(i + 2).padStart(2, '0')}</span>{x.title}</button></li>)}
+                    </ol>
+                  </div>
+                  <div className="epr-cover-kpis">{rv.cover.headlineKpis.map((k) => { const t = tone(k, k.chg); return (
+                    <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{t > 0 ? '▲' : t < 0 ? '▼' : '•'} {fmtDelta(k.chg, k.format)} <i>vs {P.prevLabel}</i></em></div>
+                  ); })}</div>
+                  <div className="epr-cover-foot">Figures computed from synced studio data{gl?.source === 'ai' ? ` · commentary by ${gl.model ?? 'Claude'}` : ''} · Ref {rv.id.slice(0, 8).toUpperCase()}</div>
                 </section>
 
                 {/* ── at a glance ── */}
                 <section id="epr-glance" data-spy className="epr-sec">
-                  <SectionHead kicker="Overview" title="At a glance" icon={Sparkles} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions part="glance" ai={gl} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} />} />
+                  <SectionHead kicker="Section 01 · Overview" title="At a glance" icon={Sparkles} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions part="glance" ai={gl} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} />} />
                   <div className="epr-grid-k8">{rv.glance.cards.map((k, i) => <KpiCard key={k.id} k={k} base={base} P={P} i={i} />)}</div>
+                  {rv.scorecard?.length > 0 && <Scorecard kpis={rv.scorecard} P={P} />}
                   <div className="epr-split">
-                    <div className="epr-prose epr-rv">{gl ? gl.summary.split(/\n\s*\n/).map((p, i) => <p key={i} className={i === 0 ? 'lead' : ''}>{p}</p>) : <Shimmer lines={7} />}</div>
-                    <div className="epr-insights epr-rv"><div className="epr-card-h"><Lightbulb size={14} />Key insights</div>{gl ? <ol>{gl.insights.map((x, i) => <li key={i}>{x}</li>)}</ol> : <Shimmer lines={5} />}</div>
+                    <div className="epr-prose epr-rv"><div className="epr-prose-h">Executive summary</div><Prose text={gl?.summary} lines={7} /></div>
+                    <div className="epr-insights epr-rv"><div className="epr-card-h"><Lightbulb size={14} />Key insights</div>{gl ? <ol>{gl.insights.map((x, i) => <li key={i}><Rich text={x} /></li>)}</ol> : <Shimmer lines={5} />}</div>
                   </div>
                   <div className="epr-highlights">{rv.sections.map((s, i) => { const I = ICONS[s.icon] ?? Sparkles; const h = gl?.highlights.find((x) => x.section === s.id)?.text ?? ai?.sections[s.id]?.headline ?? s.ruleFindings[0]; return (
-                    <button key={s.id} className="epr-hl epr-rv" style={{ transitionDelay: `${i * 50}ms` }} onClick={() => jump(s.id)}><span className="ic"><I size={15} /></span><span className="t">{s.title}</span><p>{h ?? '…'}</p><span className="go">Read section →</span></button>
+                    <button key={s.id} className="epr-hl epr-rv" style={{ transitionDelay: `${i * 50}ms` }} onClick={() => jump(s.id)}><span className="ic"><I size={15} /></span><span className="n">{String(i + 2).padStart(2, '0')}</span><span className="t">{s.title}</span><p>{h ? <Rich text={h} /> : '…'}</p><span className="go">Read section →</span></button>
                   ); })}</div>
-                  {!!gl?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{gl.watch.map((w, i) => <li key={i}>{w}</li>)}</ul></div></div>}
+                  {!!gl?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{gl.watch.map((w, i) => <li key={i}><Rich text={w} /></li>)}</ul></div></div>}
                   <div className="epr-grid-2">{rv.glance.charts.slice(0, 2).map((c, i) => <ChartCard key={c.id} c={c} i={i} note={gl?.notes[c.id] ?? rv.glance.notes[c.id]} loading={busy.has('glance')} />)}</div>
                   <div className="epr-grid-2">
                     {rv.glance.lists.length > 0 && <TopBottom lists={rv.glance.lists} />}
                     {rv.glance.charts[2] && <ChartCard c={rv.glance.charts[2]} note={gl?.notes[rv.glance.charts[2].id] ?? rv.glance.notes[rv.glance.charts[2].id]} loading={busy.has('glance')} h={300} />}
                   </div>
-                  <div className="epr-grid-2">{rv.glance.tables.slice(0, 4).map((t) => <TableCard key={t.id} t={t} rows={6} note={gl?.notes[t.id] ?? rv.glance.notes[t.id]} loading={busy.has('glance')} />)}</div>
+                  <div className="epr-grid-1">{rv.glance.tables.slice(0, 4).map((t) => <TableCard key={t.id} t={t} note={gl?.notes[t.id] ?? rv.glance.notes[t.id]} loading={busy.has('glance')} />)}</div>
+                  {rv.studios && rv.studios.result.rows.length > 1 && <TableCard t={{ ...rv.studios, title: rv.studios.title || 'Studio comparison' }} note={rv.studios.note} />}
                 </section>
 
                 {/* ── sections ── */}
-                {rv.sections.map((s) => <ReviewSectionView key={s.id} s={s} ai={ai?.sections[s.id]} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
+                {rv.sections.map((s, i) => <ReviewSectionView key={s.id} n={i + 2} total={rv.sections.length + 1} s={s} ai={ai?.sections[s.id]} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
 
                 <div className="epr-end">End of review · {rv.scope} · {P.label} · prepared {new Date(rv.generatedAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</div>
               </div>
@@ -398,14 +461,14 @@ function PartActions({ ai, busy, canAi, onRewrite }: { part: string; ai?: { sour
   );
 }
 
-function ReviewSectionView({ s, ai, busy, base, P, canAi, onRewrite }: { s: Section; ai?: SectionAI; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
+function ReviewSectionView({ n, total, s, ai, busy, base, P, canAi, onRewrite }: { n: number; total: number; s: Section; ai?: SectionAI; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
   const I = ICONS[s.icon] ?? Sparkles;
   const note = (id: string) => ai?.notes?.[id] ?? s.notes[id];
   const charts = s.charts; const tables = s.tables;
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec">
-      <SectionHead kicker={s.kicker} title={s.title} icon={I} lead={s.lead} right={<PartActions part={s.id} ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} />
-      <div className="epr-headline epr-rv">{ai ? <><Sparkles size={15} /><p>{ai.headline}</p></> : <Shimmer lines={1} />}</div>
+      <SectionHead kicker={`Section ${String(n).padStart(2, '0')} of ${String(total).padStart(2, '0')} · ${s.kicker}`} title={s.title} icon={I} lead={s.lead} right={<PartActions part={s.id} ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} />
+      <div className="epr-headline epr-rv">{ai ? <><span className="epr-headline-k">The headline</span><p><Rich text={ai.headline} /></p></> : <Shimmer lines={1} />}</div>
 
       {s.index && (
         <div className="epr-index epr-rv">
@@ -420,8 +483,8 @@ function ReviewSectionView({ s, ai, busy, base, P, canAi, onRewrite }: { s: Sect
       <div className={clsx('epr-grid-k', s.kpis.length > 8 ? 'k6' : s.kpis.length > 4 ? 'k4' : 'k4')}>{s.kpis.map((k, i) => <KpiCard key={k.id} k={k} base={base} P={P} i={i} />)}</div>
 
       <div className="epr-split">
-        <div className="epr-prose epr-rv">{ai ? <p className="lead">{ai.summary}</p> : <Shimmer lines={6} />}</div>
-        <div className="epr-insights epr-rv"><div className="epr-card-h"><Lightbulb size={14} />Insights</div>{ai ? <ol>{(ai.insights.length ? ai.insights : s.ruleFindings.slice(0, 3)).map((x, i) => <li key={i}>{x}</li>)}</ol> : <Shimmer lines={4} />}</div>
+        <div className="epr-prose epr-rv"><div className="epr-prose-h">Summary</div><Prose text={ai?.summary} /></div>
+        <div className="epr-insights epr-rv"><div className="epr-card-h"><Lightbulb size={14} />Insights</div>{ai ? <ol>{(ai.insights.length ? ai.insights : s.ruleFindings.slice(0, 3)).map((x, i) => <li key={i}><Rich text={x} /></li>)}</ol> : <Shimmer lines={4} />}</div>
       </div>
 
       {s.funnels?.length ? <div className="epr-grid-2">{s.funnels.map((f) => <Funnel key={f.title} f={f} />)}</div> : null}
@@ -436,11 +499,11 @@ function ReviewSectionView({ s, ai, busy, base, P, canAi, onRewrite }: { s: Sect
       {s.heatmap && s.heatmap.rows.length > 0 && <Heat hm={s.heatmap} />}
 
       {charts.length > 0 && <div className={clsx(charts.length === 1 ? 'epr-grid-1' : 'epr-grid-2')}>{charts.map((c, i) => <ChartCard key={c.id} c={c} i={i} note={note(c.id)} loading={busy} />)}</div>}
-      {tables.length > 0 && <div className="epr-grid-2">{tables.map((t) => <TableCard key={t.id} t={t} note={note(t.id)} loading={busy} />)}</div>}
+      {tables.length > 0 && <div className="epr-grid-1">{tables.map((t) => <TableCard key={t.id} t={t} note={note(t.id)} loading={busy} />)}</div>}
 
-      <div className="epr-grid-2">
-        <div className="epr-card epr-rv"><div className="epr-card-h"><Flag size={14} />Findings</div>{ai ? <ul className="epr-find">{ai.findings.map((x, i) => <li key={i}>{x}</li>)}</ul> : <Shimmer lines={5} />}</div>
-        <div className="epr-card epr-rv"><div className="epr-card-h"><Target size={14} />Recommendations</div>{ai ? (ai.recommendations.length ? <Recs recs={ai.recommendations} /> : <p className="epr-small">Recommendations are written by the AI — turn it on in Settings to add them.</p>) : <Shimmer lines={5} />}</div>
+      <div className="epr-grid-1">
+        <div className="epr-card epr-card-wide epr-rv"><div className="epr-card-h"><span className="epr-card-ic"><Flag size={13} /></span><span className="epr-card-t">Key findings</span></div>{ai ? <ol className="epr-find">{ai.findings.map((x, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><p><Rich text={x} /></p></li>)}</ol> : <Shimmer lines={5} />}</div>
+        <div className="epr-card epr-card-wide epr-rv"><div className="epr-card-h"><span className="epr-card-ic"><Target size={13} /></span><span className="epr-card-t">Recommended actions</span></div>{ai ? (ai.recommendations.length ? <Recs recs={ai.recommendations} /> : <p className="epr-small">Recommendations are written by the AI — turn it on in Settings to add them.</p>) : <Shimmer lines={5} />}</div>
       </div>
     </section>
   );
