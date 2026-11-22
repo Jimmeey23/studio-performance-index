@@ -14,6 +14,7 @@ import { isNotFound, markMissing } from '../ai/models.js';
 import { verifyNarrative } from '../ai/verify.js';
 import { runMetricsQuery } from '../semantic/engine.js';
 import { log } from '../util/log.js';
+import { attendanceExtras, classExtras, formatComparison, funnelExtras, productList, trainerScorecard } from './reviewExtras.js';
 import { buildReport, fmtVal, fmtChg, type Kpi, type Report, type ReportChart, type ReportSection, type ReportTable } from './build.js';
 
 export const ReviewRequestSchema = z.object({
@@ -133,6 +134,7 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const report = await buildReport({ start: req.start, end: req.end, locations: req.locations, kind: 'custom', depth: 'detailed', audience: 'leadership', title: 'Executive Performance Review',
     topics: ['sales', 'new_clients', 'leads', 'trainers', 'classes', 'formats', 'churn', 'late', ...(multi ? ['studios'] : [])] });
   const P = report.period;
+  const [attX, funX, clsX, trSc, fmX, prods] = await Promise.all([attendanceExtras(req), funnelExtras(req), classExtras(req), trainerScorecard(req), formatComparison(req), productList(req)]);
   const S = { sales: sec(report, 'sales'), nc: sec(report, 'new_clients'), leads: sec(report, 'leads'), tr: sec(report, 'trainers'), cl: sec(report, 'classes'), fm: sec(report, 'formats'), ch: sec(report, 'churn'), late: sec(report, 'late'), st: sec(report, 'studios') };
   const sections: ReviewSection[] = [];
   let n = 0;
@@ -150,22 +152,22 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const okParts = parts.filter((p) => p.value !== null);
   const idx = okParts.length ? (okParts.reduce((a, p) => a + p.value! * p.weight, 0) / okParts.reduce((a, p) => a + p.weight, 0)) * 100 : null;
   push('attendance', {
-    kpis: pickK(allK, ['visits', 'visits_per_client', 'class_checkins', 'paying_visiting_clients', 'bookings', 'class_show_up_rate', 'booking_fill_rate', 'late_cancellations', 'late_cancel_rate', 'late_cancel_clients', 'avg_notice_hours', 'late_cancel_penalties']),
-    charts: [...(S.cl?.charts.slice(1, 2) ?? []), ...(S.late?.charts ?? [])],
-    tables: [...(S.cl ? [tbl(S.cl, /Weekday vs weekend/)].filter(Boolean) as ReportTable[] : []), ...(S.late?.tables ?? [])],
+    kpis: pickK([...allK, ...(S.sales?.kpis ?? []), ...report.scorecard], ['visits', 'visiting_clients', 'visits_per_client', 'paying_visiting_clients', 'bookings', 'late_cancellations', 'late_cancel_rate', 'class_show_up_rate', 'classes', 'class_average', 'fill_rate', 'empty_classes']),
+    charts: [...attX.charts, ...(S.late?.charts.slice(0, 1) ?? [])].slice(0, 3),
+    tables: [...attX.tables, ...(S.late?.tables.slice(0, 1) ?? [])],
     index: { value: idx, parts, note: 'Attendance index = 40% show-up rate + 30% booking fill + 30% bookings kept (not late-cancelled), on a 0–100 scale.' },
   });
 
   push('funnel', {
     kpis: [...pickK(S.leads?.kpis ?? [], ['leads', 'lead_to_trial_rate', 'lead_conversion_rate', 'cost_per_lead']), ...pickK(S.nc?.kpis ?? [], ['new_clients', 'second_visit_rate', 'conversion_rate', 'retention_rate', 'avg_days_to_convert', 'new_client_avg_ltv'])],
-    charts: [...(S.leads?.charts ?? []), ...(S.nc?.charts ?? [])],
-    tables: [...(S.leads?.tables.slice(0, 2) ?? []), ...(S.nc?.tables.slice(0, 2) ?? [])],
+    charts: [S.leads?.charts[0], S.nc?.charts[0]].filter(Boolean).slice(0, 2) as ReportChart[],
+    tables: funX.tables.length ? funX.tables : [...(S.leads?.tables.slice(0, 2) ?? []), ...(S.nc?.tables.slice(0, 2) ?? [])],
     funnels: [S.leads?.visuals?.funnel && { title: 'Lead funnel', steps: S.leads.visuals.funnel }, S.nc?.visuals?.funnel && { title: 'Newcomer journey', steps: S.nc.visuals.funnel }].filter(Boolean) as ReviewSection['funnels'],
   }, [...(S.leads?.insights ?? []), ...(S.nc?.insights ?? [])]);
 
-  if (S.cl) push('classes', { kpis: pickK(S.cl.kpis, ['classes', 'fill_rate', 'class_average', 'sold_out_rate', 'empty_class_rate', 'visiting_clients']), charts: S.cl.charts.slice(0, 1), tables: S.cl.tables.filter((t) => !/Weekday vs weekend/.test(t.title)), heatmap: S.cl.visuals?.heatmap }, S.cl.insights);
-  if (S.tr) { const tc = await trainerCharts(req); push('trainers', { kpis: S.tr.kpis, charts: tc, tables: S.tr.tables, spotlight: S.tr.visuals?.spotlight }, S.tr.insights); }
-  if (S.fm) push('formats', { kpis: S.fm.kpis, charts: S.fm.charts, tables: S.fm.tables, formats: S.fm.visuals?.formats }, S.fm.insights);
+  if (S.cl) push('classes', { kpis: pickK([...S.cl.kpis, ...report.scorecard], ['classes', 'class_average', 'fill_rate', 'empty_classes', 'empty_class_rate', 'sold_out_rate', 'booking_fill_rate', 'revenue_per_class']), charts: S.cl.charts.slice(0, 1), tables: clsX.tables.length ? clsX.tables : S.cl.tables.filter((t) => !/Weekday vs weekend/.test(t.title)), heatmap: S.cl.visuals?.heatmap }, S.cl.insights);
+  if (S.tr) { const tc = await trainerCharts(req); push('trainers', { kpis: S.tr.kpis, charts: tc, tables: [...(trSc ? [trSc] : []), ...S.tr.tables.filter((t) => !trSc || !/leaderboard|scorecard/i.test(t.title))], spotlight: S.tr.visuals?.spotlight }, S.tr.insights); }
+  if (S.fm) push('formats', { kpis: S.fm.kpis, charts: [...S.fm.charts.slice(0, 1), ...fmX.charts].slice(0, 2), tables: [...fmX.tables, ...S.fm.tables.slice(0, 2)], formats: S.fm.visuals?.formats }, S.fm.insights);
   if (S.ch) push('churn', { kpis: S.ch.kpis, charts: S.ch.charts, tables: S.ch.tables }, S.ch.insights);
 
   // at a glance: 8 cards, 4 tables, top / bottom lists, 3 charts
@@ -173,7 +175,7 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const glCharts = [S.sales?.charts[0], S.nc?.charts[0], S.fm?.charts[0]].filter(Boolean) as ReportChart[];
   const lists = [
     listFrom(tbl(S.tr, /leaderboard/), 'Trainers', 'class_average'), listFrom(S.cl ? { ...tbl(S.cl, /Strongest recurring/)!, result: { ...tbl(S.cl, /Strongest recurring/)!.result, rows: [...(tbl(S.cl, /Strongest recurring/)?.result.rows ?? []), ...(tbl(S.cl, /Weakest recurring/)?.result.rows ?? [])] } } as ReportTable : undefined, 'Classes', 'class_average'),
-    listFrom(tbl(S.sales, /Top products/), 'Products', 'units_sold'), listFrom(tbl(S.leads, /Lead sources/), 'Lead sources', 'lead_conversion_rate'),
+    listFrom(prods ? { id: 'products', title: 'Products', result: prods as unknown as ReportTable['result'] } : tbl(S.sales, /Top products/), 'Products', 'units_sold'), listFrom(tbl(S.leads, /Lead sources/), 'Lead sources', 'lead_conversion_rate'),
     listFrom(tbl(S.ch, /By membership/), 'Memberships at risk', 'churn_rate'),
   ].filter(Boolean) as ReviewList[];
   // de-duplicate class rows merged from strongest + weakest
@@ -221,7 +223,7 @@ function glanceDigest(rv: Review) {
   if (rv.studios) L.push(`STUDIOS: ${tLines(rv.studios)}`);
   return L.join('\n');
 }
-const notesSchema = (ids: string[]) => ({ type: 'object', description: 'One insightful note (30–55 words) per chart/table id: what it shows, why it matters, what to do.', properties: Object.fromEntries(ids.map((id) => [id, { type: 'string' }])), required: ids });
+const notesSchema = (ids: string[]) => ({ type: 'object', description: "One detailed note (70–110 words) per chart/table id, in exactly three parts separated by ' | ' — 'Shows: <what the visual shows, naming the specific leaders, laggards and figures>' | 'Why it matters: <the business implication, with comparisons>' | 'Action: <one concrete next step with an owner>'.", properties: Object.fromEntries(ids.map((id) => [id, { type: 'string' }])), required: ids });
 const recSchema = { type: 'array', description: '3–5 recommendations, each naming who should act.', items: { type: 'object', properties: { title: { type: 'string' }, detail: { type: 'string' }, owner: { type: 'string' }, priority: { type: 'string', enum: ['high', 'medium', 'low'] } }, required: ['title', 'detail', 'owner', 'priority'] } };
 const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India (premium barre, powerCycle and Strength Lab studios), writing a senior-management Executive Performance Review for a studio.
 Rules: use ONLY figures in the digest, copied exactly as formatted; never invent numbers; estimates must be labelled "~"/"estimate". Every KPI has three baselines (previous period, current-year monthly average, same period last year) — use them. Be specific: name products, trainers, classes, slots, sources, memberships. Explain drivers (volume vs rate, mix, seasonality, small samples). Mind polarity ([lower is better]). Elegant, decisive British/Indian English for a CEO; no markdown, no emojis. Call the tool exactly once.`;

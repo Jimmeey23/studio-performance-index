@@ -11,6 +11,7 @@ import clsx from 'clsx';
 import type { Column, Result, Format } from '../../lib/types';
 import { fmt, fmtChange, fmtPeriod } from '../../lib/format';
 import { useCatalog, usePolarity } from '../../lib/catalog';
+import { TrainerName, isTrainerKey } from '../../lib/trainers';
 import { drillFor, useDrill } from '../../lib/drill';
 import { api } from '../../lib/api';
 
@@ -137,6 +138,7 @@ function useRenderValue(result: Result) {
       const bg = tone === 'text-good' ? 'bg-good/8' : tone === 'text-bad' ? 'bg-bad/8' : '';
       return <span className={clsx('tabular rounded px-1 py-0.5 text-[12px] font-medium', tone, bg)}>{fmtChange(v, pp)}</span>;
     }
+    if (c.kind === 'dimension' && isTrainerKey(c.key) && v) return <TrainerName name={String(v)} />;
     if (c.kind === 'period') return <span className="whitespace-nowrap">{fmtPeriod(String(v ?? ''), grain)}{row?.__partial ? <span className="ml-1.5 rounded bg-warn/10 px-1 text-[10px] text-warn">partial</span> : null}</span>;
     const f = (['value', 'trailing_avg'].includes(c.key) && row?.format ? row.format : c.format) as Format;
     if (isNumFmt(c.format)) return <span className={clsx('tabular', c.kind === 'comparison' && 'text-ink-3')}>{fmt(v, f)}</span>;
