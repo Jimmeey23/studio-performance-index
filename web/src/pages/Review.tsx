@@ -724,7 +724,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
               {expOpen && <div className="epr-pop epr-exp" onMouseLeave={() => setExpOpen(false)}>
                 <div className="epr-pop-l">Download</div>
                 {([
-                  ['PDF', 'Print or save as PDF', () => { setExpOpen(false); setTimeout(() => window.print(), 60); }, Printer],
+                  ['PDF', 'Designed A4 document', (r: HTMLElement, t: string) => EX.toPdf(r, t, setExpMsg), Printer],
                   ['Word', '.doc — editable document', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.doc`, EX.toWord(r, t), 'application/msword'), FileText],
                   ['Excel', '.xls — every table', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.xls`, EX.toExcel(r, t), 'application/vnd.ms-excel'), FileText],
                   ['CSV', 'Every table, one file', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.csv`, EX.toCsv(r), 'text/csv;charset=utf-8'), FileText],
