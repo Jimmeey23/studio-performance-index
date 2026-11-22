@@ -22,6 +22,7 @@ import { InteractiveChart } from '../components/blocks/Charts';
 import { AdvancedTable } from '../components/blocks/AdvancedTable';
 import { CountUp, Sparkline } from '../components/Animated';
 import { useDrill, type DrillFilter } from '../lib/drill';
+import { TrainerAvatar } from '../lib/trainers';
 import '../review.css';
 
 /* ── types (mirror server/src/report/review.ts) ── */
@@ -139,14 +140,15 @@ function Note({ text, loading, part, id, label = 'What this tells us' }: { text?
   const e = useEdit();
   if (loading && !text) return <div className="epr-note"><Shimmer lines={2} /></div>;
   if (!text && !e?.on) return null;
+  const parts = (text ?? '').split(/\s*\|\s*/).map((x) => x.match(/^(Shows|Why it matters|Action)\s*:\s*(.*)$/i)).filter(Boolean) as RegExpMatchArray[];
   const [lead, ...rest] = sentences(text ?? '');
+  const rows = parts.length >= 2 ? parts.map((m) => ({ k: m[1], v: m[2] })) : [{ k: 'Shows', v: lead ?? '' }, ...(rest.length ? [{ k: 'Why it matters', v: rest.join(' ') }] : [])];
   return (
     <div className="epr-note">
       <div className="epr-note-h"><Lightbulb size={12} />{label}</div>
-      {e?.on ? <Ed as="p" className="epr-note-lead" part={part} path={['notes', id]} value={text} placeholder="Add a note on this visual…" /> : <>
-        <p className="epr-note-lead">{lead}</p>
-        {rest.length > 0 && <p className="epr-note-body">{rest.join(' ')}</p>}
-      </>}
+      {e?.on ? <Ed as="p" className="epr-note-lead" part={part} path={['notes', id]} value={text} placeholder="Shows: … | Why it matters: … | Action: …" /> : (
+        <dl className="epr-note-grid">{rows.map((x) => <div key={x.k} className={clsx('epr-note-row', /action/i.test(x.k) && 'act')}><dt>{x.k}</dt><dd>{x.v}</dd></div>)}</dl>
+      )}
     </div>
   );
 }
@@ -281,7 +283,7 @@ function TopBottom({ lists }: { lists: List[] }) {
       <ol className="epr-tb-list" key={`${i}-${side}`}>{items.map((x, j) => (
         <li key={x.name} style={{ ['--d' as string]: `${j * 70}ms` }} {...clickable(d && l.dimKey && l.metricKey ? () => d.slice(l.metricKey!, [{ dimension: l.dimKey!, op: 'in', values: [x.name] }], [x.name], x.value) : undefined)}>
           <span className={clsx('rk', side)}>{j + 1}</span>
-          <div className="nm"><b>{x.name}</b>{x.sub && <em>{x.sub}</em>}<div className="bar"><i className={side} style={{ width: `${(Math.abs(x.value ?? 0) / max) * 100}%` }} /></div></div>
+          <div className="nm"><b className="flex items-center gap-2">{l.dimKey === 'teacher' && <TrainerAvatar name={x.name} size={24} />}{x.name}</b>{x.sub && <em>{x.sub}</em>}<div className="bar"><i className={side} style={{ width: `${(Math.abs(x.value ?? 0) / max) * 100}%` }} /></div></div>
           <span className="v">{fmtK(x.value, l.format)}</span>
         </li>
       ))}</ol>
@@ -508,7 +510,7 @@ function ReviewDoc() {
   const shown = (() => { let n = 0; for (const p of order) { if (has(p)) n++; else break; } return n; })();
   const building = shown < order.length;
   const visible = new Set(order.slice(0, shown));
-  const nav = useMemo(() => rv ? [{ id: 'cover', title: 'Cover' }, { id: 'glance', title: 'At a glance' }, ...rv.sections.map((s) => ({ id: s.id, title: ai?.sections?.[s.id]?.title ?? s.title }))] : [], [rv, ai]);
+  const nav = useMemo(() => rv ? [{ id: 'cover', title: 'Cover' }, { id: 'glance', title: 'At a glance' }, ...rv.sections.map((s) => ({ id: s.id, title: ai?.sections?.[s.id]?.title ?? s.title })), { id: 'closing', title: 'Action plan' }] : [], [rv, ai]);
   const jump = (id: string) => document.getElementById(`epr-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // keyboard: j / k to move between sections
@@ -576,7 +578,7 @@ function ReviewDoc() {
           </div>}
         </div>
         {rv && <nav className="epr-nav" aria-label="Review sections"><div className="epr-nav-in">{nav.map((n, i) => {
-          const part = n.id === 'cover' ? 'glance' : n.id; const ready = visible.has(part);
+          const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
           return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')}>
             <span className="i">{busy.has(part) ? <Loader2 size={10} className="animate-spin" /> : i === 0 ? '·' : String(i).padStart(2, '0')}</span>{n.title.replace(/ Index$/, '')}</button>;
         })}</div></nav>}
@@ -594,6 +596,7 @@ function ReviewDoc() {
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
                 {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} n={i + 2} total={rv.sections.length + 1} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
                 {building && <BuildConsole steps={steps} hints={hints} started={startedAt} />}
+                {!building && <Closing rv={rv} ai={ai} P={P} jump={jump} />}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
             </RDrill.Provider></RBase.Provider>
@@ -656,12 +659,11 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
         const hi = gl?.highlights.findIndex((x) => x.section === s.id) ?? -1;
         const k = s.kpis[0]; const t = k ? tone(k, B.chg(k)) : 0;
         return (
-          <div key={s.id} className={clsx('epr-hl epr-rv', t > 0 ? 'good' : t < 0 ? 'bad' : 'flat')} style={{ transitionDelay: `${i * 60}ms` }}>
-            <div className="epr-hl-top"><span className="n">{String(i + 2).padStart(2, '0')}</span><span className="st">{t > 0 ? 'Improving' : t < 0 ? 'Needs attention' : 'Steady'}</span></div>
-            <div className="t">{ai?.sections[s.id]?.title ?? s.title}</div>
+          <div key={s.id} className={clsx('epr-hl epr-rv', t > 0 ? 'good' : t < 0 ? 'bad' : 'flat')} style={{ transitionDelay: `${i * 60}ms` }} {...clickable(() => jump(s.id))}>
+            <div className="epr-hl-head"><span className="n">{String(i + 2).padStart(2, '0')}</span><div className="t">{ai?.sections[s.id]?.title ?? s.title}</div><span className="st">{t > 0 ? 'Improving' : t < 0 ? 'Needs attention' : 'Steady'}</span></div>
             {k && <div className="epr-hl-k"><b>{fmtK(k.value, k.format)}</b><span>{k.label}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} vs {B.label}</em></div>}
             {hi >= 0 ? <Ed as="p" part="glance" path={['highlights', hi, 'text']} value={h} /> : <p>{h ?? '…'}</p>}
-            <button className="go" onClick={() => jump(s.id)}>Read section <ArrowRight size={12} /></button>
+            <span className="go">Read chapter <ArrowRight size={12} /></span>
           </div>
         );
       })}</div>
@@ -769,7 +771,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
         )}
         {s.funnels?.length ? <div className="epr-grid-2">{s.funnels.map((f) => <Funnel key={f.title} f={f} />)}</div> : null}
         {s.spotlight?.length ? <div className="epr-spot">{s.spotlight.map((t, i) => (
-          <div key={t.name} className={clsx('epr-spot-c epr-rv', `r${i + 1}`)} style={{ transitionDelay: `${i * 80}ms` }} {...clickable(d ? () => d.slice('class_average', [{ dimension: 'teacher', op: 'in', values: [t.name] }], [t.name], t.avg) : undefined)}><div className="md"><Trophy size={14} />#{i + 1}</div><b>{t.name}</b>
+          <div key={t.name} className={clsx('epr-spot-c epr-rv', `r${i + 1}`)} style={{ transitionDelay: `${i * 80}ms` }} {...clickable(d ? () => d.slice('class_average', [{ dimension: 'teacher', op: 'in', values: [t.name] }], [t.name], t.avg) : undefined)}><div className="md"><Trophy size={14} />#{i + 1}</div><div className="epr-spot-who"><TrainerAvatar name={t.name} size={44} /><b>{t.name}</b></div>
             <div className="st"><span><i>{fmt(t.avg, 'decimal')}</i>class avg</span><span><i>{fmt(t.fill, 'percent')}</i>fill</span><span><i>{t.classes}</i>classes</span><span><i>{fmt(t.checkins, 'number')}</i>check-ins</span></div></div>
         ))}</div> : null}
         {s.formats?.length ? <div className="epr-formats">{s.formats.map((f, fi) => (
@@ -787,6 +789,44 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
         <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Flag size={13} /><span>Key findings</span></div>{ai ? <ol className="epr-find">{ai.findings.map((x, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><Ed as="p" part={s.id} path={['findings', i]} value={x} /></li>)}</ol> : <Shimmer lines={5} />}</div>
         <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Target size={13} /><span>Recommended actions</span></div>{ai ? (ai.recommendations.length ? <Recs recs={ai.recommendations} part={s.id} /> : <p className="epr-small">Recommendations are written by the AI — turn it on in Settings to add them.</p>) : <Shimmer lines={5} />}</div>
       </div>
+    </section>
+  );
+}
+
+/* ── closing chapter: main findings in brief + the full action plan with owners and timelines ── */
+const WHEN: Record<Rec['priority'], string> = { high: 'Next 2 weeks', medium: 'Within 30 days', low: 'This quarter' };
+function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; jump: (id: string) => void }) {
+  const [owner, setOwner] = useState<string>('all');
+  const recs = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, sid: s.id, chapter: ai?.sections[s.id]?.title ?? s.title })));
+  const order = { high: 0, medium: 1, low: 2 } as const;
+  recs.sort((a, b) => order[a.priority] - order[b.priority]);
+  const owners = [...new Set(recs.map((r) => r.owner).filter(Boolean))];
+  const shown = owner === 'all' ? recs : recs.filter((r) => r.owner === owner);
+  const n = rv.sections.length + 2;
+  return (
+    <section id="epr-closing" data-spy className="epr-sec epr-build-in">
+      <SectionHead n={n} total={n} kicker="Conclusions" title="Summary & action plan" lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`} />
+      <Sub n={`${n}.1`} title="Main findings" />
+      <ol className="epr-concl">{rv.sections.map((s, i) => {
+        const h = ai?.sections[s.id]?.headline ?? ai?.glance?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0];
+        return <li key={s.id} className="epr-rv" {...clickable(() => jump(s.id))}><span>{String(i + 2).padStart(2, '0')}</span><b>{ai?.sections[s.id]?.title ?? s.title}</b><p>{h}</p></li>;
+      })}</ol>
+      {!!ai?.glance?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{ai.glance.watch.map((w, i) => <li key={i}>{w}</li>)}</ul></div></div>}
+      <Sub n={`${n}.2`} title="Action plan" note={`${recs.length} actions · ${recs.filter((r) => r.priority === 'high').length} high priority`} />
+      {owners.length > 1 && <div className="epr-seg sm epr-plan-f">{['all', ...owners].map((o) => <button key={o} className={clsx(owner === o && 'on')} onClick={() => setOwner(o)}>{o === 'all' ? 'All owners' : o}</button>)}</div>}
+      <div className="epr-plan-wrap"><table className="epr-plan">
+        <thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Timeline</th><th>Priority</th><th>Chapter</th></tr></thead>
+        <tbody>{shown.map((r, i) => (
+          <tr key={i} className="epr-rv">
+            <td className="n">{String(i + 1).padStart(2, '0')}</td>
+            <td><b>{r.title}</b><p>{r.detail}</p></td>
+            <td className="o">{r.owner}</td>
+            <td className="w">{WHEN[r.priority]}</td>
+            <td><span className={clsx('epr-pri', r.priority)}>{r.priority}</span></td>
+            <td><button className="epr-plan-ch" onClick={() => jump(r.sid)}>{r.chapter} <ArrowRight size={11} /></button></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
     </section>
   );
 }
