@@ -69,14 +69,14 @@ function collectCss(): string {
 export function toHtml(root: HTMLElement, title: string): string {
   const c = cleanClone(root);
   const theme = document.documentElement.getAttribute('class') ?? '';
-  return `<!doctype html><html class="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title.replace(/</g, '&lt;')}</title><style>${collectCss()}
+  return `<!doctype html><html class="${theme}"><head><meta charset="utf-8"><meta name="author" content="Jimmeey G."><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title.replace(/</g, '&lt;')}</title><style>${collectCss()}
 body{background:#fff;margin:0}.epr-rv{opacity:1!important;transform:none!important}</style></head><body><div class="epr epr-standalone"><div style="max-width:1200px;margin:0 auto;padding:32px clamp(16px,5vw,64px)">${c.innerHTML}</div></div></body></html>`;
 }
 
 /* ── Word (.doc — Word opens HTML documents) ── */
 export function toWord(root: HTMLElement, title: string): string {
   const c = cleanClone(root);
-  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${title}</title>
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><meta name="author" content="Jimmeey G."><title>${title}</title>
 <style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111}h1,h2,h3,h4{font-family:Georgia,serif}table{border-collapse:collapse;margin:8pt 0}td,th{border:1px solid #ccc;padding:3pt 6pt;font-size:9pt}img{max-width:40px}</style></head><body><h1>${title}</h1>${c.innerHTML}</body></html>`;
 }
 
@@ -171,7 +171,7 @@ export async function toPdf(root: HTMLElement, title: string, onProgress?: (msg:
       pdf.text('Physique 57 India · Confidential', M, PH - 14);
       pdf.text(`${i} / ${n}`, PW - M, PH - 14, { align: 'right' });
     }
-    pdf.setProperties({ title, creator: 'Physique 57 Performance Review' });
+    pdf.setProperties({ title, author: 'Jimmeey G.', creator: 'Jimmeey G.' });
     onProgress?.('Saving PDF…');
     pdf.save(`${slug(title)}.pdf`);
   } finally {

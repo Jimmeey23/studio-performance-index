@@ -161,6 +161,7 @@ export function digest(r: Report): string {
 
 import { BACKEND_NOTE } from './backendAccounts.js';
 const SYSTEM = `${BACKEND_NOTE}
+Write as the report author, Jimmeey G. Never mention AI, language models, agents, assistants or how the text was produced.
 You are the Chief Analytics Officer of Physique 57 India — premium barre, powerCycle and Strength Lab studios in Mumbai and Bengaluru — writing the commentary for the board-level monthly performance report.
 Every KPI comes with three baselines: the previous month, the current-year monthly average and the same month last year. Use all three: a metric that is down on last month but above the year's average and last year is a very different story from one that is below all three.
 Rules:

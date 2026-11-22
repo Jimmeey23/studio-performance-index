@@ -605,7 +605,7 @@ export function ReportDocument({ data: raw, insights, aiLoading, layout = DEFAUL
     const photo = lay.photos ? (s.id.startsWith('trainer_ranking') ? photoForSection('trainers') : s.id.startsWith('lead_channels') ? photoForSection(s.id === 'lead_channels' ? 'clients' : 'leads') : s.ask ? photoForSection(['leads', 'classes', 'formats', 'churn', 'clients'][Number(s.id.slice(1)) % 5]) : photoForSection(s.id)) : undefined;
     const hasActions = !!c?.actions?.length || (aiLoading && !!s.answer);
     const analysis = (
-      <Panel title={aiOn ? 'AI analysis' : 'Analysis'} icon={Sparkles} className="rp-analysis">
+      <Panel title="Analysis" icon={Sparkles} className="rp-analysis">
         {aiLoading && !c?.narrative ? <Pending lines={5} /> : <Prose text={c?.narrative && aiOn ? c.narrative : s.summary} />}
         <Movers ks={s.kpis} L={L} />
       </Panel>
@@ -616,11 +616,11 @@ export function ReportDocument({ data: raw, insights, aiLoading, layout = DEFAUL
       ...body,
       B('ai', hasActions || !s.answer ? <div className="rp-grid-62">
         {analysis}
-        <Panel title={aiOn ? 'AI recommended actions' : 'Actions'} icon={Flag} className="rp-tint">{c?.actions?.length ? <Numbered items={c.actions} tone="gold" /> : aiLoading ? <Pending lines={3} /> : <p className="rp-narr muted">See the recommendations at the end of the report.</p>}</Panel>
+        <Panel title={aiOn ? 'Recommended actions' : 'Actions'} icon={Flag} className="rp-tint">{c?.actions?.length ? <Numbered items={c.actions} tone="gold" /> : aiLoading ? <Pending lines={3} /> : <p className="rp-narr muted">See the recommendations at the end of the report.</p>}</Panel>
       </div> : analysis)];
     if (lay.detail && !condensed.has(s.id)) {
       const showFind = findings.length && (aiOn || !s.answer || findings.join() !== s.answer.points.join());
-      if (showFind) blocks.push(B('find', <Panel title={aiOn ? 'AI findings' : 'Key findings'} icon={Lightbulb} className="rp-findings"><Numbered items={findings} /></Panel>));
+      if (showFind) blocks.push(B('find', <Panel title={aiOn ? 'Findings' : 'Key findings'} icon={Lightbulb} className="rp-findings"><Numbered items={findings} /></Panel>));
       blocks.push(...tableBlocks('t', s.tables));
     }
     (ins?.spotlights ?? []).forEach((sp, i) => { if (sp.section === s.id) blocks.push(spotBlock(sp, i)); });
@@ -718,7 +718,7 @@ export function ReportDocument({ data: raw, insights, aiLoading, layout = DEFAUL
       </div>
     ))}</div>));
     lps.push({ key: 'recs', toc: 'Recommendations', cont: <MiniHead title="Recommendations — continued" icon={Lightbulb} />, fill: fillFrom(data.headline, [ins?.themes?.[0]?.detail]), blocks: [
-      B('head', <div className="rp-exec-head"><div><div className="rp-kicker">{ins?.source === 'ai' ? 'AI recommendations' : 'Recommendations'}</div><h2 className="rp-h2">Recommendations &amp; suggestions</h2></div></div>, true),
+      B('head', <div className="rp-exec-head"><div><div className="rp-kicker">{ins?.source === 'ai' ? 'Recommendations' : 'Recommendations'}</div><h2 className="rp-h2">Recommendations &amp; suggestions</h2></div></div>, true),
       ...pairs,
     ] });
   }
@@ -737,7 +737,7 @@ export function ReportDocument({ data: raw, insights, aiLoading, layout = DEFAUL
     const dch: typeof defs[] = []; for (let i = 0; i < defs.length; i += 12) dch.push(defs.slice(i, i + 12));
     lps.push({ key: 'defs', toc: 'Appendix B — definitions', cont: <MiniHead title="Appendix B — definitions (continued)" icon={BookOpen} />, blocks: [
       B('head', <MiniHead title="Appendix B — definitions & method" sub="How every figure in this report is calculated." icon={BookOpen} />, true),
-      B('note', <div className="rp-note"><b>Baselines.</b> {P.prevLabel} = the previous period of equal length. {P.ytdLabel} = the mean of the monthly values from January to the month before the report period{P.months > 1 ? ', with volumes scaled to the period length' : ''}. {P.lyLabel} = the same period last year. Scope: {data.scope}. Renewal and churn cover recurring memberships only (zero-value, complimentary, single-class, sign-up-link and other non-recurring memberships excluded). Visits exclude future bookings and imported legacy records. Formats (Barre / powerCycle / Strength Lab) are derived from class names. {ins?.verification ? `AI commentary checked against computed results: ${ins.verification.checked} figures checked${ins.verification.unmatched.length ? `, ${ins.verification.unmatched.length} could not be traced (${ins.verification.unmatched.slice(0, 6).join(', ')})` : ', all traced'}.` : ''}</div>),
+      B('note', <div className="rp-note"><b>Baselines.</b> {P.prevLabel} = the previous period of equal length. {P.ytdLabel} = the mean of the monthly values from January to the month before the report period{P.months > 1 ? ', with volumes scaled to the period length' : ''}. {P.lyLabel} = the same period last year. Scope: {data.scope}. Renewal and churn cover recurring memberships only (zero-value, complimentary, single-class, sign-up-link and other non-recurring memberships excluded). Visits exclude future bookings and imported legacy records. Formats (Barre / powerCycle / Strength Lab) are derived from class names. {ins?.verification ? `Commentary checked against computed results: ${ins.verification.checked} figures checked${ins.verification.unmatched.length ? `, ${ins.verification.unmatched.length} could not be traced (${ins.verification.unmatched.slice(0, 6).join(', ')})` : ', all traced'}.` : ''}</div>),
       ...dch.map((d, i) => B(`d${i}`, <div className="rp-defs">{d.map((x) => <div key={x.metric}><b>{x.label}</b> — {x.description}</div>)}</div>)),
     ] });
   }
@@ -801,7 +801,7 @@ export function ReportDocument({ data: raw, insights, aiLoading, layout = DEFAUL
           })}
         </div>
         <div className="rp-cover-toc">{lps.map((lp) => <span key={lp.key}><em>{firstPage[lp.key] ? String(firstPage[lp.key]).padStart(2, '0') : '··'}</em>{lp.toc}</span>)}</div>
-        <div className="rp-cover-foot"><span>{lay.photos ? `${BRAND.site} · ` : ''}{lay.preparedFor ? `Prepared for ${lay.preparedFor} · ` : 'Prepared '}{new Date(data.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span><span>Figures computed from the synced studio sheets{ins?.source === 'ai' ? ` · commentary by Claude ${ins.model ?? ''}, every figure verified` : ''}</span></div>
+        <div className="rp-cover-foot"><span>{lay.photos ? `${BRAND.site} · ` : ''}{lay.preparedFor ? `Prepared for ${lay.preparedFor} · ` : 'Prepared '}{new Date(data.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span><span>Figures computed from the synced studio sheets · Prepared by Jimmeey G.</span></div>
       </div>
     </div></section>
   );

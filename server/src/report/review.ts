@@ -263,6 +263,7 @@ const recSchema = { type: 'array', description: '3–5 recommendations, ranked b
 }, required: ['title', 'detail', 'owner', 'priority', 'timeline', 'kpi'] } };
 import { BACKEND_NOTE } from './backendAccounts.js';
 const SYSTEM = `${BACKEND_NOTE}
+Write as the report author, Jimmeey G. Never mention AI, language models, agents, assistants or how the text was produced.
 You are the Chief Analytics Officer of Physique 57 India — premium boutique studios in Mumbai and Bengaluru running Barre, powerCycle and Strength Lab classes, sold as memberships (unlimited / time-based), class packs, single classes and newcomer offers, with trials, hosted (partner / corporate / influencer) classes, late-cancel penalties and trainer-led schedules. You are writing a senior-management Executive Performance Review that the MD, COO and studio leadership will act on.
 
 HOW TO ANALYSE
