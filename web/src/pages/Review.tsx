@@ -951,7 +951,10 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
 const heroPick = (k: Kpi[]) => (k.length >= 10 ? k.slice(0, 10) : k.slice(0, 6));
 function HeroSpark({ values, tone: t }: { values?: (number | null)[]; tone: number }) {
   const v = (values ?? []).filter((x): x is number => x !== null && isFinite(x)); if (v.length < 2) return <svg className="epr-hspark" />;
-  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1; const W = 100, H = 24;
+  // robust scale: clamp to 10th–90th percentile so one outlier doesn't flatten the trend
+  const srt = [...v].sort((a, b) => a - b); const q = (p: number) => srt[Math.min(srt.length - 1, Math.max(0, Math.round(p * (srt.length - 1))))];
+  const lo0 = q(0.1), hi0 = q(0.9), pad = (hi0 - lo0) * 0.25 || Math.abs(hi0) * 0.05 || 1; const lo = lo0 - pad, hi = hi0 + pad, r = hi - lo; const W = 100, H = 30;
+  for (let i = 0; i < v.length; i++) v[i] = Math.min(hi, Math.max(lo, v[i]));
   const pts = v.map((x, i) => `${(i / (v.length - 1)) * W},${H - 2 - ((x - lo) / r) * (H - 4)}`);
   const c = t > 0 ? 'var(--epr-good)' : t < 0 ? 'var(--epr-bad)' : 'var(--accent)';
   return <svg className="epr-hspark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden><polygon points={`0,${H} ${pts.join(' ')} ${W},${H}`} fill={c} opacity=".12" /><polyline points={pts.join(' ')} fill="none" stroke={c} strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>;
