@@ -22,6 +22,8 @@ import * as reportStore from './report/store.js';
 import { generateInsights, rulesInsights } from './report/insights.js';
 import { buildReview, writeGlance, writeSection, reviewContext, reviewDefinitions, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
+import { enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
+import { streamTo } from './report/blobStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
 import { SOURCES } from './sources.js';
@@ -72,6 +74,22 @@ app.get('/api/me', auth, (req, res) => res.json({ ...req.user, authDisabled: con
   model: `Auto: ${TIER_MODELS.fast.id} / ${TIER_MODELS.balanced.id} / ${TIER_MODELS.deep.id}`,
   models: { fast: TIER_MODELS.fast, balanced: TIER_MODELS.balanced, deep: TIER_MODELS.deep } }));
 
+/* Chapter video explainers (NotebookLM). Status and playback are public with the review link; starting generation needs sign-in. */
+app.get('/api/public/review/:id/explainers', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Not found' });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ available: await explainersAvailable(), videos: await videoStates(id) });
+}));
+app.get('/api/public/review/:id/video/:part', (req, res) => {
+  const id = String(req.params.id); const part = String(req.params.part);
+  if (!/^rv_[a-z0-9-]{6,}$/i.test(id) || !/^[a-z0-9_-]+$/i.test(part)) return res.status(404).end();
+  videoStates(id).then(async (v) => {
+    const st = v[part];
+    if (st?.status === 'ready' && st.storage === 'blomp' && st.key) return streamTo(st.key, req.headers.range, res, 'video/mp4');
+    const f = videoFile(id, part); if (!fs.existsSync(f)) return res.status(404).end();
+    res.sendFile(f, { headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600' } });
+  }).catch((e) => { log.warn({ err: (e as Error).message }, 'video stream failed'); if (!res.headersSent) res.status(502).end(); });
+});
 /* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
 app.get('/api/public/review/:id', wrap(async (req, res) => {
   const id = String(req.params.id);
@@ -252,14 +270,22 @@ app.get('/api/review/:id', wrap(async (req, res) => {
 }));
 app.delete('/api/review/:id', wrap(async (req, res) => { await reviewStore.remove(req.user!.id, String(req.params.id)); res.json({ ok: true }); }));
 /** AI commentary per part ('glance' or a section id): written once and reused; `fresh` rewrites that part only. */
-const reviewLocks = new Map<string, Promise<unknown>>();
+const reviewLocks = reviewStore.reviewLocks;
+app.post('/api/review/:id/explainers', wrap(async (req, res) => {
+  const s = await reviewStore.byId(req.user!.id, String(req.params.id));
+  if (!s) return res.status(404).json({ error: 'Review not found' });
+  if (!(await explainersAvailable())) return res.status(503).json({ error: 'Video explainers are not set up on this server (install notebooklm-py and set NOTEBOOKLM_AUTH_JSON).' });
+  const parts = (Array.isArray(req.body?.parts) ? req.body.parts : ['glance', ...s.review.sections.map((x) => x.id)]).filter((p: unknown): p is string => typeof p === 'string' && /^[a-z0-9_-]+$/i.test(p));
+  await enqueue(s.review.id, parts, !!req.body?.force);
+  res.json({ ok: true, videos: await videoStates(s.review.id) });
+}));
 /** Pins (assistant results added to chapters) and annotations — owned by the review's user. */
 app.put('/api/review/:id/extras', wrap(async (req, res) => {
   const uid = req.user!.id; const id = String(req.params.id); const ex = req.body?.extras;
   if (!ex || typeof ex !== 'object' || JSON.stringify(ex).length > 2_000_000) return res.status(400).json({ error: 'extras required (max 2 MB)' });
   const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
     const cur = await reviewStore.byId(uid, id); if (!cur) return false;
-    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: { pins: Array.isArray(ex.pins) ? ex.pins : [], notes: Array.isArray(ex.notes) ? ex.notes : [], speaker: ex.speaker && typeof ex.speaker === 'object' ? ex.speaker : {} } }); return true;
+    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: { ...(cur.ai.extras ?? {}), pins: Array.isArray(ex.pins) ? ex.pins : [], notes: Array.isArray(ex.notes) ? ex.notes : [], speaker: ex.speaker && typeof ex.speaker === 'object' ? ex.speaker : {} } }); return true;
   });
   reviewLocks.set(id, run.catch(() => {}));
   if (!(await run)) return res.status(404).json({ error: 'Review not found' });

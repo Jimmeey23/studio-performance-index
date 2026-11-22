@@ -992,3 +992,22 @@
 .epr-def .m { font-size: 11.5px !important; color: var(--ink-3) !important; }
 .epr-def .c { font-size: 12px !important; color: var(--warn) !important; }
 @media print { .epr-defs { display: block; } .epr-defs-body { display: grid !important; } }
+
+/* more breathing room either side of the report */
+.epr-standalone .epr-wrap { padding-left: clamp(20px, 6vw, 104px); padding-right: clamp(20px, 6vw, 104px); }
+
+/* chapter video explainer */
+.epr-vid { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 6px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.epr-vid.ready { padding-left: 4px; } .epr-vid.ready:hover { border-color: var(--ink-3); color: var(--ink); }
+.epr-vid.ready .ic { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+.epr-vid.busy svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+.epr-vid.busy circle { fill: none; stroke-width: 2.5; }
+.epr-vid.busy .t { stroke: var(--line); } .epr-vid.busy .v { stroke: var(--accent); stroke-linecap: round; transition: stroke-dasharray .8s; }
+.epr-vid.busy em { font-style: normal; color: var(--ink-3); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.epr-vid.busy::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: epr-breathe 1.6s ease-in-out infinite; }
+.epr-vid.failed { color: var(--ink-3); border-style: dashed; }
+.epr-vid.failed button { margin-left: 4px; color: var(--accent); font-weight: 600; }
+.epr-vid-player { width: min(960px, 100%); display: grid; gap: 10px; padding: 16px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-lg); }
+.epr-vid-player video { width: 100%; max-height: 70vh; border-radius: 10px; background: #000; }
+.epr-vid-player a { justify-self: end; }
+@media (max-width: 640px) { .epr-vid.busy em { display: none; } }
