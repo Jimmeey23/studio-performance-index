@@ -48,6 +48,15 @@ type HistoryItem = { id: string; label: string; scope: string; created_at: strin
 
 type Base = 'prev' | 'ytd' | 'ly';
 
+/* ── baseline (vs prev / YTD / LY) shared by every number in the report ── */
+const RBase = createContext<{ base: Base; P: ReportPeriod } | null>(null);
+function useChg() {
+  const c = useContext(RBase); const base = c?.base ?? 'prev';
+  const chg = (k: Kpi) => (base === 'prev' ? k.chg : base === 'ytd' ? k.chgYtd : k.chgLy);
+  const label = c ? (base === 'prev' ? c.P.prevLabel : base === 'ytd' ? c.P.ytdLabel : c.P.lyLabel) : '';
+  return { chg, label };
+}
+
 /* ── drill-down: every number in the review opens the records behind it ── */
 type DrillApi = { kpi: (k: Kpi, extra?: DrillFilter[], ctx?: string[]) => void; slice: (metric: string, filters: DrillFilter[], ctx: string[], expected?: number | null) => void };
 const RDrill = createContext<DrillApi | null>(null);
@@ -568,7 +577,7 @@ function ReviewDoc() {
         <div ref={revealRef} className="epr-wrap">
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
-            <RDrill.Provider value={drillApi}>
+            <RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
@@ -576,7 +585,7 @@ function ReviewDoc() {
                 {building && <BuildConsole steps={steps} hints={hints} started={startedAt} />}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
-            </RDrill.Provider>
+            </RDrill.Provider></RBase.Provider>
           )}
         </div>
       </div>
@@ -586,6 +595,7 @@ function ReviewDoc() {
 }
 
 function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P: ReportPeriod; live: boolean; jump: (id: string) => void; drill: DrillApi | null }) {
+  const B = useChg();
   return (
     <section id="epr-cover" data-spy className={clsx('epr-cover epr-build-in', live && 'live')}>
       <div className="epr-cover-l">
@@ -611,8 +621,8 @@ function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P:
           {rv.sections.map((x, i) => <li key={x.id}><button onClick={() => jump(x.id)}><span>{String(i + 2).padStart(2, '0')}</span>{x.title}</button></li>)}
         </ol>
       </div>
-      <div className="epr-cover-kpis">{rv.cover.headlineKpis.map((k, i) => { const t = tone(k, k.chg); return (
-        <div key={k.id} style={{ animationDelay: `${300 + i * 80}ms` }} {...clickable(drill ? () => drill.kpi(k) : undefined)}><span>{k.label}</span><b>{k.value === null ? '—' : <CountUp value={k.value} format={(n) => fmtK(n, k.format)} />}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{t > 0 ? '▲' : t < 0 ? '▼' : '•'} {fmtDelta(k.chg, k.format)} <i>vs {P.prevLabel}</i></em></div>
+      <div className="epr-cover-kpis">{rv.cover.headlineKpis.map((k, i) => { const t = tone(k, B.chg(k)); return (
+        <div key={k.id} style={{ animationDelay: `${300 + i * 80}ms` }} {...clickable(drill ? () => drill.kpi(k) : undefined)}><span>{k.label}</span><b>{k.value === null ? '—' : <CountUp value={k.value} format={(n) => fmtK(n, k.format)} />}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{t > 0 ? '▲' : t < 0 ? '▼' : '•'} {fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em></div>
       ); })}</div>
       <div className="epr-cover-foot">Figures computed from synced studio data{gl?.source === 'ai' ? ` · commentary by ${gl.model ?? 'Claude'}` : ''} · Ref {rv.id.slice(0, 8).toUpperCase()}</div>
     </section>
@@ -620,24 +630,25 @@ function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P:
 }
 
 function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { rv: Review; ai?: AI; gl?: GlanceAI; P: ReportPeriod; base: Base; live: boolean; busy: boolean; canAi: boolean; onRewrite: () => void; jump: (id: string) => void }) {
+  const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
       <SectionHead n={1} total={rv.sections.length + 1} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
-      <Sub n="1.2" title="Headline numbers" note="Click any number for the records behind it" />
+      <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
       <KpiGrid kpis={rv.glance.cards} base={base} P={P} />
       {rv.scorecard?.length > 0 && <Signals kpis={rv.scorecard} base={base} P={P} />}
-      <Sub n="1.3" title="Chapter by chapter" />
-      <div className="epr-highlights">{rv.sections.map((s, i) => {
+      <Sub n="1.3" full title="Chapter by chapter" />
+      <div className="epr-highlights epr-full">{rv.sections.map((s, i) => {
         const h = gl?.highlights.find((x) => x.section === s.id)?.text ?? ai?.sections[s.id]?.headline ?? s.ruleFindings[0];
         const hi = gl?.highlights.findIndex((x) => x.section === s.id) ?? -1;
-        const k = s.kpis[0]; const t = k ? tone(k, k.chg) : 0;
+        const k = s.kpis[0]; const t = k ? tone(k, B.chg(k)) : 0;
         return (
           <div key={s.id} className={clsx('epr-hl epr-rv', t > 0 ? 'good' : t < 0 ? 'bad' : 'flat')} style={{ transitionDelay: `${i * 60}ms` }}>
             <div className="epr-hl-top"><span className="n">{String(i + 2).padStart(2, '0')}</span><span className="st">{t > 0 ? 'Improving' : t < 0 ? 'Needs attention' : 'Steady'}</span></div>
             <div className="t">{ai?.sections[s.id]?.title ?? s.title}</div>
-            {k && <div className="epr-hl-k"><b>{fmtK(k.value, k.format)}</b><span>{k.label}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(k.chg, k.format)}</em></div>}
+            {k && <div className="epr-hl-k"><b>{fmtK(k.value, k.format)}</b><span>{k.label}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} vs {B.label}</em></div>}
             {hi >= 0 ? <Ed as="p" part="glance" path={['highlights', hi, 'text']} value={h} /> : <p>{h ?? '…'}</p>}
             <button className="go" onClick={() => jump(s.id)}>Read section <ArrowRight size={12} /></button>
           </div>
@@ -676,7 +687,7 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
 
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
 function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [] }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[] }) {
-  const d = useRD();
+  const d = useRD(); const B = useChg();
   return (
     <header className="epr-hero">
       <div className="epr-hero-top">
@@ -692,14 +703,14 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         </div>
       </div>
       {headline && <div className="epr-hero-quote">{headline}</div>}
-      {stats.length > 0 && <div className="epr-hero-stats">{stats.slice(0, 3).map((k) => { const t = tone(k, k.chg); return (
-        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(k.chg, k.format)}</em></div>
+      {stats.length > 0 && <div className="epr-hero-stats">{stats.slice(0, 3).map((k) => { const t = tone(k, B.chg(k)); return (
+        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em></div>
       ); })}</div>}
     </header>
   );
 }
 /** Numbered sub-heading inside a chapter (2.1, 2.2 …) — gives every chapter the same reading structure. */
-const Sub = ({ n, title, note }: { n: string; title: string; note?: string }) => <div className="epr-sub epr-rv"><span>{n}</span><h3>{title}</h3>{note && <em>{note}</em>}</div>;
+const Sub = ({ n, title, note, full }: { n: string; title: string; note?: string; full?: boolean }) => <div className={clsx('epr-sub epr-rv', full && 'epr-full')}><span>{n}</span><h3>{title}</h3>{note && <em>{note}</em>}</div>;
 function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; model?: string; edited?: boolean }; busy: boolean; canAi: boolean; onRewrite: () => void }) {
   return (
     <div className="epr-sh-act no-print">
@@ -712,7 +723,7 @@ function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; mo
 
 function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewrite }: { n: number; total: number; s: Section; ai?: SectionAI; live: boolean; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
   const note = (id: string) => ai?.notes?.[id] ?? s.notes[id];
-  const d = useRD(); const ed = useEdit();
+  const d = useRD(); const ed = useEdit(); const B = useChg();
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
@@ -721,7 +732,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
 
       <Sub n={`${n}.1`} title="Analysis" />
       <Analysis part={s.id} ai={ai} live={live} label="Analysis" fallback={s.ruleFindings.slice(0, 3)} />
-      <Sub n={`${n}.2`} title="The numbers" note="Click any number for the records behind it" />
+      <Sub n={`${n}.2`} full title="The numbers" note="Click any number for the records behind it" />
       <KpiGrid kpis={s.kpis} base={base} P={P} />
       {(hasFeature || s.charts.length > 0 || s.tables.length > 0) && <div className="epr-detail"><Sub n={`${n}.3`} title="In detail" /></div>}
 
@@ -742,7 +753,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
         ))}</div> : null}
         {s.formats?.length ? <div className="epr-formats">{s.formats.map((f, fi) => (
           <div key={f.format} className="epr-fmt epr-rv" style={{ transitionDelay: `${fi * 80}ms` }}><h4>{f.format}</h4>
-            <table><tbody>{f.kpis.map((k) => { const t = tone(k, k.chg); return <tr key={k.id} {...clickable(d ? () => d.kpi(k, [{ dimension: 'format', op: 'in', values: [f.format] }], [f.format]) : undefined)}><td>{k.label}</td><td className="v">{fmtK(k.value, k.format)}</td><td className={clsx('c', t > 0 ? 'good' : t < 0 ? 'bad' : '')}>{fmtDelta(k.chg, k.format)}</td></tr>; })}</tbody></table></div>
+            <table><tbody>{f.kpis.map((k) => { const t = tone(k, B.chg(k)); return <tr key={k.id} {...clickable(d ? () => d.kpi(k, [{ dimension: 'format', op: 'in', values: [f.format] }], [f.format]) : undefined)}><td>{k.label}</td><td className="v">{fmtK(k.value, k.format)}</td><td className={clsx('c', t > 0 ? 'good' : t < 0 ? 'bad' : '')}>{fmtDelta(B.chg(k), k.format)}</td></tr>; })}</tbody></table></div>
         ))}</div> : null}
         {s.heatmap && s.heatmap.rows.length > 0 && <Heat hm={s.heatmap} />}
       </div>}
