@@ -492,6 +492,11 @@ export default function Review({ standalone, publicView }: { embedded?: boolean;
   return standalone ? <ReviewDoc publicView={!!publicView} /> : <Landing />;
 }
 
+/** Board-level chapter names (applied to every review, including ones generated before the rename). */
+const CHAPTER_TITLES: Record<string, string> = { sales: 'Revenue & Commercial Performance', attendance: 'Client Engagement & Attendance', funnel: 'Client Acquisition & Conversion', classes: 'Schedule & Class Utilisation', trainers: 'Instructor Performance', formats: 'Format Portfolio & Economics', churn: 'Membership Retention & Renewals' };
+const chTitle = (s: { id: string; title: string }) => CHAPTER_TITLES[s.id] ?? s.title;
+const GLANCE_TITLE = 'Executive Summary'; const CLOSING_TITLE = 'Strategic Priorities & Action Plan';
+
 function ReviewDoc({ publicView }: { publicView: boolean }) {
   const me = useMe();
   const isAdmin = me?.role === 'admin';
@@ -602,13 +607,13 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const shown = (() => { let n = 0; for (const p of order) { if (has(p)) n++; else break; } return n; })();
   const building = shown < order.length;
   const visible = new Set(order.slice(0, shown));
-  const nav = useMemo(() => rv ? [{ id: 'cover', title: 'Cover' }, { id: 'glance', title: 'At a glance' }, ...rv.sections.map((s) => ({ id: s.id, title: ai?.sections?.[s.id]?.title ?? s.title })), { id: 'closing', title: 'Action plan' }] : [], [rv, ai]);
+  const nav = useMemo(() => rv ? [{ id: 'cover', title: 'Cover' }, { id: 'glance', title: GLANCE_TITLE }, ...rv.sections.map((s) => ({ id: s.id, title: chTitle(s) })), { id: 'closing', title: CLOSING_TITLE }] : [], [rv, ai]);
   const speakerChapters: SpeakerChapter[] = useMemo(() => {
     if (!rv) return [];
     const num = (k: Kpi) => { const c = base === 'prev' ? k.chg : base === 'ytd' ? k.chgYtd : k.chgLy; return { label: k.label, value: fmtK(k.value, k.format), delta: fmtDelta(c, k.format), tone: tone(k, c) }; };
     const recs = (r?: Rec[]) => (r ?? []).map((x) => `${x.title} — ${normaliseOwner(x.owner)}${x.timeline ? `, ${x.timeline}` : ''}`);
     return [
-      { id: 'glance', n: '01', title: 'At a glance', headline: ai?.glance?.headline, summary: ai?.glance?.summary, points: ai?.glance?.insights ?? [], numbers: rv.cover.headlineKpis.map(num), actions: ai?.glance?.watch ?? [] },
+      { id: 'glance', n: '01', title: GLANCE_TITLE, headline: ai?.glance?.headline, summary: ai?.glance?.summary, points: ai?.glance?.insights ?? [], numbers: rv.cover.headlineKpis.map(num), actions: ai?.glance?.watch ?? [] },
       ...rv.sections.map((x, i) => { const a = ai?.sections[x.id]; return { id: x.id, n: String(i + 2).padStart(2, '0'), title: a?.title ?? x.title, headline: a?.headline, summary: a?.summary, points: a?.insights?.length ? a.insights : x.ruleFindings.slice(0, 4), numbers: x.kpis.slice(0, 5).map(num), actions: recs(a?.recommendations) }; }),
       { id: 'closing', n: String(rv.sections.length + 2).padStart(2, '0'), title: 'Summary & action plan', headline: ai?.glance?.tagline, points: rv.sections.map((x) => ai?.sections[x.id]?.headline ?? '').filter(Boolean), numbers: [], actions: rv.sections.flatMap((x) => recs(ai?.sections[x.id]?.recommendations?.filter((r) => r.priority === 'high'))) },
     ];
@@ -694,7 +699,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const steps: Step[] = rv ? [
     { id: 'data', label: `Computed ${rv.scorecard.length + rv.sections.reduce((a, s) => a + s.kpis.length, 0)} metrics across ${rv.sections.length} sections`, state: 'done' },
     { id: 'glance', label: 'Planning the narrative — reading every section before writing', state: has('glance') ? 'done' : busy.has('glance') ? 'writing' : 'queued' },
-    ...rv.sections.map((s) => ({ id: s.id, label: `Analysing ${s.title.replace(/ Index$/, '')}`, state: (has(s.id) ? 'done' : busy.has(s.id) ? 'writing' : 'queued') as Step['state'] })),
+    ...rv.sections.map((s) => ({ id: s.id, label: `Analysing ${chTitle(s)}`, state: (has(s.id) ? 'done' : busy.has(s.id) ? 'writing' : 'queued') as Step['state'] })),
   ] : [];
 
   return (
@@ -848,7 +853,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
   const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
+      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
       <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
@@ -861,7 +866,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
         const k = s.kpis[0]; const t = k ? tone(k, B.chg(k)) : 0;
         return (
           <div key={s.id} className={clsx('epr-hl epr-rv', t > 0 ? 'good' : t < 0 ? 'bad' : 'flat')} style={{ transitionDelay: `${i * 60}ms` }} {...clickable(() => jump(s.id))}>
-            <div className="epr-hl-head"><span className="n">{String(i + 2).padStart(2, '0')}</span><div className="t">{ai?.sections[s.id]?.title ?? s.title}</div><span className="st" title={k ? `Based on ${k.label} vs ${B.label}` : undefined}>{k ? `${k.label} ${t > 0 ? 'improving' : t < 0 ? 'slipping' : 'steady'}` : 'Steady'}</span></div>
+            <div className="epr-hl-head"><span className="n">{String(i + 2).padStart(2, '0')}</span><div className="t">{chTitle(s)}</div><span className="st" title={k ? `Based on ${k.label} vs ${B.label}` : undefined}>{k ? `${k.label} ${t > 0 ? 'improving' : t < 0 ? 'slipping' : 'steady'}` : 'Steady'}</span></div>
             {k && <div className="epr-hl-k"><b>{fmtK(k.value, k.format)}</b><span>{k.label}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} vs {B.label}</em></div>}
             {hi >= 0 ? <Ed as="p" part="glance" path={['highlights', hi, 'text']} value={h} /> : <p>{h ?? '…'}</p>}
             <span className="go">Read chapter <ArrowRight size={12} /></span>
@@ -955,7 +960,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Product', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis} vid={s.id}
+      <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Portfolio', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={chTitle(s)} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis} vid={s.id}
         speak={ai ? [ai.headline, ai.summary, ai.insights.length ? `Key insights. ${ai.insights.slice(0, 3).join(' ')}` : ''].join(' ') : undefined}
         headline={ai ? (live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />) : undefined} />
 
@@ -1019,7 +1024,7 @@ function ActionCard({ r, n, jump, compact }: { r: PlanRec; n: number; jump: (id:
 const WHEN: Record<Rec['priority'], string> = { high: 'Next 2 weeks', medium: 'Within 30 days', low: 'This quarter' };
 function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; jump: (id: string) => void }) {
   const [owner, setOwner] = useState<string>('all');
-  const recs = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), sid: s.id, chapter: ai?.sections[s.id]?.title ?? s.title })));
+  const recs = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), sid: s.id, chapter: chTitle(s) })));
   const order = { high: 0, medium: 1, low: 2 } as const;
   recs.sort((a, b) => order[a.priority] - order[b.priority]);
   const owners = ROLES.filter((x) => recs.some((r) => r.owner === x));
@@ -1028,12 +1033,12 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
   const n = rv.sections.length + 2;
   return (
     <section id="epr-closing" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={n} kicker="Conclusions" title="Summary & action plan" lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`}
+      <SectionHead n={n} total={n} kicker="Conclusions" title={CLOSING_TITLE} lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`}
         speak={[...rv.sections.map((s) => ai?.sections[s.id]?.headline ?? '').filter(Boolean), recs.length ? `There are ${recs.length} recommended actions, ${recs.filter((r) => r.priority === 'high').length} of them high priority. ${recs.filter((r) => r.priority === 'high').slice(0, 4).map((r) => `${r.title}, owned by ${r.owner}.`).join(' ')}` : ''].join(' ')} />
       <Sub n={`${n}.1`} title="Main findings" />
       <ol className="epr-concl">{rv.sections.map((s, i) => {
         const h = ai?.sections[s.id]?.headline ?? ai?.glance?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0];
-        return <li key={s.id} className="epr-rv" {...clickable(() => jump(s.id))}><span>{String(i + 2).padStart(2, '0')}</span><b>{ai?.sections[s.id]?.title ?? s.title}</b><p>{h}</p></li>;
+        return <li key={s.id} className="epr-rv" {...clickable(() => jump(s.id))}><span>{String(i + 2).padStart(2, '0')}</span><b>{chTitle(s)}</b><p>{h}</p></li>;
       })}</ol>
       {!!ai?.glance?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{ai.glance.watch.map((w, i) => <li key={i}>{w}</li>)}</ul></div></div>}
       <ChapterNotes sec="closing" />
