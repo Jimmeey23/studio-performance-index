@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
+import { ClassExplorer } from '../components/ClassExplorer';
 import { fmt } from '../lib/format';
 import type { Format, Result } from '../lib/types';
 import { PRESETS, lastMonthValue, range } from '../lib/periods';
@@ -30,7 +31,8 @@ import type { Block } from '../lib/types';
 import { BlockView } from '../components/blocks/Blocks';
 import Analyst from './Analyst';
 import { SpeakerPanel, type SpeakerChapter } from '../components/report/Speaker';
-import { ChapterNotes, InkLayer, NotesCtx, NOTE_COLORS, PointerFx, PresenterBar, type ReviewNote, type Tool } from '../components/report/Presenter';
+import { ChapterNotes, InkLayer, NotesCtx, NotesPanel, NOTE_KINDS, PointerFx, PresenterBar, SaveChip, type InkStroke, type NoteKind, type ReviewNote, type Tool } from '../components/report/Presenter';
+import { autosave, pendingBody, useSaveState } from '../lib/autosave';
 import '../review.css';
 
 /* ── types (mirror server/src/report/review.ts) ── */
@@ -52,7 +54,7 @@ type Rec = { title: string; detail: string; owner: string; priority: 'high' | 'm
 type SectionAI = { title?: string; lead?: string; edited?: boolean; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: Rec[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
 type GlanceAI = { edited?: boolean; headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
 type PinItem = { id: string; part: string; block: Block; at: string };
-type Extras = { pins: PinItem[]; notes: ReviewNote[]; speaker?: Record<string, string> };
+type Extras = { pins: PinItem[]; notes: ReviewNote[]; speaker?: Record<string, string>; ink?: InkStroke[] };
 type AI = { glance?: GlanceAI; sections: Record<string, SectionAI>; extras?: Partial<Extras> };
 /** Assistant results the user pinned into a chapter. */
 const PinsCtx = createContext<{ pins: PinItem[]; remove: (id: string) => void } | null>(null);
@@ -492,6 +494,21 @@ export default function Review({ standalone, publicView }: { embedded?: boolean;
   return standalone ? <ReviewDoc publicView={!!publicView} /> : <Landing />;
 }
 
+/** Short labels for the narrow chapter rail (full names stay on the chapter headers). */
+const RAIL_SHORT: Record<string, string> = { cover: 'Cover', glance: 'Summary', sales: 'Revenue', attendance: 'Engagement', funnel: 'Acquisition', classes: 'Schedule', trainers: 'Instructors', formats: 'Formats', churn: 'Retention', closing: 'Action plan' };
+const SLIDES = [['studio-barre', 'Barre 57'], ['cycle-ride', 'powerCycle'], ['strength-kettlebell', 'Strength Lab'], ['barre-group', 'Community'], ['trainers-duo', 'Our instructors'], ['cycle-group', 'Ride together'], ['strength-lunge', 'Train strong'], ['trainers-pair', 'Coaching'], ['cycle-mono', 'In the zone']] as const;
+/** Looping photo slideshow at the foot of the chapter rail. */
+function RailSlides() {
+  const [i, setI] = useState(0);
+  useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % SLIDES.length), 4500); return () => clearInterval(t); }, []);
+  return (
+    <div className="epr-rail2-slides" aria-hidden>
+      {SLIDES.map(([f, cap], j) => <figure key={f} className={clsx(j === i && 'on')}><img src={`/brand/p57-${f}.jpg`} alt="" loading="lazy" /><figcaption>{cap}</figcaption></figure>)}
+      <div className="dots">{SLIDES.map((_, j) => <i key={j} className={clsx(j === i && 'on')} />)}</div>
+    </div>
+  );
+}
+
 /** Board-level chapter names (applied to every review, including ones generated before the rename). */
 const CHAPTER_TITLES: Record<string, string> = { sales: 'Revenue & Commercial Performance', attendance: 'Client Engagement & Attendance', funnel: 'Client Acquisition & Conversion', classes: 'Schedule & Class Utilisation', trainers: 'Instructor Performance', formats: 'Format Portfolio & Economics', churn: 'Membership Retention & Renewals' };
 const chTitle = (s: { id: string; title: string }) => CHAPTER_TITLES[s.id] ?? s.title;
@@ -512,7 +529,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [active, setActive] = useState('cover');
   const [copied, setCopied] = useState(false);
   const [editOn, setEditOn] = useState(false);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveState = useSaveState();
+  const [inkSize, setInkSize] = useState(4); const [noteKind, setNoteKind] = useState<NoteKind>('note'); const [notesOpen, setNotesOpen] = useState(false);
   const [brief, setBrief] = useState(false);
   const [scale, setScale] = useState(() => { try { return Number(localStorage.getItem('epr-scale')) || 1; } catch { return 1; } });
   const [progress, setProgress] = useState(0);
@@ -524,7 +542,6 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const vidAsked = useRef<string | null>(null);
   const [tool, setTool] = useState<Tool>('none');
   const [ink, setInk] = useState('#e11d48');
-  const [clearK, setClearK] = useState(0); const [undoK, setUndoK] = useState(0);
   const [present, setPresent] = useState(false); const [pbar, setPbar] = useState(false);
   const [pinBlock, setPinBlock] = useState<Block | null>(null);
   const [extras, setExtras] = useState<Extras>({ pins: [], notes: [] });
@@ -533,30 +550,45 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const scroller = useRef<HTMLDivElement>(null);
   const revealRef = useReveal();
   const started = useRef<Set<string>>(new Set());
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const latestAi = useRef<AI | null>(null);
   latestAi.current = saved?.ai ?? null;
 
   useEffect(() => {
     setLoading(true); setSaved(null); started.current = new Set();
-    api<Saved>(publicView ? `/api/public/review/${reviewId}` : `/api/review/${reviewId}`).then(setSaved).catch((e) => setErr((e as Error).message)).finally(() => setLoading(false));
+    api<Saved>(publicView ? `/api/public/review/${reviewId}` : `/api/review/${reviewId}`).then((sv) => {
+      // replay any edit that had not reached the server yet (closed tab, offline, crash)
+      const ai = { ...sv.ai, sections: { ...(sv.ai.sections ?? {}) } };
+      const g = pendingBody<{ content: GlanceAI }>(`ai:${sv.review.id}:glance`); if (g?.content) ai.glance = g.content;
+      for (const s of sv.review.sections) { const p = pendingBody<{ content: SectionAI }>(`ai:${sv.review.id}:${s.id}`); if (p?.content) ai.sections[s.id] = p.content; }
+      setSaved({ ...sv, ai });
+    }).catch((e) => setErr((e as Error).message)).finally(() => setLoading(false));
   }, [reviewId]);
   useEffect(() => { try { localStorage.setItem('epr-scale', String(scale)); } catch { /* */ } }, [scale]);
   const loadedExtras = useRef<string | null>(null);
-  useEffect(() => { if (saved && loadedExtras.current !== saved.review.id) { loadedExtras.current = saved.review.id; setExtras({ pins: (saved.ai.extras?.pins ?? []) as PinItem[], notes: (saved.ai.extras?.notes ?? []) as ReviewNote[], speaker: saved.ai.extras?.speaker }); let sp = saved.ai.extras?.speaker ?? {}; if (publicView) { try { sp = { ...sp, ...JSON.parse(localStorage.getItem(`epr-spk-${saved.review.id}`) ?? '{}') }; } catch { /* */ } } setSpkNotes(sp); } }, [saved]);
-  const saveExtras = (next: Extras) => {
-    setExtras(next);
-    if (exTimer.current) clearTimeout(exTimer.current);
-    if (publicView) return;
-    exTimer.current = setTimeout(() => { if (saved) api(`/api/review/${saved.review.id}/extras`, { method: 'PUT', json: { extras: next } }).catch((e) => setErr(`Could not save: ${(e as Error).message}`)); }, 500);
+  useEffect(() => {
+    if (!saved || loadedExtras.current === saved.review.id) return;
+    loadedExtras.current = saved.review.id; const id = saved.review.id;
+    const server = (saved.ai.extras ?? {}) as Partial<Extras>;
+    let ex: Extras = { pins: (server.pins ?? []) as PinItem[], notes: (server.notes ?? []) as ReviewNote[], speaker: server.speaker ?? {}, ink: (server.ink ?? []) as InkStroke[] };
+    const pend = pendingBody<{ extras: Extras }>(`extras:${id}`)?.extras; if (pend) ex = { ...ex, ...pend };
+    if (publicView) { try { ex = { ...ex, ...JSON.parse(localStorage.getItem(`epr-extras-${id}`) ?? '{}') }; ex.speaker = { ...ex.speaker, ...JSON.parse(localStorage.getItem(`epr-spk-${id}`) ?? '{}') }; } catch { /* */ } }
+    extrasRef.current = ex; setExtras(ex); setSpkNotes(ex.speaker ?? {});
+  }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const extrasRef = useRef<Extras>(extras);
+  /** Every annotation change is saved at once: functional updates (no lost concurrent edits) → autosave queue. */
+  const saveExtras = (fn: (e: Extras) => Extras) => {
+    const next = fn(extrasRef.current); extrasRef.current = next; setExtras(next);
+    if (!saved) return; const id = saved.review.id;
+    if (publicView) { try { localStorage.setItem(`epr-extras-${id}`, JSON.stringify({ notes: next.notes, ink: next.ink })); } catch { /* */ } return; }
+    autosave().put(`extras:${id}`, `/api/review/${id}/extras`, { extras: next }, 250);
   };
-  const addPin = (part: string) => { if (!pinBlock) return; saveExtras({ ...extras, pins: [...extras.pins, { id: `p${Date.now().toString(36)}`, part, block: pinBlock, at: new Date().toISOString() }] }); setPinBlock(null); setTimeout(() => document.getElementById(`epr-${part}`)?.querySelector('.epr-pins')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200); };
-  const notesApi = { notes: extras.notes, update: (id: string, patch: Partial<ReviewNote>) => saveExtras({ ...extras, notes: extras.notes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }), remove: (id: string) => saveExtras({ ...extras, notes: extras.notes.filter((n) => n.id !== id) }) };
+  const addPin = (part: string) => { if (!pinBlock) return; saveExtras((ex) => ({ ...ex, pins: [...ex.pins, { id: `p${Date.now().toString(36)}`, part, block: pinBlock, at: new Date().toISOString() }] })); setPinBlock(null); setTimeout(() => document.getElementById(`epr-${part}`)?.querySelector('.epr-pins')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200); };
+  const notesApi = { notes: extras.notes, update: (id: string, patch: Partial<ReviewNote>) => saveExtras((ex) => ({ ...ex, notes: ex.notes.map((n) => (n.id === id ? { ...n, ...patch } : n)) })), remove: (id: string) => saveExtras((ex) => ({ ...ex, notes: ex.notes.filter((n) => n.id !== id) })) };
   const placeNote = (e: React.MouseEvent) => {
     if (tool !== 'note') return;
     const sec = (e.target as HTMLElement).closest('[data-spy]') as HTMLElement | null; if (!sec || (e.target as HTMLElement).closest('.epr-sticky')) return;
     const r = sec.getBoundingClientRect();
-    saveExtras({ ...extras, notes: [...extras.notes, { id: `n${Date.now().toString(36)}`, sec: sec.id.replace('epr-', ''), x: Math.min(0.85, (e.clientX - r.left) / r.width), y: (e.clientY - r.top) / r.height, text: '', color: NOTE_COLORS[0], by: me?.name, at: new Date().toISOString() }] });
+    saveExtras((ex) => ({ ...ex, notes: [...ex.notes, { id: `n${Date.now().toString(36)}`, sec: sec.id.replace('epr-', ''), x: Math.min(0.82, (e.clientX - r.left) / r.width), y: (e.clientY - r.top) / r.height, text: '', color: NOTE_KINDS[noteKind].tint, kind: noteKind, by: me?.name, at: new Date().toISOString() }] }));
     setTool('none');
   };
   const togglePresent = () => { if (!document.fullscreenElement) { rootRef.current?.requestFullscreen?.().catch(() => {}); setPresent(true); setPbar(true); } else { document.exitFullscreen?.(); } };
@@ -632,9 +664,9 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       else if (k === 'f') togglePresent();
       else if (k === '/') { e.preventDefault(); setAskOpen(true); }
       else if (k === '?') setPbar(true);
-      else if (k === 'u') setUndoK((x) => x + 1);
-      else if (k === 'c') setClearK((x) => x + 1);
-      else { const t = ({ l: 'laser', s: 'spot', p: 'pen', h: 'hl', n: 'note' } as Record<string, Tool>)[k]; if (t) { setPbar(true); setTool((cur) => (cur === t ? 'none' : t)); } }
+      else if (k === 'u') saveExtras((ex) => ({ ...ex, ink: (ex.ink ?? []).slice(0, -1) }));
+      else if (k === 'c') { if ((extrasRef.current.ink ?? []).length && confirm('Clear all ink on this review?')) saveExtras((ex) => ({ ...ex, ink: [] })); }
+      else { const t = ({ l: 'laser', s: 'spot', p: 'pen', h: 'hl', a: 'arrow', r: 'rect', e: 'erase', n: 'note' } as Record<string, Tool>)[k]; if (t) { setPbar(true); setTool((cur) => (cur === t ? 'none' : t)); } }
     };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [nav, active, present]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -671,15 +703,12 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     on: editOn && isAdmin,
     set: (part, path, value) => {
       if (!rv) return;
-      setSaved((s) => { if (!s) return s; const cur = part === 'glance' ? s.ai.glance : s.ai.sections?.[part]; const nextPart = setIn(cur ?? {}, path, value);
-        return { ...s, ai: part === 'glance' ? { ...s.ai, glance: nextPart as GlanceAI } : { ...s.ai, sections: { ...s.ai.sections, [part]: nextPart as SectionAI } } }; });
-      setSaveState('saving');
-      clearTimeout(timers.current[part]);
-      timers.current[part] = setTimeout(async () => {
-        const a = latestAi.current; const content = part === 'glance' ? a?.glance : a?.sections?.[part];
-        try { await api(`/api/review/${rv.id}/ai/${part}`, { method: 'PUT', json: { content } }); setSaveState('saved'); }
-        catch (e) { setSaveState('error'); setErr(`Save failed: ${(e as Error).message}`); }
-      }, 700);
+      const a0 = latestAi.current; if (!a0) return;
+      const nextPart = setIn((part === 'glance' ? a0.glance : a0.sections?.[part]) ?? {}, path, value);
+      const nextAi: AI = part === 'glance' ? { ...a0, glance: nextPart as GlanceAI } : { ...a0, sections: { ...a0.sections, [part]: nextPart as SectionAI } };
+      latestAi.current = nextAi;                                   // next keystroke builds on this one, even before re-render
+      setSaved((s) => (s ? { ...s, ai: nextAi } : s));
+      autosave().put(`ai:${rv.id}:${part}`, `/api/review/${rv.id}/ai/${part}`, { content: nextPart }, 400);
     },
   };
 
@@ -704,7 +733,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
 
   return (
     <REdit.Provider value={editApi}>
-    <PinCtx.Provider value={setPinBlock}><NotesCtx.Provider value={notesApi}><PinsCtx.Provider value={{ pins: extras.pins, remove: (id) => saveExtras({ ...extras, pins: extras.pins.filter((p) => p.id !== id) }) }}>
+    <PinCtx.Provider value={setPinBlock}><NotesCtx.Provider value={notesApi}><PinsCtx.Provider value={{ pins: extras.pins, remove: (id) => saveExtras((ex) => ({ ...ex, pins: ex.pins.filter((p) => p.id !== id) })) }}>
     <div ref={rootRef} className={clsx('epr epr-standalone flex h-full flex-col', brief && 'brief', editApi.on && 'editing', present && 'presenting', tool !== 'none' && `tool-${tool}`)} style={{ ['--epr-scale' as string]: scale }}>
       <div className="epr-bar no-print">
         <div className="epr-bar-in">
@@ -723,7 +752,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
             </div>
             <i className="epr-vsep" />
             {isAdmin && !publicView && <button className={clsx('epr-ibtn', editOn && 'on')} onClick={() => setEditOn((o) => !o)} title={editOn ? 'Done editing' : 'Edit the report text in place — saves automatically'}><Pencil size={15} /></button>}
-            {editOn && <span className={clsx('epr-save', saveState)}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Not saved' : 'Editing'}</span>}
+            {(editOn || saveState === 'saving' || saveState === 'offline' || saveState === 'error') && !publicView && <SaveChip state={saveState} canSave />}
             <div className="relative">
               <button className={clsx('epr-ibtn', expOpen && 'on')} onClick={() => setExpOpen((o) => !o)} title="Export or copy the report"><Download size={15} /></button>
               {expOpen && <div className="epr-pop epr-exp" onMouseLeave={() => setExpOpen(false)}>
@@ -761,8 +790,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       {rv && <nav className="epr-rail2 no-print" aria-label="Chapters">{nav.map((n, i) => {
         const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
         return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')} aria-current={active === n.id ? 'true' : undefined}>
-          <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{n.title.replace(/ Index$/, '')}</span></button>;
-      })}<div className="epr-rail2-p"><i style={{ height: `${progress * 100}%` }} /></div></nav>}
+          <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{RAIL_SHORT[n.id] ?? n.title}</span></button>;
+      })}<RailSlides /></nav>}
       <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
@@ -771,7 +800,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
-                {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} n={i + 2} total={rv.sections.length + 2} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
+                {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} req={publicView ? undefined : rv.request} n={i + 2} total={rv.sections.length + 2} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
                 {building && <BuildConsole steps={steps} hints={hints} started={startedAt} />}
                 {!building && <Closing rv={rv} ai={ai} P={P} jump={jump} />}
                 {!building && !!saved?.definitions?.length && <Definitions defs={saved.definitions} />}
@@ -782,7 +811,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         </div>
       </div>
       {spkOpen && rv && P && <SpeakerPanel chapters={speakerChapters} active={active === 'cover' ? 'glance' : active} onJump={jump} notes={spkNotes} canSave={!publicView}
-        onNote={(id, t) => { const nx = { ...spkNotes, [id]: t }; setSpkNotes(nx); if (!publicView) saveExtras({ ...extras, speaker: nx }); else try { localStorage.setItem(`epr-spk-${rv.id}`, JSON.stringify(nx)); } catch { /* */ } }} onClose={() => setSpkOpen(false)} />}
+        onNote={(id, t) => { const nx = { ...spkNotes, [id]: t }; setSpkNotes(nx); if (!publicView) saveExtras((ex) => ({ ...ex, speaker: nx })); else try { localStorage.setItem(`epr-spk-${rv.id}`, JSON.stringify(nx)); } catch { /* */ } }} onClose={() => setSpkOpen(false)} />}
       {askOpen && rv && !publicView && (
         <aside className="epr-askp no-print">
           <div className="epr-askp-h"><Sparkles size={14} /><b>Ask about this report</b><button onClick={() => setAskOpen(false)} title="Close"><X size={15} /></button></div>
@@ -792,9 +821,12 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         </aside>
       )}
       </div>
-      <InkLayer scroller={scroller} tool={tool} color={ink} clearKey={clearK} undoKey={undoK} />
+      <InkLayer scroller={scroller} tool={tool} color={ink} size={inkSize} strokes={extras.ink ?? []} onChange={(ink2) => saveExtras((ex) => ({ ...ex, ink: ink2 }))} />
+      {notesOpen && rv && <NotesPanel chapters={nav.filter((n) => n.id !== 'cover')} onClose={() => setNotesOpen(false)} />}
       <PointerFx tool={tool} />
-      <PresenterBar tool={tool} setTool={setTool} color={ink} setColor={setInk} onClear={() => setClearK((x) => x + 1)} onUndo={() => setUndoK((x) => x + 1)} present={present} togglePresent={togglePresent} open={pbar} setOpen={setPbar} />
+      <PresenterBar tool={tool} setTool={setTool} color={ink} setColor={setInk} size={inkSize} setSize={setInkSize} noteKind={noteKind} setNoteKind={setNoteKind}
+        onClear={() => saveExtras((ex) => ({ ...ex, ink: [] }))} onUndo={() => saveExtras((ex) => ({ ...ex, ink: (ex.ink ?? []).slice(0, -1) }))}
+        present={present} togglePresent={togglePresent} open={pbar} setOpen={setPbar} notesOpen={notesOpen} toggleNotes={() => setNotesOpen((x) => !x)} noteCount={extras.notes.length} save={saveState} canSave={!publicView} />
       {pinBlock && rv && (
         <div className="epr-modal no-print" onClick={() => setPinBlock(null)}>
           <div className="epr-modal-c" onClick={(e) => e.stopPropagation()}>
@@ -819,7 +851,7 @@ function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P:
   return (
     <section id="epr-cover" data-spy className={clsx('epr-cover epr-build-in', live && 'live')}>
       <div className="epr-cover-l">
-        <div className="epr-cover-top"><img src={BRAND.logoOnDark} alt="Physique 57" /><span className="epr-cover-conf">Confidential</span></div>
+        <div className="epr-cover-top"><span className="p57-logo-anim"><img src={BRAND.logoOnDark} alt="Physique 57" /></span><span className="epr-cover-conf">Confidential</span></div>
         <div className="epr-cover-mid">
           <div className="epr-cover-eyebrow">Executive Performance Review · {P.label}</div>
           <div className="epr-cover-rule" />
@@ -853,7 +885,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
   const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
+      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={[...rv.glance.cards, ...rv.scorecard.filter((k) => !rv.glance.cards.some((c) => c.id === k.id))]} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
       <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
@@ -916,6 +948,38 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
   );
 }
 
+/** Hero card count: a full 10-card grid (2 × 5) when there are enough metrics, else a 6-card row. */
+const heroPick = (k: Kpi[]) => (k.length >= 10 ? k.slice(0, 10) : k.slice(0, 6));
+function HeroSpark({ values, tone: t }: { values?: (number | null)[]; tone: number }) {
+  const v = (values ?? []).filter((x): x is number => x !== null && isFinite(x)); if (v.length < 2) return <svg className="epr-hspark" />;
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1; const W = 100, H = 24;
+  const pts = v.map((x, i) => `${(i / (v.length - 1)) * W},${H - 2 - ((x - lo) / r) * (H - 4)}`);
+  const c = t > 0 ? 'var(--epr-good)' : t < 0 ? 'var(--epr-bad)' : 'var(--accent)';
+  return <svg className="epr-hspark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden><polygon points={`0,${H} ${pts.join(' ')} ${W},${H}`} fill={c} opacity=".12" /><polyline points={pts.join(' ')} fill="none" stroke={c} strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>;
+}
+/** Chapter hero graphic: momentum ring (share of metrics improving) + trend of the lead metric. */
+function HeroGraphic({ kpis }: { kpis: Kpi[] }) {
+  const B = useChg();
+  const scored = kpis.filter((k) => B.chg(k) !== null && k.higherIsBetter !== undefined);
+  const up = scored.filter((k) => tone(k, B.chg(k)) > 0).length; const down = scored.filter((k) => tone(k, B.chg(k)) < 0).length;
+  const share = scored.length ? up / scored.length : 0; const C = 2 * Math.PI * 30;
+  const lead = kpis.find((k) => (k.series ?? []).filter((x) => x !== null).length >= 3) ?? kpis[0];
+  const v = (lead.series ?? []).filter((x): x is number => x !== null && isFinite(x));
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1; const W = 360, H = 84;
+  const pts = v.map((x, i) => [(i / Math.max(1, v.length - 1)) * W, H - 6 - ((x - lo) / r) * (H - 16)] as const);
+  return (
+    <div className="epr-hero-gfx" aria-hidden>
+      <div className="ring"><svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="30" className="trk" /><circle cx="36" cy="36" r="30" className="val" strokeDasharray={`${share * C} ${C}`} transform="rotate(-90 36 36)" /></svg>
+        <div><b>{up}<i>/{scored.length}</i></b><span>improving</span></div></div>
+      <div className="ring-l"><span><i className="g" />{up} up</span><span><i className="b" />{down} down</span><span><i />{scored.length - up - down} flat</span></div>
+      {v.length >= 2 && <div className="trend"><div className="trend-h">{lead.label}<em>trend</em></div>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"><defs><linearGradient id="epr-hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity=".35" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>
+          <polygon points={`0,${H} ${pts.map((p) => p.join(',')).join(' ')} ${W},${H}`} fill="url(#epr-hg)" />
+          <polyline className="ln" points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          {pts.length > 0 && <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="4" fill="var(--accent)" className="pulse" />}</svg></div>}
+    </div>
+  );
+}
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
 function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak, vid }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string; vid?: string }) {
   const d = useRD(); const B = useChg();
@@ -936,9 +1000,10 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         </div>
       </div>
       {headline && <div className="epr-hero-quote">{headline}</div>}
-      {stats.length > 0 && <div className="epr-hero-stats">{stats.slice(0, 3).map((k) => { const t = tone(k, B.chg(k)); return (
-        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em></div>
-      ); })}</div>}
+      {stats.length > 0 && <HeroGraphic kpis={stats} />}
+      {stats.length > 0 && (() => { const list = heroPick(stats); return <div className="epr-hero-stats" style={{ ['--hc' as string]: list.length >= 10 ? 5 : Math.min(6, list.length) }}>{list.map((k) => { const t = tone(k, B.chg(k)); return (
+        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em><HeroSpark values={k.series} tone={t} /></div>
+      ); })}</div>; })()}
     </header>
   );
 }
@@ -954,7 +1019,7 @@ function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; mo
   );
 }
 
-function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewrite }: { n: number; total: number; s: Section; ai?: SectionAI; live: boolean; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
+function ReviewSectionView({ req, n, total, s, ai, live, busy, base, P, canAi, onRewrite }: { req?: Review['request']; n: number; total: number; s: Section; ai?: SectionAI; live: boolean; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
   const note = (id: string) => ai?.notes?.[id] ?? s.notes[id];
   const d = useRD(); const ed = useEdit(); const B = useChg();
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
@@ -968,6 +1033,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
       <Analysis part={s.id} ai={ai} live={live} label="Chapter summary" fallback={s.ruleFindings.slice(0, 3)} />
       <Sub n={`${n}.2`} full title="The numbers" note="Click any number for the records behind it" />
       <KpiGrid kpis={s.kpis} base={base} P={P} />
+      {s.id === 'classes' && req && <div className="epr-full epr-classx no-print"><Sub n={`${n}.2b`} title="Class performance explorer" note="Rank every class by any grouping, criterion and filter — live" /><ClassExplorer start={req.start} end={req.end} locations={req.locations} /></div>}
       {(hasFeature || s.charts.length > 0 || s.tables.length > 0) && <div className="epr-detail"><Sub n={`${n}.3`} title="In detail" /></div>}
 
       {hasFeature && <div className="epr-detail epr-feature">

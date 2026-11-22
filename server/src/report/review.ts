@@ -61,7 +61,7 @@ export interface Review {
 /* ── AI commentary (stored per part) ── */
 export interface ReviewSectionAI { title?: string; lead?: string; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; timeline?: string; kpi?: string; impact?: string }[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
 export interface ReviewGlanceAI { headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
-export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; extras?: { pins?: unknown[]; notes?: unknown[]; speaker?: Record<string, string> }; verification?: { checked: number; unmatched: string[] } }
+export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; extras?: { pins?: unknown[]; notes?: unknown[]; speaker?: Record<string, string>; ink?: unknown[] }; verification?: { checked: number; unmatched: string[] } }
 
 const cache = new Map<string, { review: Review; report: Report }>();
 export const getReview = (id: string) => cache.get(id);
@@ -139,9 +139,19 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const [attX, funX, clsX, trSc, fmX, prods] = await Promise.all([attendanceExtras(req), funnelExtras(req), classExtras(req), trainerScorecard(req), formatComparison(req), productList(req)]);
   const S = { sales: sec(report, 'sales'), nc: sec(report, 'new_clients'), leads: sec(report, 'leads'), tr: sec(report, 'trainers'), cl: sec(report, 'classes'), fm: sec(report, 'formats'), ch: sec(report, 'churn'), late: sec(report, 'late'), st: sec(report, 'studios') };
   const sections: ReviewSection[] = [];
+  const SC = { kpis: report.scorecard };
+  const POOL: Partial<Record<ReviewSectionId, ({ kpis: Kpi[] } | undefined)[]>> = {
+    sales: [S.sales, SC], attendance: [S.cl, S.late, S.sales], funnel: [S.leads, S.nc], classes: [S.cl, S.late],
+    trainers: [S.tr, S.cl], formats: [S.fm, S.cl], churn: [S.ch, S.nc],
+  };
   let n = 0;
-  const push = (id: ReviewSectionId, x: Omit<ReviewSection, 'id' | 'title' | 'icon' | 'lead' | 'kicker' | 'notes' | 'ruleFindings'>, extraFind: string[] = []) => {
+  const push = (id: ReviewSectionId, x0: Omit<ReviewSection, 'id' | 'title' | 'icon' | 'lead' | 'kicker' | 'notes' | 'ruleFindings'>, extraFind: string[] = []) => {
+    let x = x0;
     const meta = REVIEW_SECTIONS.find((m) => m.id === id)!;
+    // hero shows a full 10-card grid: top up with related metrics from the same areas of the report
+    const seen = new Set(x.kpis.map((k) => k.id));
+    const extra = (POOL[id] ?? []).flatMap((p) => p?.kpis ?? []).filter((k) => k.value !== null && !seen.has(k.id) && seen.add(k.id));
+    x = { ...x, kpis: [...x.kpis, ...extra].slice(0, Math.max(10, x.kpis.length)) };
     sections.push({ ...meta, kicker: `Section ${String(++n).padStart(2, '0')}`, ...x, notes: notesFor(x.charts, x.tables), ruleFindings: [...kpiFindings(x.kpis, P), ...extraFind].slice(0, 6) });
   };
 

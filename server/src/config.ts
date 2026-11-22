@@ -33,6 +33,7 @@ export const config = {
   thinking: env('AI_THINKING', 'on'),
   anthropicModel: env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'),
   jwtSecret: env('JWT_SECRET', 'change-me-in-.env'),
+  teamPassword: process.env.TEAM_PASSWORD ?? '',
   authDisabled: env('AUTH_DISABLED', 'false') === 'true',
   syncCron: env('SYNC_INTERVAL_MINUTES', '60'),
   timezone: 'Asia/Kolkata',
