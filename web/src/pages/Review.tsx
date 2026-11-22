@@ -63,7 +63,7 @@ function Pins({ part, n }: { part: string; n: string }) {
   const c = useContext(PinsCtx); const mine = c?.pins.filter((p) => p.part === part) ?? [];
   if (!c || !mine.length) return null;
   return <>
-    <div className="epr-sub epr-rv in"><span>{n}</span><h3>Added from the assistant</h3><em>{mine.length} item{mine.length === 1 ? '' : 's'}</em></div>
+    <div className="epr-sub epr-rv in"><span>{n}</span><h3>Added to this report</h3><em>{mine.length} item{mine.length === 1 ? '' : 's'}</em></div>
     <div className="epr-pins">{mine.map((p) => (
       <div key={p.id} className="epr-pin">
         <div className="epr-pin-h"><Pin size={12} /><span>Added {new Date(p.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span><button className="no-print" onClick={() => c.remove(p.id)} title="Remove from report"><Trash2 size={13} /></button></div>

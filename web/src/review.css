@@ -1296,3 +1296,17 @@
 .epr-disc-g > div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
 .epr-disc-g span { display: block; font-size: 11.5px; color: var(--ink-3); } .epr-disc-g b { display: block; font-size: 22px; margin-top: 4px; color: var(--ink); font-family: var(--epr-serif); font-weight: 400; } .epr-disc-g em { font-style: normal; font-size: 12px; color: var(--ink-3); }
 @media (max-width: 900px) { .epr-disc-g { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── key insights v3: sized by its own container (works embedded in workspaces and standalone) ── */
+.epr-analysis { container-type: inline-size; container-name: epr-an; }
+.epr .epr-analysis .epr-insights { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; align-items: start; justify-items: stretch; padding: 24px 0 0 !important; margin-top: 20px; border: 0 !important; border-top: 1px solid var(--line) !important; border-radius: 0; background: transparent; }
+.epr .epr-insights > .epr-analysis-h { margin: 0; padding: 0; font-family: var(--epr-serif); font-size: 18px; letter-spacing: -.01em; text-transform: none; color: var(--ink); }
+.epr .epr-insights ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; gap: 12px; align-items: stretch; justify-items: stretch; width: 100%; margin: 0; padding: 0; }
+.epr .epr-insights li, .epr .epr-insights li:first-child { width: auto; max-width: none; margin: 0; padding: 18px 18px 18px 54px !important; border: 1px solid var(--line) !important; border-radius: 12px; background: var(--surface); font-size: var(--fs-body) !important; line-height: 1.6; color: var(--ink-2); transform: none !important; filter: none !important; box-shadow: none; }
+.epr .epr-insights li::before, .epr .epr-insights li:first-child::before { left: 18px; top: 16px !important; font-family: var(--epr-serif); font-size: 22px; font-weight: 300; line-height: 1; color: var(--accent); }
+.epr .epr-insights li.epr-pop { animation: epr-pop2 .5s ease-out both; }
+@keyframes epr-pop2 { from { opacity: 0; } }
+@container epr-an (min-width: 820px) {
+  .epr .epr-analysis .epr-insights { grid-template-columns: 180px minmax(0, 1fr) !important; gap: 40px !important; }
+  .epr .epr-insights > .epr-analysis-h { padding-top: 4px; }
+}
