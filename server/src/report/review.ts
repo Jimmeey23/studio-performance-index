@@ -61,7 +61,7 @@ export interface Review {
 /* ── AI commentary (stored per part) ── */
 export interface ReviewSectionAI { title?: string; lead?: string; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; timeline?: string; kpi?: string; impact?: string }[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
 export interface ReviewGlanceAI { headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
-export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; extras?: { pins?: unknown[]; notes?: unknown[]; speaker?: Record<string, string> }; verification?: { checked: number; unmatched: string[] } }
+export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; extras?: { pins?: unknown[]; notes?: unknown[]; speaker?: Record<string, string>; ink?: unknown[] }; verification?: { checked: number; unmatched: string[] } }
 
 const cache = new Map<string, { review: Review; report: Report }>();
 export const getReview = (id: string) => cache.get(id);

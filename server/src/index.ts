@@ -281,11 +281,15 @@ app.post('/api/review/:id/explainers', wrap(async (req, res) => {
 }));
 /** Pins (assistant results added to chapters) and annotations — owned by the review's user. */
 app.put('/api/review/:id/extras', wrap(async (req, res) => {
-  const uid = req.user!.id; const id = String(req.params.id); const ex = req.body?.extras;
+  const id = String(req.params.id); const ex = req.body?.extras;
   if (!ex || typeof ex !== 'object' || JSON.stringify(ex).length > 2_000_000) return res.status(400).json({ error: 'extras required (max 2 MB)' });
   const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
-    const cur = await reviewStore.byId(uid, id); if (!cur) return false;
-    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: { ...(cur.ai.extras ?? {}), pins: Array.isArray(ex.pins) ? ex.pins : [], notes: Array.isArray(ex.notes) ? ex.notes : [], speaker: ex.speaker && typeof ex.speaker === 'object' ? ex.speaker : {} } }); return true;
+    // any signed-in user can annotate a shared review; only the keys sent are replaced (older clients never wipe ink)
+    const cur = await reviewStore.byIdPublic(id); if (!cur) return false;
+    const next: Record<string, unknown> = { ...(cur.ai.extras ?? {}) };
+    for (const k of ['pins', 'notes', 'ink'] as const) if (Array.isArray(ex[k])) next[k] = ex[k];
+    if (ex.speaker && typeof ex.speaker === 'object') next.speaker = ex.speaker;
+    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: next as typeof cur.ai.extras }); return true;
   });
   reviewLocks.set(id, run.catch(() => {}));
   if (!(await run)) return res.status(404).json({ error: 'Review not found' });
