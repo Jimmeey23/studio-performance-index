@@ -41,19 +41,19 @@ export function LayoutPanel({ layout, data, onChange, onClose }: { layout: Repor
     // jump over sections this report does not have
     let j = i + d; while (j >= 0 && j < o.length && !present.has(o[j])) j += d;
     if (j < 0 || j >= o.length) return;
-    [o[i], o[j]] = [o[j], o[i]]; set({ order: o, autoDesign: false }); // the reader's own order replaces the AI's
+    [o[i], o[j]] = [o[j], o[i]]; set({ order: o, autoDesign: false }); // the reader's own order replaces the suggested's
   };
   const app = currentAccent();
   return (
     <aside className="pop-in fixed bottom-4 right-4 top-4 z-50 flex w-[360px] flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-2xl no-print">
       <div className="flex items-center gap-3 border-b border-line px-5 py-4">
         <span className="panel-tile !h-9 !w-9"><LayoutTemplate size={16} /></span>
-        <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-ink">Customise report</div><div className="text-[11.5px] text-ink-3">Styling and structure only — no AI tokens used. Saved with this report.</div></div>
+        <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-ink">Customise report</div><div className="text-[11.5px] text-ink-3">Styling and structure only. Saved with this report.</div></div>
         <button onClick={onClose} className="tool"><X size={15} /></button>
       </div>
       <div className="flex-1 overflow-y-auto">
         <Group icon={Palette} title="Colour">
-          <Toggle on={layout.autoDesign !== false} label="AI art direction — palette, cover, section order" onChange={(v) => set({ autoDesign: v })} />
+          <Toggle on={layout.autoDesign !== false} label="Art direction — palette, cover, section order" onChange={(v) => set({ autoDesign: v })} />
           <div className="flex flex-wrap gap-2">
             <button onClick={() => set({ accent: 'app' })} className={clsx('flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs', layout.accent === 'app' ? 'border-accent ring-2 ring-accent/30' : 'border-line')}>
               <span className="h-4 w-4 rounded-full" style={{ background: `linear-gradient(135deg, ${app.a}, ${app.b})` }} />App accent

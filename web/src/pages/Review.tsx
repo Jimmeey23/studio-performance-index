@@ -132,10 +132,11 @@ function useReveal() {
   return ref;
 }
 const Shimmer = ({ lines = 3 }: { lines?: number }) => <div className="epr-shimmer">{Array.from({ length: lines }, (_, i) => <i key={i} style={{ width: `${92 - i * 11}%` }} />)}</div>;
+const AUTHOR = 'Jimmeey G.';
 function AiTag({ ai, loading }: { ai?: { source: string; model?: string }; loading?: boolean }) {
   if (loading) return <span className="epr-aitag busy"><Loader2 size={11} className="animate-spin" />Writing…</span>;
   if (!ai) return null;
-  return <span className={clsx('epr-aitag', ai.source === 'ai' ? 'ai' : 'rules')}><Sparkles size={11} />{ai.source === 'ai' ? `AI · ${ai.model ?? 'Claude'}` : 'Computed'}</span>;
+  return <span className="epr-aitag"><PenLine size={11} />{AUTHOR}</span>;
 }
 function Delta({ k, base, P }: { k: Kpi; base: Base; P: ReportPeriod }) {
   const c = base === 'prev' ? k.chg : base === 'ytd' ? k.chgYtd : k.chgLy;
@@ -514,7 +515,7 @@ function Landing() {
         <header className="epr-land-h epr-in">
           <div className="epr-eyebrow">Executive Performance Review</div>
           <h1>Prepare a review</h1>
-          <p>Pick a period and studios. The numbers are computed, then the AI plans the narrative and writes the review section by section — it opens as its own page.</p>
+          <p>Pick a period and studios. The numbers are computed, then the narrative is planned and the review is written section by section — it opens as its own page.</p>
         </header>
         <div className="epr-setup epr-in" style={{ animationDelay: '80ms' }}>
           <div className="epr-setup-row"><span className="epr-setup-l">Period</span><div className="flex flex-wrap gap-1.5">{PRESETS.map(([k, l]) => <button key={k} className={chip(preset === k)} onClick={() => setPreset(k)}>{l}</button>)}</div></div>
@@ -658,7 +659,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       const r = await api<{ part: string; content: GlanceAI | SectionAI }>(`/api/review/${id}/ai`, { method: 'POST', json: { part, fresh: again } });
       setFresh((f) => new Set(f).add(part));
       setSaved((s) => (!s || s.review.id !== id ? s : { ...s, ai: part === 'glance' ? { ...s.ai, glance: r.content as GlanceAI } : { ...s.ai, sections: { ...s.ai.sections, [part]: r.content as SectionAI } } }));
-    } catch (e) { setFailed((f) => new Set(f).add(part)); setErr(`AI (${part}): ${(e as Error).message}`); }
+    } catch (e) { setFailed((f) => new Set(f).add(part)); setErr(`Writing ${part} failed: ${(e as Error).message}`); }
     finally { setBusy((b) => { const n = new Set(b); n.delete(part); return n; }); }
   }, []);
   // plan first (the overview reads every section), then write the sections three at a time
@@ -778,7 +779,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   };
   const copyLink = async () => { if (!rv) return; try { await navigator.clipboard.writeText(`${location.origin}/review/${rv.id}`); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* */ } };
   const refresh = async () => {
-    if (!rv || !confirm('Recompute every number from the latest data? The AI will write a fresh review.')) return;
+    if (!rv || !confirm('Recompute every number from the latest data? A fresh review will be written.')) return;
     try { const s = await api<Saved>('/api/review', { method: 'POST', json: { ...rv.request, fresh: true } }); navigate(`/review/${s.review.id}`); } catch (e) { setErr((e as Error).message); }
   };
 
@@ -837,7 +838,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
             <i className="epr-vsep" />
             <button className={clsx('epr-ibtn', pbar && 'on')} onClick={() => setPbar((x) => !x)} title="Presenter tools — laser, spotlight, pen, notes, timer"><PenLine size={15} /></button>
             <button className={clsx('epr-ibtn', spkOpen && 'on')} onClick={() => { setSpkOpen((x) => !x); setAskOpen(false); }} title="Speaker notes & teleprompter"><ScrollText size={15} /></button>
-            {!publicView && <button className={clsx('epr-ask', askOpen && 'on')} onClick={() => { setAskOpen((x) => !x); setSpkOpen(false); }} title="Ask the assistant about this report ( / )"><MessageSquare size={14} /><span>Ask AI</span></button>}
+            {!publicView && <button className={clsx('epr-ask', askOpen && 'on')} onClick={() => { setAskOpen((x) => !x); setSpkOpen(false); }} title="Ask the assistant about this report ( / )"><MessageSquare size={14} /><span>Ask a question</span></button>}
           </div>}
         </div>
         <div className="epr-progress" style={{ transform: `scaleX(${progress})` }} />
@@ -934,7 +935,7 @@ function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P:
       <div className="epr-cover-kpis">{rv.cover.headlineKpis.map((k, i) => { const t = tone(k, B.chg(k)); return (
         <div key={k.id} style={{ animationDelay: `${300 + i * 80}ms` }} {...clickable(drill ? () => drill.kpi(k) : undefined)}><span>{k.label}</span><b>{k.value === null ? '—' : <CountUp value={k.value} format={(n) => fmtK(n, k.format)} />}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{t > 0 ? '▲' : t < 0 ? '▼' : '•'} {fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em></div>
       ); })}</div>
-      <div className="epr-cover-foot">Figures computed from synced studio data{gl?.source === 'ai' ? ` · commentary by ${gl.model ?? 'Claude'}` : ''} · Ref {rv.id.slice(0, 8).toUpperCase()}</div>
+      <div className="epr-cover-foot">Figures computed from synced studio data · Prepared by {AUTHOR} · Ref {rv.id.slice(0, 8).toUpperCase()}</div>
     </section>
   );
 }
@@ -991,7 +992,7 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
           <div className="epr-sum-mark" aria-hidden>{exec ? <Sparkles size={16} /> : <BookOpenText size={16} />}</div>
           <div className="epr-sum-label">{label}</div>
           {ai && <dl>
-            <div><dt>Author</dt><dd>{ai.source === 'ai' ? (ai.model ?? 'Claude') : 'Computed from data'}</dd></div>
+            <div><dt>Author</dt><dd>{AUTHOR}</dd></div>
             {words > 0 && <div><dt>Reading time</dt><dd>{Math.max(1, Math.round(words / 220))} min · {words} words</dd></div>}
             {ins.length > 0 && <div><dt>Insights</dt><dd>{ins.length} below</dd></div>}
           </dl>}
@@ -1072,7 +1073,7 @@ function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; mo
     <div className="epr-sh-act no-print">
       {ai?.edited && <span className="epr-aitag">Edited</span>}
       <AiTag ai={ai} loading={busy} />
-      {canAi && ai && !busy && <button className="epr-rewrite" onClick={() => { if (confirm('Rewrite the AI commentary for this part? The current text (including edits) will be replaced.')) onRewrite(); }} title="Rewrite this part's AI commentary"><RefreshCw size={12} />Rewrite</button>}
+      {canAi && ai && !busy && <button className="epr-rewrite" onClick={() => { if (confirm('Rewrite the commentary for this part? The current text (including edits) will be replaced.')) onRewrite(); }} title="Rewrite this part's commentary"><RefreshCw size={12} />Rewrite</button>}
     </div>
   );
 }
@@ -1125,7 +1126,7 @@ function ReviewSectionView({ req, n, total, s, ai, live, busy, base, P, canAi, o
       <Sub n={`${n}.${hasFeature || s.charts.length || s.tables.length ? 4 : 3}`} title="Findings & actions" />
       <div className="epr-close">
         <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Flag size={13} /><span>Key findings</span></div>{ai ? <ol className="epr-find">{ai.findings.map((x, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><Ed as="p" part={s.id} path={['findings', i]} value={x} /></li>)}</ol> : <Shimmer lines={5} />}</div>
-        <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Target size={13} /><span>Recommended actions</span></div>{ai ? (ai.recommendations.length ? <Recs recs={ai.recommendations} part={s.id} /> : <p className="epr-small">Recommendations are written by the AI — turn it on in Settings to add them.</p>) : <Shimmer lines={5} />}</div>
+        <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Target size={13} /><span>Recommended actions</span></div>{ai ? (ai.recommendations.length ? <Recs recs={ai.recommendations} part={s.id} /> : <p className="epr-small">Recommendations will appear here once the commentary is written.</p>) : <Shimmer lines={5} />}</div>
       </div>
     </section>
   );
