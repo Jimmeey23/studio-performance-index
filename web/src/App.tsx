@@ -34,6 +34,8 @@ export default function App() {
   const load = useCallback(() => api<Me>('/api/me').then(async (m) => { await loadAppConfig(); setMe(m); }).catch(() => setMe(null)), []);
   useEffect(() => { load(); const h = () => setMe(null); window.addEventListener('p57:unauthorised', h); return () => window.removeEventListener('p57:unauthorised', h); }, [load]);
   if (me === undefined) return <div className="flex h-full items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-line border-t-accent" /></div>;
+  // review links are public: a signed-out visitor sees the report read-only (no AI, drill-down or editing)
+  if (me === null && /^\/review\/rv_[^/]+\/?$/.test(location.pathname)) return <BrowserRouter><Routes><Route path="/review/:reviewId" element={<Review standalone publicView />} /></Routes></BrowserRouter>;
   if (me === null) return <Login onLogin={load} />;
   return (
     <MeCtx.Provider value={me}>

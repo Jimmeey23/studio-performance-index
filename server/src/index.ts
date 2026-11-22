@@ -72,6 +72,15 @@ app.get('/api/me', auth, (req, res) => res.json({ ...req.user, authDisabled: con
   model: `Auto: ${TIER_MODELS.fast.id} / ${TIER_MODELS.balanced.id} / ${TIER_MODELS.deep.id}`,
   models: { fast: TIER_MODELS.fast, balanced: TIER_MODELS.balanced, deep: TIER_MODELS.deep } }));
 
+/* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
+app.get('/api/public/review/:id', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Review not found' });
+  const s = await reviewStore.byIdPublic(id);
+  if (!s) return res.status(404).json({ error: 'Review not found' });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ...s, public: true });
+}));
 app.use('/api', auth);
 
 /* ── chat ─────────────────────────────────────────────────────────────── */
@@ -250,7 +259,7 @@ app.put('/api/review/:id/extras', wrap(async (req, res) => {
   if (!ex || typeof ex !== 'object' || JSON.stringify(ex).length > 2_000_000) return res.status(400).json({ error: 'extras required (max 2 MB)' });
   const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
     const cur = await reviewStore.byId(uid, id); if (!cur) return false;
-    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: { pins: Array.isArray(ex.pins) ? ex.pins : [], notes: Array.isArray(ex.notes) ? ex.notes : [] } }); return true;
+    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: { pins: Array.isArray(ex.pins) ? ex.pins : [], notes: Array.isArray(ex.notes) ? ex.notes : [], speaker: ex.speaker && typeof ex.speaker === 'object' ? ex.speaker : {} } }); return true;
   });
   reviewLocks.set(id, run.catch(() => {}));
   if (!(await run)) return res.status(404).json({ error: 'Review not found' });

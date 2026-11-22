@@ -92,13 +92,25 @@ export function PresenterBar({ tool, setTool, color, setColor, onClear, onUndo, 
   present: boolean; togglePresent: () => void; open: boolean; setOpen: (o: boolean) => void;
 }) {
   const [timer, setTimer] = useState(false); const [help, setHelp] = useState(false);
+  // auto-collapse: shrinks to a small pill shortly after the pointer leaves, expands on hover — never left open over the slides
+  const [mini, setMini] = useState(false);
+  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const arm = (ms = 2200) => { if (idle.current) clearTimeout(idle.current); idle.current = setTimeout(() => { setMini(true); setHelp(false); }, ms); };
+  const wake = () => { if (idle.current) clearTimeout(idle.current); setMini(false); };
+  useEffect(() => { if (open) arm(present ? 1500 : 4000); return () => { if (idle.current) clearTimeout(idle.current); }; }, [open, present, tool]); // eslint-disable-line react-hooks/exhaustive-deps
   const clock = useClock(timer || present);
   const T = ({ t, icon: I, label, k }: { t: Tool; icon: typeof PenLine; label: string; k: string }) => (
     <button className={clsx(tool === t && 'on')} onClick={() => setTool(tool === t ? 'none' : t)} title={`${label} (${k})`}><I size={15} /><span>{label}</span></button>
   );
-  if (!open) return <button className="epr-pbar-fab no-print" onClick={() => setOpen(true)} title="Presenter tools"><Presentation size={16} />Present</button>;
+  if (!open) return <button className="epr-pbar-fab no-print" onClick={() => { setOpen(true); wake(); }} title="Presenter tools"><Presentation size={16} />Tools</button>;
+  const CurIcon = ({ laser: ScanEye, spot: ScanEye, pen: PenLine, hl: Highlighter, note: StickyNote, none: MousePointer2 } as const)[tool];
+  if (mini) return (
+    <button className="epr-pbar-mini no-print" onMouseEnter={wake} onFocus={wake} onClick={wake} title="Presenter tools">
+      <CurIcon size={15} />{(timer || present) && <span className="tab">{clock}</span>}<i />
+    </button>
+  );
   return (
-    <div className="epr-pbar no-print" role="toolbar" aria-label="Presenter tools">
+    <div className="epr-pbar no-print" role="toolbar" aria-label="Presenter tools" onMouseEnter={wake} onMouseLeave={() => arm()}>
       <button className={clsx(present && 'on')} onClick={togglePresent} title="Presentation mode — full screen, ← → between chapters (F)"><Presentation size={15} /><span>{present ? 'Exit' : 'Present'}</span></button>
       <i className="sep" />
       <button className={clsx(tool === 'none' && 'on')} onClick={() => setTool('none')} title="Select (Esc)"><MousePointer2 size={15} /><span>Select</span></button>
