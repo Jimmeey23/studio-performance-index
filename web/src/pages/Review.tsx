@@ -9,7 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, ArrowLeft, ArrowRight, Pencil, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, BookOpenText, ArrowLeft, ArrowRight, Pencil, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -150,11 +150,22 @@ function Note({ text, loading, part, id, label = 'What this tells us' }: { text?
     </div>
   );
 }
+/** Shape AI prose for reading: a short standfirst (first 1–2 sentences), then paragraphs of ~2 sentences. */
+function shape(text: string): string[] {
+  const paras = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const all = paras.flatMap((p) => sentences(p));
+  if (all.length < 3) return paras;
+  const leadN = all[0].length < 90 && all.length > 3 ? 2 : 1;
+  const out = [all.slice(0, leadN).join(' ')];
+  const rest = all.slice(leadN);
+  for (let i = 0; i < rest.length; i += 2) out.push(rest.slice(i, i + 2).join(' '));
+  return out;
+}
 function Prose({ text, part, live }: { text?: string; part: string; live?: boolean }) {
   const e = useEdit();
   if (!text && !e?.on) return <Shimmer lines={6} />;
   if (e?.on) return <Ed as="div" className="epr-prose-ed" part={part} path={['summary']} value={text} />;
-  const paras = (text ?? '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const paras = shape(text ?? '');
   return <>{paras.map((p, i) => <p key={i} className={i === 0 ? 'lead' : ''}><Words text={p} live={live && i === 0} /></p>)}</>;
 }
 function ChartCard({ c, note, loading, part, h = 300, i = 0 }: { c: Chart; note?: string; loading?: boolean; part: string; h?: number; i?: number }) {
@@ -671,10 +682,20 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
 /** Summary + insights block — the AI's analysis, styled as an analyst's note. */
 function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { summary: string; insights: string[]; model?: string; source: string }; live: boolean; label: string; fallback: string[] }) {
   const ins = ai ? (ai.insights.length ? ai.insights : fallback) : [];
+  const words = ai?.summary ? ai.summary.split(/\s+/).length : 0;
+  const exec = part === 'glance';
   return (
-    <div className="epr-analysis epr-rv">
-      <div className="epr-analysis-main">
-        <div className="epr-analysis-h"><Sparkles size={13} /><span>{label}</span>{ai && <em>{ai.source === 'ai' ? `Written by ${ai.model ?? 'Claude'}` : 'Computed'}</em>}</div>
+    <div className={clsx('epr-analysis epr-rv', exec && 'exec')}>
+      <div className="epr-sum">
+        <aside className="epr-sum-side">
+          <div className="epr-sum-mark" aria-hidden>{exec ? <Sparkles size={16} /> : <BookOpenText size={16} />}</div>
+          <div className="epr-sum-label">{label}</div>
+          {ai && <dl>
+            <div><dt>Author</dt><dd>{ai.source === 'ai' ? (ai.model ?? 'Claude') : 'Computed from data'}</dd></div>
+            {words > 0 && <div><dt>Reading time</dt><dd>{Math.max(1, Math.round(words / 220))} min · {words} words</dd></div>}
+            {ins.length > 0 && <div><dt>Insights</dt><dd>{ins.length} below</dd></div>}
+          </dl>}
+        </aside>
         <div className="epr-prose"><Prose text={ai?.summary} part={part} live={live} /></div>
       </div>
       <aside className="epr-insights">
@@ -731,7 +752,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
         headline={ai ? (live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />) : undefined} />
 
       <Sub n={`${n}.1`} title="Analysis" />
-      <Analysis part={s.id} ai={ai} live={live} label="Analysis" fallback={s.ruleFindings.slice(0, 3)} />
+      <Analysis part={s.id} ai={ai} live={live} label="Chapter summary" fallback={s.ruleFindings.slice(0, 3)} />
       <Sub n={`${n}.2`} full title="The numbers" note="Click any number for the records behind it" />
       <KpiGrid kpis={s.kpis} base={base} P={P} />
       {(hasFeature || s.charts.length > 0 || s.tables.length > 0) && <div className="epr-detail"><Sub n={`${n}.3`} title="In detail" /></div>}
