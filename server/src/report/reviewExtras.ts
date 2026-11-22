@@ -143,5 +143,5 @@ export async function formatComparison(req: Req) {
 
 /** Full product list (every product, not just the top table) so the top / bottom toggle shows true bottom performers. */
 export async function productList(req: Req) {
-  return q(req, ['revenue', 'units_sold', 'atv'], ['product'], { sort: 'revenue', limit: 500 });
+  return q(req, ['revenue', 'units_sold', 'atv'], ['product'], { sort: 'revenue', limit: 500, keep: (r) => Number(r.revenue) > 0 });   // refunds / zero rows are not "bottom performers"
 }

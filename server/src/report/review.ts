@@ -13,6 +13,7 @@ import { MODELS, fallbackOrder, type Tier } from '../ai/router.js';
 import { isNotFound, markMissing } from '../ai/models.js';
 import { verifyNarrative } from '../ai/verify.js';
 import { runMetricsQuery } from '../semantic/engine.js';
+import { metricById, modelById } from '../semantic/metrics.js';
 import { log } from '../util/log.js';
 import { attendanceExtras, classExtras, formatComparison, funnelExtras, productList, trainerScorecard } from './reviewExtras.js';
 import { buildReport, fmtVal, fmtChg, type Kpi, type Report, type ReportChart, type ReportSection, type ReportTable } from './build.js';
@@ -358,4 +359,23 @@ export function reviewContext(rv: Review, ai: ReviewAI): string {
   if (ai.glance) L.push(`\nEXECUTIVE SUMMARY: ${ai.glance.summary}`);
   const t = L.join('\n');
   return t.length > 30000 ? t.slice(0, 30000) + '\n…(truncated)' : t;
+}
+
+/** Definitions of every metric that appears anywhere in the review: what it means, how it is calculated, its source and rules. */
+export function reviewDefinitions(rv: Review) {
+  const ids = new Set<string>();
+  const addK = (ks: Kpi[] = []) => ks.forEach((k) => ids.add(k.id));
+  const addR = (r?: { columns?: { key: string; kind: string }[]; spec?: unknown }) => {
+    for (const c of r?.columns ?? []) if (c.kind === 'metric') ids.add(c.key.replace(/__(prev|chg)$/, ''));
+    for (const m of ((r?.spec as { metrics?: string[] } | undefined)?.metrics ?? [])) ids.add(m);
+  };
+  addK(rv.scorecard); addK(rv.cover.headlineKpis); addK(rv.glance.cards);
+  rv.glance.tables.forEach((t) => addR(t.result as never)); rv.glance.charts.forEach((c) => addR(c.result as never));
+  if (rv.studios) addR(rv.studios.result as never);
+  for (const s of rv.sections) { addK(s.kpis); s.formats?.forEach((f) => addK(f.kpis)); s.tables.forEach((t) => addR(t.result as never)); s.charts.forEach((c) => addR(c.result as never)); }
+  return [...ids].map((id) => metricById.get(id)).filter(Boolean).map((m) => {
+    const mod = modelById.get(m!.model);
+    return { id: m!.id, label: m!.label, description: m!.description, formula: (m as unknown as { sql?: string }).sql ?? '', format: m!.format, dataset: mod?.label ?? m!.model,
+      source: mod ? `${mod.table} · dated by ${mod.timeLabel}` : '', rule: mod?.defaultRuleLabel ?? '', caveat: m!.caveat ?? '', direction: m!.higherIsBetter === true ? 'Higher is better' : m!.higherIsBetter === false ? 'Lower is better' : 'Neutral' };
+  }).sort((a, b) => a.dataset.localeCompare(b.dataset) || a.label.localeCompare(b.label));
 }

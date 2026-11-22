@@ -9,7 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, Play, Pause, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -67,7 +67,8 @@ function Pins({ part, n }: { part: string; n: string }) {
     ))}</div>
   </>;
 }
-type Saved = { review: Review; ai: AI; created_at: string; updated_at: string; reused?: boolean };
+type Def = { id: string; label: string; description: string; formula: string; format: string; dataset: string; source: string; rule: string; caveat: string; direction: string };
+type Saved = { review: Review; ai: AI; created_at: string; updated_at: string; reused?: boolean; definitions?: Def[] };
 type HistoryItem = { id: string; label: string; scope: string; created_at: string; updated_at: string; ai_parts: number };
 
 type Base = 'prev' | 'ytd' | 'ly';
@@ -116,7 +117,9 @@ function KpiCard({ k, base, P, i = 0, big }: { k: Kpi; base: Base; P: ReportPeri
   const t = tone(k, k.chg);
   const ref = base === 'prev' ? k.prev : base === 'ytd' ? k.ytd : k.ly;
   const d = useRD();
-  const ctx = vals.length > 2 && k.value !== null ? context(k.value, vals, k) : null;
+  const single = P.start.slice(0, 7) === P.end.slice(0, 7);
+  const last = k.series[k.series.length - 1];
+  const ctx = vals.length > 3 && last !== null && last !== undefined ? context(vals, k, single) : null;
   return (
     <div className={clsx('epr-kpi epr-rv', big && 'big')} style={{ transitionDelay: `${i * 45}ms` }} title={`${k.description}${d ? ' — click for the records behind this number' : ''}`} {...clickable(d ? () => d.kpi(k) : undefined)}>
       <div className="epr-kpi-l">{k.label}</div>
@@ -128,18 +131,19 @@ function KpiCard({ k, base, P, i = 0, big }: { k: Kpi; base: Base; P: ReportPeri
     </div>
   );
 }
-/** Where this period sits in the trailing series — a quick sense of "is this unusual?". */
-function context(v: number, vals: number[], k: Kpi): { text: string; t: string } | null {
-  const hist = vals.slice(0, -1); if (hist.length < 3) return null;
-  const hi = Math.max(...hist), lo = Math.min(...hist), n = hist.length + 1;
-  const good = k.higherIsBetter === false ? 'bad' : 'good', bad = good === 'good' ? 'bad' : 'good';
-  if (v >= hi) return { text: `Highest in ${n} periods`, t: good };
-  if (v <= lo) return { text: `Lowest in ${n} periods`, t: bad };
+/** Where the latest month sits in the trailing monthly series — a quick sense of "is this unusual?".
+ *  The series is monthly, so for multi-month periods it describes the latest month, and says so. */
+function context(vals: number[], k: Kpi, single: boolean): { text: string; t: string } | null {
+  const v = vals[vals.length - 1]; const hist = vals.slice(0, -1); if (hist.length < 3) return null;
+  const hi = Math.max(...hist), lo = Math.min(...hist), n = hist.length + 1; const pre = single ? '' : 'Latest month ';
+  const good = k.higherIsBetter === false ? 'bad' : k.higherIsBetter === true ? 'good' : 'flat', bad = good === 'good' ? 'bad' : good === 'bad' ? 'good' : 'flat';
+  if (v > hi) return { text: `${pre}highest in ${n} months`.replace(/^h/, 'H'), t: good };
+  if (v < lo) return { text: `${pre}lowest in ${n} months`.replace(/^l/, 'L'), t: bad };
   const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
   if (!avg) return null;
   const p = (v - avg) / Math.abs(avg);
-  if (Math.abs(p) < 0.03) return { text: `In line with ${hist.length}-period average`, t: 'flat' };
-  return { text: `${p > 0 ? 'Above' : 'Below'} ${hist.length}-period average by ${Math.abs(p * 100).toFixed(0)}%`, t: p > 0 ? good : bad };
+  if (Math.abs(p) < 0.03) return { text: `${pre}in line with the ${hist.length}-month average`.replace(/^i/, 'I'), t: 'flat' };
+  return { text: `${pre}${p > 0 ? 'above' : 'below'} the ${hist.length}-month average by ${Math.abs(p * 100).toFixed(0)}%`.replace(/^([ab])/, (m) => m.toUpperCase()), t: p > 0 ? good : bad };
 }
 /* ── inline editing (admins): any AI-written text can be edited in place and autosaves ── */
 type Path = (string | number)[];
@@ -685,9 +689,10 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
-                {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} n={i + 2} total={rv.sections.length + 1} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
+                {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} n={i + 2} total={rv.sections.length + 2} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
                 {building && <BuildConsole steps={steps} hints={hints} started={startedAt} />}
                 {!building && <Closing rv={rv} ai={ai} P={P} jump={jump} />}
+                {!building && !!saved?.definitions?.length && <Definitions defs={saved.definitions} />}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
             </RDrill.Provider></RBase.Provider>
@@ -766,7 +771,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
   const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 1} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} />
+      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
       <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
@@ -779,7 +784,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
         const k = s.kpis[0]; const t = k ? tone(k, B.chg(k)) : 0;
         return (
           <div key={s.id} className={clsx('epr-hl epr-rv', t > 0 ? 'good' : t < 0 ? 'bad' : 'flat')} style={{ transitionDelay: `${i * 60}ms` }} {...clickable(() => jump(s.id))}>
-            <div className="epr-hl-head"><span className="n">{String(i + 2).padStart(2, '0')}</span><div className="t">{ai?.sections[s.id]?.title ?? s.title}</div><span className="st">{t > 0 ? 'Improving' : t < 0 ? 'Needs attention' : 'Steady'}</span></div>
+            <div className="epr-hl-head"><span className="n">{String(i + 2).padStart(2, '0')}</span><div className="t">{ai?.sections[s.id]?.title ?? s.title}</div><span className="st" title={k ? `Based on ${k.label} vs ${B.label}` : undefined}>{k ? `${k.label} ${t > 0 ? 'improving' : t < 0 ? 'slipping' : 'steady'}` : 'Steady'}</span></div>
             {k && <div className="epr-hl-k"><b>{fmtK(k.value, k.format)}</b><span>{k.label}</span><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} vs {B.label}</em></div>}
             {hi >= 0 ? <Ed as="p" part="glance" path={['highlights', hi, 'text']} value={h} /> : <p>{h ?? '…'}</p>}
             <span className="go">Read chapter <ArrowRight size={12} /></span>
@@ -830,13 +835,14 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
 }
 
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
-function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [] }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[] }) {
+function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string }) {
   const d = useRD(); const B = useChg();
   return (
     <header className="epr-hero">
       <div className="epr-hero-top">
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
+        {speak && <AudioSummary text={`Chapter ${n}. ${title}. ${speak}`} />}
         {right}
       </div>
       <div className="epr-hero-body">
@@ -871,7 +877,8 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={total} kicker={s.kicker} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis}
+      <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Product', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis}
+        speak={ai ? [ai.headline, ai.summary, ai.insights.length ? `Key insights. ${ai.insights.slice(0, 3).join(' ')}` : ''].join(' ') : undefined}
         headline={ai ? (live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />) : undefined} />
 
       <Sub n={`${n}.1`} title="Analysis" />
@@ -928,7 +935,8 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
   const n = rv.sections.length + 2;
   return (
     <section id="epr-closing" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={n} kicker="Conclusions" title="Summary & action plan" lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`} />
+      <SectionHead n={n} total={n} kicker="Conclusions" title="Summary & action plan" lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`}
+        speak={[...rv.sections.map((s) => ai?.sections[s.id]?.headline ?? '').filter(Boolean), recs.length ? `There are ${recs.length} recommended actions, ${recs.filter((r) => r.priority === 'high').length} of them high priority. ${recs.filter((r) => r.priority === 'high').slice(0, 4).map((r) => `${r.title}, owned by ${r.owner}.`).join(' ')}` : ''].join(' ')} />
       <Sub n={`${n}.1`} title="Main findings" />
       <ol className="epr-concl">{rv.sections.map((s, i) => {
         const h = ai?.sections[s.id]?.headline ?? ai?.glance?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0];
@@ -953,5 +961,65 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
         ))}</tbody>
       </table></div>
     </section>
+  );
+}
+
+/* ── audio summary: reads the chapter aloud with the browser's speech engine ── */
+function AudioSummary({ text }: { text: string }) {
+  const [on, setOn] = useState(false);
+  const [pct, setPct] = useState(0);
+  const ok = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  useEffect(() => () => { if (on) window.speechSynthesis.cancel(); }, [on]);
+  if (!ok || !text.trim()) return null;
+  const play = () => {
+    const sp = window.speechSynthesis;
+    if (on) { sp.cancel(); setOn(false); return; }
+    sp.cancel();
+    const clean = text.replace(/₹/g, 'rupees ').replace(/(\d)L\b/g, '$1 lakh').replace(/(\d)Cr\b/g, '$1 crore').replace(/\bpp\b/g, 'percentage points').replace(/\s+/g, ' ');
+    const u = new SpeechSynthesisUtterance(clean);
+    const vs = sp.getVoices(); u.voice = vs.find((v) => /en-IN/i.test(v.lang)) ?? vs.find((v) => /en-GB/i.test(v.lang)) ?? vs.find((v) => /^en/i.test(v.lang)) ?? null;
+    u.rate = 1; u.pitch = 1;
+    u.onboundary = (e) => setPct(Math.min(1, e.charIndex / clean.length));
+    u.onend = u.onerror = () => { setOn(false); setPct(0); };
+    setOn(true); setPct(0); sp.speak(u);
+  };
+  return (
+    <button className={clsx('epr-audio no-print', on && 'on')} onClick={play} title={on ? 'Stop the audio summary' : 'Play an audio summary of this chapter'}>
+      <span className="ic">{on ? <Pause size={13} /> : <Play size={13} />}</span>
+      <span className="lb">{on ? 'Playing' : 'Listen'}</span>
+      {on ? <span className="eq" aria-hidden><i /><i /><i /><i /></span> : <span className="dur">~{Math.max(1, Math.round(text.split(/\s+/).length / 150))} min</span>}
+      {on && <span className="bar" style={{ width: `${pct * 100}%` }} />}
+    </button>
+  );
+}
+
+/* ── appendix: every metric used in the review, what it means and how it is calculated (collapsed by default) ── */
+function Definitions({ defs }: { defs: Def[] }) {
+  const [q, setQ] = useState('');
+  const shown = defs.filter((d) => !q || `${d.label} ${d.description} ${d.dataset}`.toLowerCase().includes(q.toLowerCase()));
+  const groups = [...new Set(shown.map((d) => d.dataset))];
+  return (
+    <details className="epr-defs" id="epr-definitions">
+      <summary><span className="k">Appendix</span><b>Metric definitions & calculations</b><em>{defs.length} metrics used in this review</em><ChevronDown size={16} /></summary>
+      <div className="epr-defs-body">
+        <input className="epr-input" placeholder="Search metrics…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {groups.map((g) => (
+          <section key={g}><h4>{g}</h4>
+            <dl>{shown.filter((d) => d.dataset === g).map((d) => (
+              <div key={d.id} className="epr-def">
+                <dt><b>{d.label}</b><span>{d.format}{d.direction !== 'Neutral' ? ` · ${d.direction.toLowerCase()}` : ''}</span></dt>
+                <dd>
+                  <p>{d.description}</p>
+                  {d.formula && <p className="f"><span>Calculation</span><code>{d.formula}</code></p>}
+                  <p className="m">{d.source}{d.rule ? ` · counts ${d.rule}` : ''}</p>
+                  {d.caveat && <p className="c">Note: {d.caveat}</p>}
+                </dd>
+              </div>
+            ))}</dl>
+          </section>
+        ))}
+        <p className="epr-small">Comparisons: “Prev” is the previous period of equal length; “YTD” is the current-year monthly average from January to the month before the period, scaled to the period length for volume metrics; “LY” is the same period last year. Percentage-type metrics change in percentage points (pp).</p>
+      </div>
+    </details>
   );
 }
