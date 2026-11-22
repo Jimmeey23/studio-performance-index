@@ -655,7 +655,6 @@ function ReviewDoc() {
       <div className="flex min-h-0 flex-1">
       <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
-          <InkLayer host={mainRef} tool={tool} color={ink} clearKey={clearK} undoKey={undoK} />
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
             <RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
@@ -680,6 +679,7 @@ function ReviewDoc() {
         </aside>
       )}
       </div>
+      <InkLayer scroller={scroller} tool={tool} color={ink} clearKey={clearK} undoKey={undoK} />
       <PointerFx tool={tool} />
       <PresenterBar tool={tool} setTool={setTool} color={ink} setColor={setInk} onClear={() => setClearK((x) => x + 1)} onUndo={() => setUndoK((x) => x + 1)} present={present} togglePresent={togglePresent} open={pbar} setOpen={setPbar} />
       {pinBlock && rv && (

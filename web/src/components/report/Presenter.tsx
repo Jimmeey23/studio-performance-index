@@ -32,24 +32,36 @@ export function ChapterNotes({ sec }: { sec: string }) {
   ))}</>;
 }
 
-/** Freehand pen / highlighter layer covering the whole report; strokes live for the session. */
-export function InkLayer({ host, tool, color, clearKey, undoKey }: { host: RefObject<HTMLElement | null>; tool: Tool; color: string; clearKey: number; undoKey: number }) {
+/** Freehand pen / highlighter. The canvas only covers the visible viewport (a full-report canvas can exceed
+ *  the browser's canvas size limit and blank the page); strokes are stored in report coordinates and
+ *  redrawn on scroll, so ink stays attached to the content. Nothing is mounted until ink is used. */
+export function InkLayer({ scroller, tool, color, clearKey, undoKey }: { scroller: RefObject<HTMLElement | null>; tool: Tool; color: string; clearKey: number; undoKey: number }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const strokes = useRef<{ c: string; w: number; a: number; pts: [number, number][] }[]>([]);
+  const [count, setCount] = useState(0);
+  const active = tool === 'pen' || tool === 'hl';
   const draw = () => {
-    const c = cv.current; const h = host.current; if (!c || !h) return;
-    const dpr = window.devicePixelRatio || 1; const W = h.scrollWidth, H = h.scrollHeight;
-    if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr; c.style.width = `${W}px`; c.style.height = `${H}px`; }
-    const g = c.getContext('2d')!; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
+    const c = cv.current; const sc = scroller.current; if (!c || !sc) return;
+    const r = sc.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.style.left = `${r.left}px`; c.style.top = `${r.top}px`; c.style.width = `${sc.clientWidth}px`; c.style.height = `${sc.clientHeight}px`;
+    const W = Math.round(sc.clientWidth * dpr), H = Math.round(sc.clientHeight * dpr);
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+    const g = c.getContext('2d'); if (!g) return;
+    g.setTransform(dpr, 0, 0, dpr, 0, -sc.scrollTop * dpr); g.clearRect(0, sc.scrollTop, sc.clientWidth, sc.clientHeight); g.lineCap = 'round'; g.lineJoin = 'round';
     for (const s of strokes.current) { g.globalAlpha = s.a; g.strokeStyle = s.c; g.lineWidth = s.w; g.beginPath(); s.pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
   };
-  useEffect(() => { strokes.current = []; draw(); }, [clearKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { strokes.current.pop(); draw(); }, [undoKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const ro = new ResizeObserver(draw); if (host.current) ro.observe(host.current); return () => ro.disconnect(); }, [host]); // eslint-disable-line react-hooks/exhaustive-deps
-  const active = tool === 'pen' || tool === 'hl';
-  const pos = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] as [number, number]; };
-  return <canvas ref={cv} className={clsx('epr-ink', active && 'on', tool === 'hl' && 'hl')}
-    onPointerDown={(e) => { if (!active) return; (e.target as HTMLElement).setPointerCapture(e.pointerId); strokes.current.push({ c: color, w: tool === 'hl' ? 18 : 3, a: tool === 'hl' ? 0.28 : 0.95, pts: [pos(e)] }); draw(); }}
+  useEffect(() => { strokes.current = []; setCount(0); draw(); }, [clearKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { strokes.current.pop(); setCount(strokes.current.length); draw(); }, [undoKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = active || count > 0;
+  useEffect(() => {
+    if (!shown) return; const sc = scroller.current; if (!sc) return;
+    draw(); sc.addEventListener('scroll', draw, { passive: true }); window.addEventListener('resize', draw);
+    return () => { sc.removeEventListener('scroll', draw); window.removeEventListener('resize', draw); };
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!shown) return null;
+  const pos = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top + (scroller.current?.scrollTop ?? 0)] as [number, number]; };
+  return <canvas ref={cv} className={clsx('epr-ink', active && 'on')}
+    onPointerDown={(e) => { if (!active) return; (e.target as HTMLElement).setPointerCapture(e.pointerId); strokes.current.push({ c: color, w: tool === 'hl' ? 18 : 3, a: tool === 'hl' ? 0.28 : 0.95, pts: [pos(e)] }); setCount(strokes.current.length); draw(); }}
     onPointerMove={(e) => { if (!active || !e.buttons) return; strokes.current[strokes.current.length - 1]?.pts.push(pos(e)); draw(); }} />;
 }
 
