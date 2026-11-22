@@ -1059,3 +1059,11 @@
 
 @media (max-width: 1000px) { .epr-ap-board { grid-template-columns: minmax(0, 1fr); } .epr-ap-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } .epr-ap-stat:nth-child(3) { padding-left: 0; border-left: 0; } }
 @media print { .epr-ap-ctrl { display: none; } .epr-ac p.clamp { -webkit-line-clamp: unset; display: block; } }
+
+/* key insights: label in the same side column as the summary byline, cards fill the full row (no empty slots) */
+.epr-standalone .epr-analysis .epr-insights { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 40px; align-items: start; }
+.epr-standalone .epr-insights > .epr-analysis-h { margin: 0; padding-top: 4px; font-family: var(--epr-serif); font-size: 18px; letter-spacing: -.01em; text-transform: none; color: var(--ink); }
+.epr-standalone .epr-insights ol { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: stretch; }
+@media (max-width: 760px) {
+  .epr-standalone .epr-analysis .epr-insights { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}
