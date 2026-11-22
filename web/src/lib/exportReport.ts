@@ -107,3 +107,74 @@ export async function copyRich(root: HTMLElement, title: string) {
 export const copyText = (s: string) => navigator.clipboard.writeText(s);
 
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'report';
+
+/* ── PDF: rendered with html-to-image (the browser's own layout engine, so every style survives)
+      and laid out on A4 pages with jsPDF — page per chapter, no element cut unless it is taller than a page ── */
+export async function toPdf(root: HTMLElement, title: string, onProgress?: (msg: string) => void): Promise<void> {
+  const [{ toCanvas, getFontEmbedCSS }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')]);
+  document.documentElement.classList.add('epr-exporting');
+  root.querySelectorAll('img[loading="lazy"]').forEach((i) => i.setAttribute('loading', 'eager'));
+  await Promise.all([...root.querySelectorAll('img')].map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; setTimeout(r, 4000); }))));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  try {
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
+    const PW = pdf.internal.pageSize.getWidth(), PH = pdf.internal.pageSize.getHeight();
+    const M = 30, TOP = 34, BOTTOM = 40, CW = PW - 2 * M, CH = PH - TOP - BOTTOM;
+    const rootBox = root.getBoundingClientRect();
+    const k = CW / rootBox.width;                       // pt per CSS px — the whole report keeps its proportions
+    let fontEmbedCSS: string | undefined;
+    try { fontEmbedCSS = await getFontEmbedCSS(root); } catch { /* fonts fall back */ }
+    const opts = (h: number) => ({ pixelRatio: Math.min(2, 12000 / Math.max(1, h)), backgroundColor: '#ffffff', cacheBust: false, fontEmbedCSS, imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+      filter: (n: Node) => !(n instanceof HTMLElement && (n.matches('button.epr-ibtn, .no-print, .epr-sticky, .epr-ink, video, audio, textarea') || n.classList.contains('epr-shimmer'))) });
+
+    /** leaves to capture: split tall vertically-stacked containers into their rows */
+    const stacked = (el: Element) => { const k2 = [...el.children].filter((c) => (c as HTMLElement).offsetHeight > 0); for (let i = 1; i < k2.length; i++) if (k2[i].getBoundingClientRect().top < k2[i - 1].getBoundingClientRect().bottom - 1) return null; return k2; };
+    const leaves = (el: Element, out: Element[]) => {
+      const h = el.getBoundingClientRect().height * k;
+      const kids = h > CH * 0.7 ? stacked(el) : null;
+      if (kids && kids.length > 1) kids.forEach((c) => leaves(c, out)); else out.push(el);
+    };
+    const chapters = [...root.querySelectorAll('.epr-main > *')].filter((c) => (c as HTMLElement).offsetHeight > 0);
+    let page = 0, y = TOP;
+    for (let ci = 0; ci < chapters.length; ci++) {
+      onProgress?.(`Building PDF… chapter ${ci + 1} of ${chapters.length}`);
+      if (page === 0) { page = 1; } else { pdf.addPage(); page++; y = TOP; }    // each chapter opens a new page
+      const items: Element[] = []; leaves(chapters[ci], items);
+      let prevBottom: number | null = null;
+      for (const el of items) {
+        const b = el.getBoundingClientRect(); if (b.height < 1 || b.width < 1) continue;
+        const gap = prevBottom == null ? 0 : Math.min(28, Math.max(0, (b.top - prevBottom) * k)); prevBottom = b.bottom;
+        let canvas: HTMLCanvasElement;
+        try { canvas = await toCanvas(el as HTMLElement, opts(b.height)); } catch { continue; }
+        const x = M + (b.left - rootBox.left) * k, w = b.width * k, h = b.height * k;
+        if (y + gap + h <= TOP + CH) { y += gap; }
+        else if (h <= CH) { pdf.addPage(); page++; y = TOP; }
+        else if (y > TOP + CH * 0.25) { pdf.addPage(); page++; y = TOP; }
+        // slice anything taller than the space left
+        const pxPerPt = canvas.height / h; let done = 0;
+        while (done < h - 0.5) {
+          const room = TOP + CH - y; const take = Math.min(h - done, room);
+          const s = document.createElement('canvas'); s.width = canvas.width; s.height = Math.max(1, Math.round(take * pxPerPt));
+          s.getContext('2d')!.drawImage(canvas, 0, Math.round(done * pxPerPt), canvas.width, s.height, 0, 0, s.width, s.height);
+          pdf.addImage(s.toDataURL('image/jpeg', 0.9), 'JPEG', x, y, w, take, undefined, 'FAST');
+          done += take; y += take;
+          if (done < h - 0.5) { pdf.addPage(); page++; y = TOP; }
+        }
+      }
+    }
+    // running header + footer
+    const n = pdf.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      pdf.setPage(i); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(130);
+      if (i > 1) pdf.text(title.replace(/[—–]/g, '-'), M, 20);
+      pdf.setDrawColor(225); pdf.line(M, PH - 26, PW - M, PH - 26);
+      pdf.text('Physique 57 India · Confidential', M, PH - 14);
+      pdf.text(`${i} / ${n}`, PW - M, PH - 14, { align: 'right' });
+    }
+    pdf.setProperties({ title, creator: 'Physique 57 Performance Review' });
+    onProgress?.('Saving PDF…');
+    pdf.save(`${slug(title)}.pdf`);
+  } finally {
+    document.documentElement.classList.remove('epr-exporting');
+  }
+}
