@@ -268,15 +268,19 @@ async function callTool<T>(tool: Anthropic.Tool, content: string, tier: Tier): P
   if (!config.anthropicKey) return null;
   const client = new Anthropic({ apiKey: config.anthropicKey });
   let order = fallbackOrder(tier);
+  let forced = true;   // newer models reject a forced tool_choice; fall back to 'auto' + an explicit instruction
   while (order.length) {
     const model = MODELS[order[0]];
     try {
-      const msg = await client.messages.stream({ model: model.id, max_tokens: 8000, system: SYSTEM, tools: [tool], tool_choice: { type: 'tool', name: tool.name }, messages: [{ role: 'user', content }] } as Anthropic.MessageStreamParams).finalMessage();
+      const msg = await client.messages.stream({ model: model.id, max_tokens: 16000, system: SYSTEM, tools: [tool],
+        tool_choice: forced ? { type: 'tool', name: tool.name } : { type: 'auto' },
+        messages: [{ role: 'user', content: forced ? content : `${content}\n\nRespond only by calling the ${tool.name} tool, exactly once.` }] } as Anthropic.MessageStreamParams).finalMessage();
       const tu = msg.content.find((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use');
       if (!tu) throw new Error('no tool output');
       return { out: tu.input as T, model: model.label };
     } catch (e) {
       const m = (e as Error).message; log.warn({ model: model.id, err: m.slice(0, 200) }, 'review AI failed');
+      if (forced && /tool_choice/i.test(m)) { forced = false; continue; }
       if (isNotFound(m)) { if (markMissing(model.id, order[0])) continue; }
       order = order.slice(1);
     }
