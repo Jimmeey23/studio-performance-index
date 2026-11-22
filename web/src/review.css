@@ -699,3 +699,17 @@
   .epr-sum-side dl { display: none; }
   .epr-analysis.exec .epr-sum { padding: 22px 18px; }
 }
+
+/* ═════════ hover without clipping ═════════
+   Rows and tiles highlight in place: no negative margins, lifts or scaling that
+   overflow their (scroll-clipped) containers; card borders never appear on hover. */
+.epr-wrap { overflow-x: visible; }
+.epr-standalone .epr-scroll, .epr-standalone > .min-h-0 { overflow-x: hidden; }
+.epr-standalone .epr-card, .epr-standalone .epr-card:hover { border-left: 0; border-right: 0; border-bottom: 0; border-top-color: var(--line); }
+.epr-table { margin: 0; }
+.epr-tb-list li, .epr-signals-col li { margin: 0; padding-left: 8px; padding-right: 8px; }
+.epr-tb-list .rk { padding-left: 0; }
+.epr-heat td[data-drill]:hover { transform: none; box-shadow: inset 0 0 0 2px var(--ink); }
+.epr-standalone :is(.epr-hl, .epr-spot-c, .epr-land-c, .epr-insights li):hover { transform: none !important; }
+.epr-kpi[data-drill]::after { transform: none; }
+.epr-score-wrap, .epr-heat-wrap, .epr-table { padding-bottom: 2px; }
