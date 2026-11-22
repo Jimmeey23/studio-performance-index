@@ -790,7 +790,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
         return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')} aria-current={active === n.id ? 'true' : undefined}>
           <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{RAIL_SHORT[n.id] ?? n.title}</span></button>;
-      })}<RailSlides /></nav>}
+      })}<div className="epr-rail2-prog" aria-label={`${Math.round(progress * 100)}% read`}><div className="trk"><i style={{ height: `${Math.max(2, progress * 100)}%` }} /></div><b>{Math.round(progress * 100)}<em>%</em></b></div><RailSlides /></nav>}
       <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
