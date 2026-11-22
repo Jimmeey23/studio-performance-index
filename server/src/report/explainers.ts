@@ -17,8 +17,9 @@ import { config } from '../config.js';
 import { log } from '../util/log.js';
 import * as reviewStore from './reviewStore.js';
 import type { Review, ReviewAI } from './review.js';
+import { blobConfigured, blobKey, putFile } from './blobStore.js';
 
-export type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?: string; progress: number; startedAt?: string; at: string; error?: string; file?: string };
+export type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?: string; progress: number; startedAt?: string; at: string; error?: string; file?: string; storage?: 'local' | 'blomp'; key?: string; bytes?: number };
 const BIN = process.env.NOTEBOOKLM_BIN || 'notebooklm';
 const dir = (rid: string) => path.join(config.dataDir, 'explainers', rid.replace(/[^a-z0-9_-]/gi, ''));
 export const videoFile = (rid: string, part: string) => path.join(dir(rid), `${part.replace(/[^a-z0-9_-]/gi, '')}.mp4`);
@@ -63,7 +64,7 @@ export async function videoStates(rid: string): Promise<Record<string, VideoStat
   const cur = await reviewStore.byIdPublic(rid);
   const v = ((cur?.ai.extras ?? {}) as { videos?: Record<string, VideoState> }).videos ?? {};
   // a file on disk can vanish (redeploy without a volume) — report it as needing regeneration
-  for (const [p, s] of Object.entries(v)) if (s.status === 'ready' && !fs.existsSync(videoFile(rid, p))) v[p] = { ...s, status: 'failed', error: 'Video file is no longer on the server — regenerate it.' };
+  for (const [p, s] of Object.entries(v)) if (s.status === 'ready' && s.storage !== 'blomp' && !fs.existsSync(videoFile(rid, p))) v[p] = { ...s, status: 'failed', error: 'Video file is no longer on the server — regenerate it.' };
   return v;
 }
 
@@ -139,7 +140,18 @@ async function generate(rid: string, part: string) {
     const out = videoFile(rid, part);
     await run(['download', 'video', out, '-n', nb, '-a', task, '--force', '--json'], 300_000);
     if (!fs.existsSync(out)) throw new Error('Download finished but no file was written');
-    await setState(rid, part, { status: 'ready', progress: 100, step: 'Ready', file: path.basename(out), error: undefined });
+    await step('Compressing', 96);
+    const final = await compress(out);
+    let storage: VideoState['storage'] = 'local'; let key: string | undefined;
+    if (blobConfigured()) {
+      await step('Uploading to storage', 98);
+      key = blobKey(`explainers/${rid}/${part}.mp4`);
+      await putFile(key, final, 'video/mp4');
+      storage = 'blomp';
+      fs.rmSync(final, { force: true });   // the server disk is not kept between deploys; Blomp is the copy of record
+    }
+    const bytes = storage === 'local' ? fs.statSync(final).size : undefined;
+    await setState(rid, part, { status: 'ready', progress: 100, step: 'Ready', file: path.basename(out), storage, key, bytes, error: undefined });
     log.info({ rid, part, secs: Math.round((Date.now() - started) / 1000) }, 'explainer video ready');
   } catch (e) {
     const m = (e as Error).message;
@@ -148,4 +160,18 @@ async function generate(rid: string, part: string) {
   } finally {
     if (nb) run(['delete', '-n', nb, '-y', '--json'], 60_000).catch(() => {});
   }
+}
+
+/** Re-encode to 720p H.264 / AAC with fast-start for streaming; falls back to the original if ffmpeg is missing or fails. */
+function compress(file: string): Promise<string> {
+  const out = file.replace(/\.mp4$/, '.c.mp4');
+  return new Promise((resolve) => {
+    const p = spawn(process.env.FFMPEG_BIN || 'ffmpeg', ['-y', '-loglevel', 'error', '-i', file, '-vf', "scale=-2:'min(720,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28',
+      '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', out], { stdio: 'ignore' });
+    p.on('error', () => resolve(file));
+    p.on('close', (code) => {
+      if (code === 0 && fs.existsSync(out) && fs.statSync(out).size > 0 && fs.statSync(out).size < fs.statSync(file).size) { fs.renameSync(out, file); resolve(file); }
+      else { fs.rmSync(out, { force: true }); resolve(file); }
+    });
+  });
 }

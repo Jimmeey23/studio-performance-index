@@ -23,6 +23,7 @@ import { generateInsights, rulesInsights } from './report/insights.js';
 import { buildReview, writeGlance, writeSection, reviewContext, reviewDefinitions, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
 import { enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
+import { streamTo } from './report/blobStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
 import { SOURCES } from './sources.js';
@@ -82,8 +83,12 @@ app.get('/api/public/review/:id/explainers', wrap(async (req, res) => {
 app.get('/api/public/review/:id/video/:part', (req, res) => {
   const id = String(req.params.id); const part = String(req.params.part);
   if (!/^rv_[a-z0-9-]{6,}$/i.test(id) || !/^[a-z0-9_-]+$/i.test(part)) return res.status(404).end();
-  const f = videoFile(id, part); if (!fs.existsSync(f)) return res.status(404).end();
-  res.sendFile(f, { headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600' } });
+  videoStates(id).then(async (v) => {
+    const st = v[part];
+    if (st?.status === 'ready' && st.storage === 'blomp' && st.key) return streamTo(st.key, req.headers.range, res, 'video/mp4');
+    const f = videoFile(id, part); if (!fs.existsSync(f)) return res.status(404).end();
+    res.sendFile(f, { headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600' } });
+  }).catch((e) => { log.warn({ err: (e as Error).message }, 'video stream failed'); if (!res.headersSent) res.status(502).end(); });
 });
 /* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
 app.get('/api/public/review/:id', wrap(async (req, res) => {
