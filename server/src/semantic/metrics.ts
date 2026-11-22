@@ -105,6 +105,7 @@ export const MODELS: SemanticModel[] = [
       payment_method: 'payment_method', discount_code: 'discount_code', membership: 'product',
       day_of_week: 'dayname(payment_ts)', client: 'member_id', weekpart: WEEKPART('payment_ts'), hour: HOUR('payment_ts'),
       product_family: PRODUCT_FAMILY, seller_type: `case when is_self_serve then 'Online / self-serve' else 'Staff' end`,
+      discounted: `case when coalesce(discount_amount, 0) > 0 then 'Discounted' else 'Full price' end`,
     },
     drill: { order: 'payment_ts desc', columns: [
       ['payment_ts::varchar', 'payment_ts', 'Paid at'], ['customer_name', 'customer_name', 'Client'], ['member_id', 'member_id', 'Member ID'],
@@ -220,6 +221,9 @@ export const MODELS: SemanticModel[] = [
     get defaultRuleLabel() { return membershipScopeLabel(); },
     dims: {
       location: 'location', city: 'city', membership: 'membership', status: 'status', sold_by: 'sold_by',
+      usage_band: `case when coalesce(total_sessions, 0) = 0 then '0 classes used' when total_sessions < 4 then '1–3 classes' when total_sessions < 8 then '4–7 classes' when total_sessions < 12 then '8–11 classes' else '12+ classes' end`,
+      last_visit_gap: `case when last_visit_ts is null then 'Never visited' when date_diff('day', last_visit_ts, end_ts) <= 7 then 'Visited in last week' when date_diff('day', last_visit_ts, end_ts) <= 21 then '8–21 days before end' when date_diff('day', last_visit_ts, end_ts) <= 45 then '22–45 days before end' else 'Gone quiet 45+ days' end`,
+      term_length: `case when date_diff('day', start_ts, end_ts) <= 35 then '≤ 1 month' when date_diff('day', start_ts, end_ts) <= 100 then '2–3 months' when date_diff('day', start_ts, end_ts) <= 200 then '4–6 months' else '6+ months' end`,
       product_family: `case when lower(coalesce(membership,'')) similar to '.*(newcomer|intro|2 for 1|trial).*' then 'Newcomer offers' when lower(coalesce(membership,'')) similar to '.*(unlimited|annual|month|week).*' then 'Unlimited / time-based' when lower(coalesce(membership,'')) similar to '.*(package|pack|[0-9]+ class).*' then 'Class packs' when lower(coalesce(membership,'')) similar to '.*(single|class).*' then 'Single / complimentary class' else 'Other' end`,
     },
     drill: { order: 'end_ts desc', columns: [

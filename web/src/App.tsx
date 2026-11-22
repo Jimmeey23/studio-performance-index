@@ -1,30 +1,34 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useState } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { FileText, BookMarked, Database, LogOut, Moon, Plus, Settings as SettingsIcon, Sigma, Sun, TrendingUp, Pin, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, LayoutTemplate, ChevronDown, Search, Layers, PenTool, ShieldCheck, Gauge } from 'lucide-react';
 import { api } from './lib/api';
 import type { Conversation, Me, DomainMeta } from './lib/types';
-import Domain from './pages/Domain';
-import Templates from './pages/Templates';
 import { Logo } from './components/Animated';
 import { domainIcon } from './lib/domainIcons';
 import { CatalogProvider } from './lib/catalog';
-import Analyst from './pages/Analyst';
 import Login from './pages/Login';
-import DataSources from './pages/DataSources';
-import Metrics from './pages/Metrics';
-import Reports from './pages/Reports';
-import Insights from './pages/Insights';
-import Settings from './pages/Settings';
-import Report from './pages/Report';
-import CustomReports from './pages/CustomReports';
-import Designer from './pages/Designer';
-import Admin from './pages/Admin';
-import Review from './pages/Review';
 import { loadAppConfig, useAppConfig, applyNav } from './lib/appConfig';
 import { DrillProvider } from './lib/drill';
 import { DrillDrawer } from './components/DrillDrawer';
 import { CommandPalette } from './components/CommandPalette';
+
+
+/* route-level code splitting: each page loads on first visit */
+const Domain = lazy(() => import('./pages/Domain'));
+const Templates = lazy(() => import('./pages/Templates'));
+const Analyst = lazy(() => import('./pages/Analyst'));
+const DataSources = lazy(() => import('./pages/DataSources'));
+const Metrics = lazy(() => import('./pages/Metrics'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Insights = lazy(() => import('./pages/Insights'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Report = lazy(() => import('./pages/Report'));
+const CustomReports = lazy(() => import('./pages/CustomReports'));
+const Designer = lazy(() => import('./pages/Designer'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Review = lazy(() => import('./pages/Review'));
+const PageLoad = () => <div className="flex h-full items-center justify-center"><Logo size={40} busy /></div>;
 
 const MeCtx = createContext<Me | null>(null);
 export const useMe = () => useContext(MeCtx);
@@ -35,7 +39,7 @@ export default function App() {
   useEffect(() => { load(); const h = () => setMe(null); window.addEventListener('p57:unauthorised', h); return () => window.removeEventListener('p57:unauthorised', h); }, [load]);
   if (me === undefined) return <div className="flex h-full items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-line border-t-accent" /></div>;
   // review links are public: a signed-out visitor sees the report read-only (no AI, drill-down or editing)
-  if (me === null && /^\/review\/rv_[^/]+\/?$/.test(location.pathname)) return <BrowserRouter><Routes><Route path="/review/:reviewId" element={<Review standalone publicView />} /></Routes></BrowserRouter>;
+  if (me === null && /^\/review\/rv_[^/]+\/?$/.test(location.pathname)) return <BrowserRouter><Suspense fallback={<PageLoad />}><Routes><Route path="/review/:reviewId" element={<Review standalone publicView />} /></Routes></Suspense></BrowserRouter>;
   if (me === null) return <Login onLogin={load} />;
   return (
     <MeCtx.Provider value={me}>
@@ -60,12 +64,12 @@ function Shell() {
   useEffect(() => { refresh(); }, [refresh]);
   const { pathname } = useLocation();
   // a generated review opens as its own full page — no app sidebar, just the report and its controls
-  if (/^\/review\/[^/]+/.test(pathname)) return <main className="h-full overflow-hidden"><Routes><Route path="/review/:reviewId" element={<Review standalone />} /></Routes></main>;
+  if (/^\/review\/[^/]+/.test(pathname)) return <main className="h-full overflow-hidden"><Suspense fallback={<PageLoad />}><Routes><Route path="/review/:reviewId" element={<Review standalone />} /></Routes></Suspense></main>;
   return (
     <div className="flex h-full">
       <Sidebar convs={convs} refresh={refresh} collapsed={collapsed} setCollapsed={setCollapsed} />
       <main className="min-w-0 flex-1 overflow-hidden">
-        <Routes>
+        <Suspense fallback={<PageLoad />}><Routes>
           <Route path="/" element={<Analyst onConversationsChange={refresh} />} />
           <Route path="/c/:id" element={<Analyst onConversationsChange={refresh} />} />
           <Route path="/w/:domainId" element={<Domain onConversationsChange={refresh} />} />
@@ -83,7 +87,7 @@ function Shell() {
           <Route path="/metrics" element={<Page><Metrics /></Page>} />
           <Route path="/settings" element={<Page><Settings /></Page>} />
           <Route path="/admin" element={<Admin />} />
-        </Routes>
+        </Routes></Suspense>
       </main>
     </div>
   );
