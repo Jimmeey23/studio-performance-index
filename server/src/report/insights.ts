@@ -159,7 +159,9 @@ export function digest(r: Report): string {
   return L.join('\n');
 }
 
-const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India — premium barre, powerCycle and Strength Lab studios in Mumbai and Bengaluru — writing the commentary for the board-level monthly performance report.
+import { BACKEND_NOTE } from './backendAccounts.js';
+const SYSTEM = `${BACKEND_NOTE}
+You are the Chief Analytics Officer of Physique 57 India — premium barre, powerCycle and Strength Lab studios in Mumbai and Bengaluru — writing the commentary for the board-level monthly performance report.
 Every KPI comes with three baselines: the previous month, the current-year monthly average and the same month last year. Use all three: a metric that is down on last month but above the year's average and last year is a very different story from one that is below all three.
 Rules:
 - Use ONLY figures that appear in the digest, copied exactly as formatted (₹ values, %, pp). Never invent numbers. Targets and impacts may be estimates but must be labelled as such ("~", "around", "estimate").

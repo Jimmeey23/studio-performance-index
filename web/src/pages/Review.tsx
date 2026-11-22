@@ -7,9 +7,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
+import * as EX from '../lib/exportReport';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, Play, Pause, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, Play, Pause, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Download, Copy, FileText, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -512,7 +513,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [progress, setProgress] = useState(0);
   const [startedAt] = useState(Date.now());
   const [askOpen, setAskOpen] = useState(false);
-  const [spkOpen, setSpkOpen] = useState(false); const [viewOpen, setViewOpen] = useState(false);
+  const [spkOpen, setSpkOpen] = useState(false); const [viewOpen, setViewOpen] = useState(false); const [expOpen, setExpOpen] = useState(false); const [expMsg, setExpMsg] = useState<string | null>(null);
   const [spkNotes, setSpkNotes] = useState<Record<string, string>>({});
   const [vids, setVids] = useState<{ available: boolean; videos: Record<string, VideoState> }>({ available: false, videos: {} });
   const vidAsked = useRef<string | null>(null);
@@ -677,6 +678,12 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     },
   };
 
+  const runExport = async (label: string, fn: (r: HTMLElement, t: string) => unknown, isCopy = false) => {
+    const r = mainRef.current; if (!r || !rv) return;
+    const title = `${rv.scope} — Performance Review — ${rv.period.label}`;
+    try { await fn(r, title); setExpMsg(isCopy ? label : `${label} downloaded`); } catch (e) { setExpMsg(`Could not export: ${(e as Error).message}`); }
+    setTimeout(() => setExpMsg(null), 2200);
+  };
   const copyLink = async () => { if (!rv) return; try { await navigator.clipboard.writeText(`${location.origin}/review/${rv.id}`); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* */ } };
   const refresh = async () => {
     if (!rv || !confirm('Recompute every number from the latest data? The AI will write a fresh review.')) return;
@@ -712,7 +719,27 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
             <i className="epr-vsep" />
             {isAdmin && !publicView && <button className={clsx('epr-ibtn', editOn && 'on')} onClick={() => setEditOn((o) => !o)} title={editOn ? 'Done editing' : 'Edit the report text in place — saves automatically'}><Pencil size={15} /></button>}
             {editOn && <span className={clsx('epr-save', saveState)}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Not saved' : 'Editing'}</span>}
-            <button className="epr-ibtn" onClick={() => window.print()} title="Print or save as PDF"><Printer size={15} /></button>
+            <div className="relative">
+              <button className={clsx('epr-ibtn', expOpen && 'on')} onClick={() => setExpOpen((o) => !o)} title="Export or copy the report"><Download size={15} /></button>
+              {expOpen && <div className="epr-pop epr-exp" onMouseLeave={() => setExpOpen(false)}>
+                <div className="epr-pop-l">Download</div>
+                {([
+                  ['PDF', 'Print or save as PDF', () => { setExpOpen(false); setTimeout(() => window.print(), 60); }, Printer],
+                  ['Word', '.doc — editable document', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.doc`, EX.toWord(r, t), 'application/msword'), FileText],
+                  ['Excel', '.xls — every table', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.xls`, EX.toExcel(r, t), 'application/vnd.ms-excel'), FileText],
+                  ['CSV', 'Every table, one file', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.csv`, EX.toCsv(r), 'text/csv;charset=utf-8'), FileText],
+                  ['HTML', 'Self-contained web page', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.html`, EX.toHtml(r, t), 'text/html'), FileText],
+                  ['Markdown', '.md — for Notion, GitHub', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.md`, EX.toMarkdown(r, t), 'text/markdown'), FileText],
+                  ['JSON', 'Raw data and commentary', (_r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.json`, JSON.stringify(saved, null, 2), 'application/json'), FileText],
+                ] as const).map(([label, sub, fn, I]) => <button key={label} className="epr-exp-i" onClick={() => runExport(label, fn)}><I size={14} /><span><b>{label}</b><em>{sub}</em></span></button>)}
+                <div className="epr-pop-l">Copy</div>
+                <button className="epr-exp-i" onClick={() => runExport('Copied — paste into Docs, Word or email', (r, t) => EX.copyRich(r, t), true)}><Copy size={14} /><span><b>Formatted</b><em>Rich text with tables</em></span></button>
+                <button className="epr-exp-i" onClick={() => runExport('Copied as Markdown', (r, t) => EX.copyText(EX.toMarkdown(r, t)), true)}><Copy size={14} /><span><b>Markdown</b><em>For Notion, Slack, GitHub</em></span></button>
+                <button className="epr-exp-i" onClick={() => runExport('Copied as plain text', (r, t) => EX.copyText(EX.toPlainText(r, t)), true)}><Copy size={14} /><span><b>Plain text</b><em>No formatting</em></span></button>
+                <button className="epr-exp-i" onClick={() => { void copyLink(); setExpMsg('Link copied'); }}><Link2 size={14} /><span><b>Link</b><em>Public read-only link</em></span></button>
+                {expMsg && <div className="epr-exp-msg"><Check size={13} />{expMsg}</div>}
+              </div>}
+            </div>
             <button className="epr-ibtn" onClick={copyLink} title="Copy the public link">{copied ? <Check size={15} /> : <Link2 size={15} />}</button>
             {!publicView && <button className="epr-ibtn" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={15} /></button>}
             <i className="epr-vsep" />

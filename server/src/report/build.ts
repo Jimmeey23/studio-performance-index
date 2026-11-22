@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { runMetricsQuery, type QueryResult } from '../semantic/engine.js';
+import { backendFilters } from './backendAccounts.js';
 import { metricById, modelById, DIMENSIONS } from '../semantic/metrics.js';
 import { executeTool } from '../ai/tools.js';
 import { planTopic, PlanSchema } from './topicPlanner.js';
@@ -170,13 +171,13 @@ async function trend(ctx: Ctx, title: string, metrics: string[], o: { chart?: Re
   return { id: uid('c'), title, chart: o.chart ?? 'bar', seriesBy: o.dimension, y: o.y ?? (o.compare ? [metrics[0], `${metrics[0]}__prev`] : metrics), result: r, wide: o.wide };
 }
 async function mix(ctx: Ctx, title: string, metric: string, dim: string, extra: Filter[] = []): Promise<ReportChart> {
-  const r = await runMetricsQuery({ metrics: [metric], dimensions: [dim], start: ctx.req.start, end: ctx.req.end, filters: [...filtersFor([metric], ctx.req, extra), { dimension: dim, op: 'not_in', values: ['(blank)'] }], sort: { by: metric, dir: 'desc' }, limit: 8 });
+  const r = await runMetricsQuery({ metrics: [metric], dimensions: [dim], start: ctx.req.start, end: ctx.req.end, filters: [...filtersFor([metric], ctx.req, extra), { dimension: dim, op: 'not_in', values: ['(blank)'] }, ...backendFilters([dim])] as never, sort: { by: metric, dir: 'desc' }, limit: 8 });
   r.title = title; ctx.results.push(r);
   return { id: uid('c'), title, chart: 'pie', result: r };
 }
 async function table(ctx: Ctx, title: string, metrics: string[], dims: string[], o: { limit?: number; sort?: string; dir?: 'asc' | 'desc'; extra?: Filter[]; post?: (rows: Record<string, unknown>[]) => Record<string, unknown>[]; compare?: boolean; note?: string } = {}): Promise<ReportTable> {
   const r = await runMetricsQuery({ metrics, dimensions: dims, start: ctx.req.start, end: ctx.req.end, compare: o.compare === false ? null : 'previous_period',
-    filters: [...filtersFor(metrics, ctx.req, o.extra), ...dims.filter((x) => !['location', 'format'].includes(x)).map((x) => ({ dimension: x, op: 'not_in' as const, values: ['(blank)'] }))],
+    filters: [...filtersFor(metrics, ctx.req, o.extra), ...dims.filter((x) => !['location', 'format'].includes(x)).map((x) => ({ dimension: x, op: 'not_in' as const, values: ['(blank)'] })), ...backendFilters(dims)] as never,
     sort: { by: o.sort ?? metrics[0], dir: o.dir ?? 'desc' }, limit: o.post ? 400 : o.limit ?? 10 });
   if (o.post) { r.rows = o.post(r.rows).slice(0, o.limit ?? 10); r.rowCount = r.rows.length; r.totals = undefined; }
   r.title = title; ctx.results.push(r);
