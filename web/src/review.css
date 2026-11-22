@@ -365,9 +365,9 @@
 .epr-back { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); transition: all .2s; }
 .epr-back:hover { color: var(--ink); border-color: var(--ink-3); transform: translateX(-2px); }
 .epr-tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.epr-tb { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; color: var(--ink-2); border: 1px solid transparent; transition: all .15s; }
-.epr-tb:hover { background: var(--surface-2); color: var(--ink); }
-.epr-tb.on { background: var(--ink); color: var(--bg); }
+.epr-tbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; color: var(--ink-2); border: 1px solid transparent; transition: all .15s; }
+.epr-tbtn:hover { background: var(--surface-2); color: var(--ink); }
+.epr-tbtn.on { background: var(--ink); color: var(--bg); }
 .epr-save { font-size: 11.5px; color: var(--ink-3); }
 .epr-save.saved { color: var(--epr-good); } .epr-save.error { color: var(--epr-bad); } .epr-save.saving { color: var(--accent); }
 .epr-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transform-origin: left; transition: transform .1s linear; }
@@ -643,3 +643,7 @@
 .epr-standalone .epr-insights ol { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .epr-standalone .epr-insights li, .epr-standalone .epr-insights li:first-child { padding: 18px 18px 18px 52px; border: 0; border-radius: 12px; background: var(--surface-2); font-size: var(--fs-small); line-height: 1.6; }
 .epr-standalone .epr-insights li::before, .epr-standalone .epr-insights li:first-child::before { left: 18px; top: 17px; font-family: var(--epr-serif); font-size: 18px; line-height: 1; color: var(--accent); }
+
+/* top & bottom card: controls stack above the list */
+.epr-tb { display: flex; flex-direction: column; }
+.epr-tb .epr-tb-ctrl { flex-direction: column; align-items: flex-start; }

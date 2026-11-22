@@ -548,11 +548,11 @@ function ReviewDoc() {
             <div className="epr-seg sm" title="Baseline used on every metric"><button className={clsx(base === 'prev' && 'on')} onClick={() => setBase('prev')}>vs prev</button><button className={clsx(base === 'ytd' && 'on')} onClick={() => setBase('ytd')}>vs YTD</button><button className={clsx(base === 'ly' && 'on')} onClick={() => setBase('ly')}>vs LY</button></div>
             <div className="epr-seg sm" title="Full report or executive brief (headlines, numbers and actions only)"><button className={clsx(!brief && 'on')} onClick={() => setBrief(false)}>Full</button><button className={clsx(brief && 'on')} onClick={() => setBrief(true)}>Brief</button></div>
             <div className="epr-seg sm" title="Text size"><button onClick={() => setScale((x) => Math.max(0.9, +(x - 0.05).toFixed(2)))}>A−</button><button onClick={() => setScale((x) => Math.min(1.2, +(x + 0.05).toFixed(2)))}>A+</button></div>
-            {isAdmin && <button className={clsx('epr-tb', editOn && 'on')} onClick={() => setEditOn((o) => !o)} title="Edit the report text in place — changes save automatically"><Pencil size={14} />{editOn ? 'Done' : 'Edit'}</button>}
+            {isAdmin && <button className={clsx('epr-tbtn', editOn && 'on')} onClick={() => setEditOn((o) => !o)} title="Edit the report text in place — changes save automatically"><Pencil size={14} />{editOn ? 'Done' : 'Edit'}</button>}
             {editOn && <span className={clsx('epr-save', saveState)}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Not saved' : 'Click any text to edit'}</span>}
-            <button className="epr-tb" onClick={() => window.print()} title="Print or save as PDF"><Printer size={14} /></button>
-            <button className="epr-tb" onClick={copyLink} title="Copy link">{copied ? <Check size={14} /> : <Link2 size={14} />}</button>
-            <button className="epr-tb" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={14} /></button>
+            <button className="epr-tbtn" onClick={() => window.print()} title="Print or save as PDF"><Printer size={14} /></button>
+            <button className="epr-tbtn" onClick={copyLink} title="Copy link">{copied ? <Check size={14} /> : <Link2 size={14} />}</button>
+            <button className="epr-tbtn" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={14} /></button>
           </div>}
         </div>
         {rv && <nav className="epr-nav" aria-label="Review sections"><div className="epr-nav-in">{nav.map((n, i) => {
