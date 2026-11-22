@@ -9,7 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, BookOpenText, ArrowLeft, ArrowRight, Pencil, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, MessageSquare, Pin, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -23,6 +23,11 @@ import { AdvancedTable } from '../components/blocks/AdvancedTable';
 import { CountUp, Sparkline } from '../components/Animated';
 import { useDrill, type DrillFilter } from '../lib/drill';
 import { TrainerAvatar } from '../lib/trainers';
+import { PinCtx } from '../lib/pin';
+import type { Block } from '../lib/types';
+import { BlockView } from '../components/blocks/Blocks';
+import Analyst from './Analyst';
+import { ChapterNotes, InkLayer, NotesCtx, NOTE_COLORS, PointerFx, PresenterBar, type ReviewNote, type Tool } from '../components/report/Presenter';
 import '../review.css';
 
 /* ── types (mirror server/src/report/review.ts) ── */
@@ -40,10 +45,27 @@ type Section = {
 };
 type Review = { id: string; generatedAt: string; request: { start: string; end: string; locations: string[] }; period: ReportPeriod; scope: string; cover: { photo: number; headlineKpis: Kpi[] };
   glance: { cards: Kpi[]; tables: Table[]; charts: Chart[]; lists: List[]; notes: Record<string, string> }; sections: Section[]; scorecard: Kpi[]; studios?: Table };
-type Rec = { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low' };
+type Rec = { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; timeline?: string; kpi?: string; impact?: string };
 type SectionAI = { title?: string; lead?: string; edited?: boolean; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: Rec[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
 type GlanceAI = { edited?: boolean; headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
-type AI = { glance?: GlanceAI; sections: Record<string, SectionAI> };
+type PinItem = { id: string; part: string; block: Block; at: string };
+type Extras = { pins: PinItem[]; notes: ReviewNote[] };
+type AI = { glance?: GlanceAI; sections: Record<string, SectionAI>; extras?: Partial<Extras> };
+/** Assistant results the user pinned into a chapter. */
+const PinsCtx = createContext<{ pins: PinItem[]; remove: (id: string) => void } | null>(null);
+function Pins({ part, n }: { part: string; n: string }) {
+  const c = useContext(PinsCtx); const mine = c?.pins.filter((p) => p.part === part) ?? [];
+  if (!c || !mine.length) return null;
+  return <>
+    <div className="epr-sub epr-rv in"><span>{n}</span><h3>Added from the assistant</h3><em>{mine.length} item{mine.length === 1 ? '' : 's'}</em></div>
+    <div className="epr-pins">{mine.map((p) => (
+      <div key={p.id} className="epr-pin">
+        <div className="epr-pin-h"><Pin size={12} /><span>Added {new Date(p.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span><button className="no-print" onClick={() => c.remove(p.id)} title="Remove from report"><Trash2 size={13} /></button></div>
+        <BlockView block={p.block} />
+      </div>
+    ))}</div>
+  </>;
+}
 type Saved = { review: Review; ai: AI; created_at: string; updated_at: string; reused?: boolean };
 type HistoryItem = { id: string; label: string; scope: string; created_at: string; updated_at: string; ai_parts: number };
 
@@ -322,7 +344,12 @@ function Recs({ recs, part }: { recs: Rec[]; part: string }) {
       <div className="epr-rec-top"><span className="epr-rec-n">{String(i + 1).padStart(2, '0')}</span><span className={clsx('pri', r.priority)}>{r.priority} priority</span></div>
       <Ed as="div" className="epr-rec-t" part={part} path={['recommendations', i, 'title']} value={r.title} />
       <Ed as="p" part={part} path={['recommendations', i, 'detail']} value={r.detail} />
-      <div className="epr-rec-o"><Target size={11} /><Ed part={part} path={['recommendations', i, 'owner']} value={r.owner} /></div>
+      <dl className="epr-rec-meta">
+        <div><dt>Owner</dt><dd><Ed part={part} path={['recommendations', i, 'owner']} value={r.owner} /></dd></div>
+        {r.timeline && <div><dt>When</dt><dd><Ed part={part} path={['recommendations', i, 'timeline']} value={r.timeline} /></dd></div>}
+        {r.kpi && <div className="w"><dt>Measure</dt><dd><Ed part={part} path={['recommendations', i, 'kpi']} value={r.kpi} /></dd></div>}
+        {r.impact && <div className="w"><dt>Impact</dt><dd><Ed part={part} path={['recommendations', i, 'impact']} value={r.impact} /></dd></div>}
+      </dl>
     </div>
   ))}</div>;
 }
@@ -452,6 +479,15 @@ function ReviewDoc() {
   const [scale, setScale] = useState(() => { try { return Number(localStorage.getItem('epr-scale')) || 1; } catch { return 1; } });
   const [progress, setProgress] = useState(0);
   const [startedAt] = useState(Date.now());
+  const [askOpen, setAskOpen] = useState(false);
+  const [tool, setTool] = useState<Tool>('none');
+  const [ink, setInk] = useState('#e11d48');
+  const [clearK, setClearK] = useState(0); const [undoK, setUndoK] = useState(0);
+  const [present, setPresent] = useState(false); const [pbar, setPbar] = useState(false);
+  const [pinBlock, setPinBlock] = useState<Block | null>(null);
+  const [extras, setExtras] = useState<Extras>({ pins: [], notes: [] });
+  const rootRef = useRef<HTMLDivElement>(null); const mainRef = useRef<HTMLDivElement>(null);
+  const exTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const revealRef = useReveal();
   const started = useRef<Set<string>>(new Set());
@@ -464,6 +500,24 @@ function ReviewDoc() {
     api<Saved>(`/api/review/${reviewId}`).then(setSaved).catch((e) => setErr((e as Error).message)).finally(() => setLoading(false));
   }, [reviewId]);
   useEffect(() => { try { localStorage.setItem('epr-scale', String(scale)); } catch { /* */ } }, [scale]);
+  const loadedExtras = useRef<string | null>(null);
+  useEffect(() => { if (saved && loadedExtras.current !== saved.review.id) { loadedExtras.current = saved.review.id; setExtras({ pins: (saved.ai.extras?.pins ?? []) as PinItem[], notes: (saved.ai.extras?.notes ?? []) as ReviewNote[] }); } }, [saved]);
+  const saveExtras = (next: Extras) => {
+    setExtras(next);
+    if (exTimer.current) clearTimeout(exTimer.current);
+    exTimer.current = setTimeout(() => { if (saved) api(`/api/review/${saved.review.id}/extras`, { method: 'PUT', json: { extras: next } }).catch((e) => setErr(`Could not save: ${(e as Error).message}`)); }, 500);
+  };
+  const addPin = (part: string) => { if (!pinBlock) return; saveExtras({ ...extras, pins: [...extras.pins, { id: `p${Date.now().toString(36)}`, part, block: pinBlock, at: new Date().toISOString() }] }); setPinBlock(null); setTimeout(() => document.getElementById(`epr-${part}`)?.querySelector('.epr-pins')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200); };
+  const notesApi = { notes: extras.notes, update: (id: string, patch: Partial<ReviewNote>) => saveExtras({ ...extras, notes: extras.notes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }), remove: (id: string) => saveExtras({ ...extras, notes: extras.notes.filter((n) => n.id !== id) }) };
+  const placeNote = (e: React.MouseEvent) => {
+    if (tool !== 'note') return;
+    const sec = (e.target as HTMLElement).closest('[data-spy]') as HTMLElement | null; if (!sec || (e.target as HTMLElement).closest('.epr-sticky')) return;
+    const r = sec.getBoundingClientRect();
+    saveExtras({ ...extras, notes: [...extras.notes, { id: `n${Date.now().toString(36)}`, sec: sec.id.replace('epr-', ''), x: Math.min(0.85, (e.clientX - r.left) / r.width), y: (e.clientY - r.top) / r.height, text: '', color: NOTE_COLORS[0], by: me?.name, at: new Date().toISOString() }] });
+    setTool('none');
+  };
+  const togglePresent = () => { if (!document.fullscreenElement) { rootRef.current?.requestFullscreen?.().catch(() => {}); setPresent(true); setPbar(true); } else { document.exitFullscreen?.(); } };
+  useEffect(() => { const h = () => { if (!document.fullscreenElement) setPresent(false); }; document.addEventListener('fullscreenchange', h); return () => document.removeEventListener('fullscreenchange', h); }, []);
 
   const writePart = useCallback(async (id: string, part: string, again = false) => {
     setBusy((b) => new Set(b).add(part));
@@ -518,10 +572,19 @@ function ReviewDoc() {
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement; if (t.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(t.tagName) || e.metaKey || e.ctrlKey) return;
       const ids = nav.map((n) => n.id).filter((id) => document.getElementById(`epr-${id}`)); const i = ids.indexOf(active);
-      if (e.key === 'j') jump(ids[Math.min(ids.length - 1, i + 1)]); else if (e.key === 'k') jump(ids[Math.max(0, i - 1)]);
+      const k = e.key;
+      if (k === 'j' || (present && (k === 'ArrowRight' || k === 'PageDown'))) { e.preventDefault(); jump(ids[Math.min(ids.length - 1, i + 1)]); }
+      else if (k === 'k' || (present && (k === 'ArrowLeft' || k === 'PageUp'))) { e.preventDefault(); jump(ids[Math.max(0, i - 1)]); }
+      else if (k === 'Escape') setTool('none');
+      else if (k === 'f') togglePresent();
+      else if (k === '/') { e.preventDefault(); setAskOpen(true); }
+      else if (k === '?') setPbar(true);
+      else if (k === 'u') setUndoK((x) => x + 1);
+      else if (k === 'c') setClearK((x) => x + 1);
+      else { const t = ({ l: 'laser', s: 'spot', p: 'pen', h: 'hl', n: 'note' } as Record<string, Tool>)[k]; if (t) { setPbar(true); setTool((cur) => (cur === t ? 'none' : t)); } }
     };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
-  }, [nav, active]);
+  }, [nav, active, present]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDrill = useDrill();
   const drillApi: DrillApi | null = rv && P && openDrill ? (() => {
@@ -561,7 +624,8 @@ function ReviewDoc() {
 
   return (
     <REdit.Provider value={editApi}>
-    <div className={clsx('epr epr-standalone flex h-full flex-col', brief && 'brief', editApi.on && 'editing')} style={{ ['--epr-scale' as string]: scale }}>
+    <PinCtx.Provider value={setPinBlock}><NotesCtx.Provider value={notesApi}><PinsCtx.Provider value={{ pins: extras.pins, remove: (id) => saveExtras({ ...extras, pins: extras.pins.filter((p) => p.id !== id) }) }}>
+    <div ref={rootRef} className={clsx('epr epr-standalone flex h-full flex-col', brief && 'brief', editApi.on && 'editing', present && 'presenting', tool !== 'none' && `tool-${tool}`)} style={{ ['--epr-scale' as string]: scale }}>
       <div className="epr-bar no-print">
         <div className="epr-bar-in">
           <button className="epr-back" onClick={() => navigate('/review')} title="Back to the app"><ArrowLeft size={15} /><span>Back to app</span></button>
@@ -575,6 +639,8 @@ function ReviewDoc() {
             <button className="epr-tbtn" onClick={() => window.print()} title="Print or save as PDF"><Printer size={14} /></button>
             <button className="epr-tbtn" onClick={copyLink} title="Copy link">{copied ? <Check size={14} /> : <Link2 size={14} />}</button>
             <button className="epr-tbtn" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={14} /></button>
+            <button className={clsx('epr-tbtn', pbar && 'on')} onClick={() => setPbar((x) => !x)} title="Presenter tools — laser, spotlight, pen, notes, timer"><PenLine size={14} /></button>
+            <button className={clsx('epr-ask', askOpen && 'on')} onClick={() => setAskOpen((x) => !x)} title="Ask the assistant about this report ( / )"><MessageSquare size={14} />Ask AI</button>
           </div>}
         </div>
         {rv && <nav className="epr-nav" aria-label="Review sections"><div className="epr-nav-in">{nav.map((n, i) => {
@@ -586,8 +652,10 @@ function ReviewDoc() {
         {err && <div className="epr-err"><AlertTriangle size={14} />{err}<button onClick={() => setErr(null)}><X size={13} /></button></div>}
       </div>
 
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-        <div ref={revealRef} className="epr-wrap">
+      <div className="flex min-h-0 flex-1">
+      <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
+          <InkLayer host={mainRef} tool={tool} color={ink} clearKey={clearK} undoKey={undoK} />
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
             <RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
@@ -603,7 +671,32 @@ function ReviewDoc() {
           )}
         </div>
       </div>
+      {askOpen && rv && (
+        <aside className="epr-askp no-print">
+          <div className="epr-askp-h"><Sparkles size={14} /><b>Ask about this report</b><button onClick={() => setAskOpen(false)} title="Close"><X size={15} /></button></div>
+          <div className="min-h-0 flex-1"><Analyst embedded onConversationsChange={() => {}} reviewId={rv.id}
+            intro="Ask anything about this review or any other data. Ask it to build a table, chart, comparison or summary — then add it to any chapter."
+            prompts={['What are the three biggest risks in this review, and what should we do first?', 'Build a table of every trainer with class average, fill rate, new clients and conversion, ranked.', 'Compare this period with the same month last year across all headline metrics, as a table.', 'Chart weekly visits for the last 6 months by format.']} /></div>
+        </aside>
+      )}
+      </div>
+      <PointerFx tool={tool} />
+      <PresenterBar tool={tool} setTool={setTool} color={ink} setColor={setInk} onClear={() => setClearK((x) => x + 1)} onUndo={() => setUndoK((x) => x + 1)} present={present} togglePresent={togglePresent} open={pbar} setOpen={setPbar} />
+      {pinBlock && rv && (
+        <div className="epr-modal no-print" onClick={() => setPinBlock(null)}>
+          <div className="epr-modal-c" onClick={(e) => e.stopPropagation()}>
+            <div className="epr-modal-h"><Pin size={15} /><b>Add to which chapter?</b><button onClick={() => setPinBlock(null)}><X size={15} /></button></div>
+            <p className="epr-small">“{pinBlock.title ?? pinBlock.result?.title ?? 'Assistant result'}” will appear in the chapter under “Added from the assistant” and is saved with this review.</p>
+            <div className="epr-modal-list">
+              <button onClick={() => addPin('glance')}><span>01</span>At a glance</button>
+              {rv.sections.map((x, i) => <button key={x.id} onClick={() => addPin(x.id)}><span>{String(i + 2).padStart(2, '0')}</span>{ai?.sections[x.id]?.title ?? x.title}</button>)}
+              <button onClick={() => addPin('closing')}><span>{String(rv.sections.length + 2).padStart(2, '0')}</span>Summary & action plan</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </PinsCtx.Provider></NotesCtx.Provider></PinCtx.Provider>
     </REdit.Provider>
   );
 }
@@ -668,6 +761,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
         );
       })}</div>
       {!!gl?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{gl.watch.map((w, i) => <li key={i}><Ed part="glance" path={['watch', i]} value={w} /></li>)}</ul></div></div>}
+      <ChapterNotes sec="glance" />
       <div className="epr-detail"><Sub n="1.4" title="In detail" /></div>
       <div className="epr-detail epr-grid-2">{rv.glance.charts.slice(0, 2).map((c, i) => <ChartCard key={c.id} c={c} i={i} part="glance" note={gl?.notes[c.id] ?? rv.glance.notes[c.id]} />)}</div>
       <div className="epr-detail epr-grid-2">
@@ -677,6 +771,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
       {rv.scorecard?.length > 0 && <div className="epr-detail"><Scorecard kpis={rv.scorecard} P={P} /></div>}
       <div className="epr-detail epr-grid-1">{rv.glance.tables.slice(0, 4).map((t) => <TableCard key={t.id} t={t} part="glance" note={gl?.notes[t.id] ?? rv.glance.notes[t.id]} />)}</div>
       {rv.studios && rv.studios.result.rows.length > 1 && <div className="epr-detail"><TableCard t={{ ...rv.studios, title: rv.studios.title || 'Studio comparison' }} part="glance" note={rv.studios.note} /></div>}
+      <Pins part="glance" n="1.+" />
     </section>
   );
 }
@@ -784,6 +879,8 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
       {s.charts.length > 0 && <div className={clsx('epr-detail', s.charts.length === 1 ? 'epr-grid-1' : 'epr-grid-2')}>{s.charts.map((c, i) => <ChartCard key={c.id} c={c} i={i} part={s.id} note={note(c.id)} loading={busy} />)}</div>}
       {s.tables.length > 0 && <div className="epr-detail epr-grid-1">{s.tables.map((t) => <TableCard key={t.id} t={t} part={s.id} note={note(t.id)} loading={busy} />)}</div>}
 
+      <Pins part={s.id} n={`${n}.+`} />
+      <ChapterNotes sec={s.id} />
       <Sub n={`${n}.${hasFeature || s.charts.length || s.tables.length ? 4 : 3}`} title="Findings & actions" />
       <div className="epr-close">
         <div className="epr-close-col epr-rv"><div className="epr-analysis-h"><Flag size={13} /><span>Key findings</span></div>{ai ? <ol className="epr-find">{ai.findings.map((x, i) => <li key={i}><span>{String(i + 1).padStart(2, '0')}</span><Ed as="p" part={s.id} path={['findings', i]} value={x} /></li>)}</ol> : <Shimmer lines={5} />}</div>
@@ -812,16 +909,18 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
         return <li key={s.id} className="epr-rv" {...clickable(() => jump(s.id))}><span>{String(i + 2).padStart(2, '0')}</span><b>{ai?.sections[s.id]?.title ?? s.title}</b><p>{h}</p></li>;
       })}</ol>
       {!!ai?.glance?.watch?.length && <div className="epr-watch epr-rv"><AlertTriangle size={15} /><div><b>Watch-outs</b><ul>{ai.glance.watch.map((w, i) => <li key={i}>{w}</li>)}</ul></div></div>}
+      <ChapterNotes sec="closing" />
+      <Pins part="closing" n={`${n}.+`} />
       <Sub n={`${n}.2`} title="Action plan" note={`${recs.length} actions · ${recs.filter((r) => r.priority === 'high').length} high priority`} />
       {owners.length > 1 && <div className="epr-seg sm epr-plan-f">{['all', ...owners].map((o) => <button key={o} className={clsx(owner === o && 'on')} onClick={() => setOwner(o)}>{o === 'all' ? 'All owners' : o}</button>)}</div>}
       <div className="epr-plan-wrap"><table className="epr-plan">
-        <thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Timeline</th><th>Priority</th><th>Chapter</th></tr></thead>
+        <thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Timeline & measure</th><th>Priority</th><th>Chapter</th></tr></thead>
         <tbody>{shown.map((r, i) => (
           <tr key={i} className="epr-rv">
             <td className="n">{String(i + 1).padStart(2, '0')}</td>
             <td><b>{r.title}</b><p>{r.detail}</p></td>
             <td className="o">{r.owner}</td>
-            <td className="w">{WHEN[r.priority]}</td>
+            <td className="w">{r.timeline || WHEN[r.priority]}{r.kpi && <em className="epr-plan-kpi">{r.kpi}</em>}</td>
             <td><span className={clsx('epr-pri', r.priority)}>{r.priority}</span></td>
             <td><button className="epr-plan-ch" onClick={() => jump(r.sid)}>{r.chapter} <ArrowRight size={11} /></button></td>
           </tr>

@@ -2,9 +2,10 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import clsx from 'clsx';
-import { AlertTriangle, BookmarkPlus, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Copy, XCircle, Cpu, CalendarRange, MapPin, GitCompare, Brain, ListChecks, Circle, MinusCircle } from 'lucide-react';
+import { AlertTriangle, BookmarkPlus, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Copy, XCircle, Cpu, CalendarRange, MapPin, GitCompare, Brain, ListChecks, Circle, MinusCircle, Plus } from 'lucide-react';
 import { Logo } from './Animated';
 import type { Message } from '../lib/types';
+import { usePin } from '../lib/pin';
 import { BlockView } from './blocks/Blocks';
 import { api } from '../lib/api';
 
@@ -53,6 +54,7 @@ function PlanCard({ plan, pending }: { plan: NonNullable<Message['plan']>; pendi
 }
 
 export function MessageView({ m, onSaved }: { m: Message; onSaved?: () => void }) {
+  const pin = usePin();
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   if (m.role === 'user') {
@@ -98,7 +100,8 @@ export function MessageView({ m, onSaved }: { m: Message; onSaved?: () => void }
         const details = (m.blocks ?? []).filter((b) => b.type === 'details');
         const fus = (m.blocks ?? []).filter((b) => b.type === 'followups');
         return <>
-          {!!main.length && <div className="mt-4 space-y-4">{main.map((b) => <BlockView key={b.id} block={b} />)}</div>}
+          {pin && !m.pending && m.role === 'assistant' && !!m.text?.trim() && <button onClick={() => pin({ id: `t_${m.id}`, type: 'insights', title: 'From the assistant', items: [{ kind: 'observation', title: m.text.trim().split(/\n/)[0].replace(/[#*_`]/g, '').slice(0, 120), detail: m.text.trim().replace(/[#*_`]/g, '') }] })} className="chip mt-3 !h-7 hover:border-accent hover:text-accent" title="Add this written answer to a chapter"><Plus size={12} />Add answer to report</button>}
+          {!!main.length && <div className="mt-4 space-y-4">{main.map((b) => <div key={b.id} className="relative">{pin && !m.pending && b.type !== 'clarify' && <button onClick={() => pin(b)} className="chip mb-2 !h-7 hover:border-accent hover:text-accent" title="Add this to a chapter of the report"><Plus size={12} />Add to report</button>}<BlockView block={b} /></div>)}</div>}
           {!m.pending && !!details.length && <div className="mt-4 space-y-4">{details.map((b) => <BlockView key={b.id} block={b} />)}</div>}
           {!m.pending && !!fus.length && <div className="mt-5">{fus.slice(-1).map((b) => <BlockView key={b.id} block={b} />)}</div>}
         </>;

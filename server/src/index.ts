@@ -20,7 +20,7 @@ import { buildDashboard } from './ai/dashboard.js';
 import { buildReport, getReport, ReportRequestSchema, TOPICS } from './report/build.js';
 import * as reportStore from './report/store.js';
 import { generateInsights, rulesInsights } from './report/insights.js';
-import { buildReview, writeGlance, writeSection, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
+import { buildReview, writeGlance, writeSection, reviewContext, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
@@ -83,8 +83,10 @@ app.post('/api/chat', async (req, res) => {
   const emit = (e: StreamEvent) => res.write(`data: ${JSON.stringify(e)}\n\n`);
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
   try {
+    let context: string | undefined;
+    if (typeof req.body.reviewId === 'string') { const sv = await reviewStore.byId(req.user!.id, req.body.reviewId); if (sv) context = reviewContext(sv.review, sv.ai); }
     await answer({ conversationId: req.body.conversationId, userId: req.user!.id, question: String(req.body.question ?? '').slice(0, 4000), emit,
-      controls: req.body.controls, domain: req.body.domain && domainById.has(req.body.domain) ? req.body.domain : undefined });
+      controls: req.body.controls, domain: req.body.domain && domainById.has(req.body.domain) ? req.body.domain : undefined, context });
   } catch (e) { emit({ type: 'error', message: (e as Error).message }); }
   clearInterval(ping);
   res.end();
@@ -242,6 +244,18 @@ app.get('/api/review/:id', wrap(async (req, res) => {
 app.delete('/api/review/:id', wrap(async (req, res) => { await reviewStore.remove(req.user!.id, String(req.params.id)); res.json({ ok: true }); }));
 /** AI commentary per part ('glance' or a section id): written once and reused; `fresh` rewrites that part only. */
 const reviewLocks = new Map<string, Promise<unknown>>();
+/** Pins (assistant results added to chapters) and annotations — owned by the review's user. */
+app.put('/api/review/:id/extras', wrap(async (req, res) => {
+  const uid = req.user!.id; const id = String(req.params.id); const ex = req.body?.extras;
+  if (!ex || typeof ex !== 'object' || JSON.stringify(ex).length > 2_000_000) return res.status(400).json({ error: 'extras required (max 2 MB)' });
+  const run = (reviewLocks.get(id) ?? Promise.resolve()).then(async () => {
+    const cur = await reviewStore.byId(uid, id); if (!cur) return false;
+    await reviewStore.saveAi(id, { ...cur.ai, sections: cur.ai.sections ?? {}, extras: { pins: Array.isArray(ex.pins) ? ex.pins : [], notes: Array.isArray(ex.notes) ? ex.notes : [] } }); return true;
+  });
+  reviewLocks.set(id, run.catch(() => {}));
+  if (!(await run)) return res.status(404).json({ error: 'Review not found' });
+  res.json({ ok: true });
+}));
 /** Admin inline edits: replace one AI part (glance or a section) with the edited content. */
 app.put('/api/review/:id/ai/:part', adminOnly, wrap(async (req, res) => {
   const uid = req.user!.id; const id = String(req.params.id); const part = String(req.params.part);
