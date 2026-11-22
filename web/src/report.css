@@ -240,7 +240,7 @@
   .rp-measure, .rp-wait { display: none !important; }
   @page landscape { size: A4 landscape; margin: 0; }
   html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
-  #root { display: none !important; }
+  body:has(#print-host) #root { display: none !important; }
   #print-host { position: static !important; left: auto !important; display: block !important; width: 210mm !important; }
   #print-host .report-paper { display: block !important; gap: 0 !important; }
   .a4 { box-shadow: none !important; border-radius: 0 !important; break-after: page; page-break-after: always; margin: 0 !important; }

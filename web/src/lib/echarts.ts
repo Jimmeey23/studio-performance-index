@@ -4,10 +4,10 @@ import { BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, FunnelChart 
 import {
   GridComponent, TooltipComponent, LegendComponent, ToolboxComponent, DataZoomComponent, MarkLineComponent, MarkAreaComponent, VisualMapComponent, TitleComponent, DatasetComponent,
 } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { CanvasRenderer, SVGRenderer } from 'echarts/renderers';
 
 echarts.use([BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, FunnelChart, GridComponent, TooltipComponent, LegendComponent, ToolboxComponent,
-  DataZoomComponent, MarkLineComponent, MarkAreaComponent, VisualMapComponent, TitleComponent, DatasetComponent, CanvasRenderer]);
+  DataZoomComponent, MarkLineComponent, MarkAreaComponent, VisualMapComponent, TitleComponent, DatasetComponent, CanvasRenderer, SVGRenderer]);
 export { echarts };
 
 export interface ThemeColors { series: string[]; ink: string; ink2: string; ink3: string; line: string; grid: string; surface: string; surface2: string; accent: string; good: string; bad: string; dark: boolean }
@@ -39,3 +39,7 @@ export const LIGHT_THEME: ThemeColors = {
   ink: '#101114', ink2: '#4a4a50', ink3: '#8b8a90', line: '#e6e4de', grid: '#ebeae6', surface: '#ffffff', surface2: '#f4f3ef',
   accent: '#4f56d9', good: '#0a7d0a', bad: '#c43232', dark: false,
 };
+
+/** Server-side PDF render (?pdf=1): vector SVG charts so text stays text. */
+export const IS_PDF = typeof location !== 'undefined' && new URLSearchParams(location.search).has('pdf');
+export const chartOpts = { renderer: (IS_PDF ? 'svg' : 'canvas') as 'svg' | 'canvas' };

@@ -1310,3 +1310,23 @@
   .epr .epr-analysis .epr-insights { grid-template-columns: 180px minmax(0, 1fr) !important; gap: 40px !important; }
   .epr .epr-insights > .epr-analysis-h { padding-top: 4px; }
 }
+
+/* ── server PDF / print: clean document, text stays text ── */
+@media print {
+  @page { size: A4; margin: 12mm 10mm 16mm; }
+  html, body, #root { height: auto !important; overflow: visible !important; background: #fff !important; }
+  .epr, .epr-standalone { height: auto !important; display: block !important; overflow: visible !important; }
+  .epr-scroll, .epr-body, .epr-wrap, main { height: auto !important; overflow: visible !important; }
+  .epr-rail2, .epr-rail, .epr-progress, .epr-bar, .epr-vid, .epr-audio, .epr-sh-act, .epr-sticky2, .epr-sticky-dot, .epr-notesp, .epr-pbar2, .epr-savechip, .epr-classx, .epr-tch-more, .epr-hero-art, .epr-hero-bg, [class*="epr-exp"] { display: none !important; }
+  .epr-standalone .epr-wrap { max-width: none !important; padding: 0 !important; }
+  .epr *, .epr *::before, .epr *::after { animation: none !important; transition: none !important; }
+  .epr-hero { box-shadow: none !important; break-inside: avoid; }
+  .epr-hero-stats > div, .epr-insights li, .epr-tch-row, .epr-disc-g > div { break-inside: avoid; backdrop-filter: none !important; }
+  .epr-table table tr, .epr-tf tr { break-inside: avoid; }
+  .epr-card-h, .epr-sub, h2, h3 { break-after: avoid; }
+  .epr-table [class*="pagination"], .epr-table select { display: none !important; }
+}
+@media print {
+  .epr-table :is(input, select, button), .epr-table [role="toolbar"], .epr-card-h button, .epr-tb-tabs, .epr-chart-tools { display: none !important; }
+  .epr-table > div > div:first-child:has(input) { display: none !important; }
+}
