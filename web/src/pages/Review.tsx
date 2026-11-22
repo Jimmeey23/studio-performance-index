@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
+import { ClassExplorer } from '../components/ClassExplorer';
 import { fmt } from '../lib/format';
 import type { Format, Result } from '../lib/types';
 import { PRESETS, lastMonthValue, range } from '../lib/periods';
@@ -790,7 +791,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
         return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')} aria-current={active === n.id ? 'true' : undefined}>
           <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{RAIL_SHORT[n.id] ?? n.title}</span></button>;
-      })}<div className="epr-rail2-p"><i style={{ height: `${progress * 100}%` }} /></div><RailSlides /></nav>}
+      })}<RailSlides /></nav>}
       <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
@@ -799,7 +800,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
-                {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} n={i + 2} total={rv.sections.length + 2} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
+                {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} req={publicView ? undefined : rv.request} n={i + 2} total={rv.sections.length + 2} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
                 {building && <BuildConsole steps={steps} hints={hints} started={startedAt} />}
                 {!building && <Closing rv={rv} ai={ai} P={P} jump={jump} />}
                 {!building && !!saved?.definitions?.length && <Definitions defs={saved.definitions} />}
@@ -850,7 +851,7 @@ function Cover({ rv, gl, P, live, jump, drill }: { rv: Review; gl?: GlanceAI; P:
   return (
     <section id="epr-cover" data-spy className={clsx('epr-cover epr-build-in', live && 'live')}>
       <div className="epr-cover-l">
-        <div className="epr-cover-top"><img src={BRAND.logoOnDark} alt="Physique 57" /><span className="epr-cover-conf">Confidential</span></div>
+        <div className="epr-cover-top"><span className="p57-logo-anim"><img src={BRAND.logoOnDark} alt="Physique 57" /></span><span className="epr-cover-conf">Confidential</span></div>
         <div className="epr-cover-mid">
           <div className="epr-cover-eyebrow">Executive Performance Review · {P.label}</div>
           <div className="epr-cover-rule" />
@@ -884,7 +885,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
   const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
+      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={[...rv.glance.cards, ...rv.scorecard.filter((k) => !rv.glance.cards.some((c) => c.id === k.id))]} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
       <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
@@ -947,6 +948,38 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
   );
 }
 
+/** Hero card count: a full 10-card grid (2 × 5) when there are enough metrics, else a 6-card row. */
+const heroPick = (k: Kpi[]) => (k.length >= 10 ? k.slice(0, 10) : k.slice(0, 6));
+function HeroSpark({ values, tone: t }: { values?: (number | null)[]; tone: number }) {
+  const v = (values ?? []).filter((x): x is number => x !== null && isFinite(x)); if (v.length < 2) return <svg className="epr-hspark" />;
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1; const W = 100, H = 24;
+  const pts = v.map((x, i) => `${(i / (v.length - 1)) * W},${H - 2 - ((x - lo) / r) * (H - 4)}`);
+  const c = t > 0 ? 'var(--epr-good)' : t < 0 ? 'var(--epr-bad)' : 'var(--accent)';
+  return <svg className="epr-hspark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden><polygon points={`0,${H} ${pts.join(' ')} ${W},${H}`} fill={c} opacity=".12" /><polyline points={pts.join(' ')} fill="none" stroke={c} strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>;
+}
+/** Chapter hero graphic: momentum ring (share of metrics improving) + trend of the lead metric. */
+function HeroGraphic({ kpis }: { kpis: Kpi[] }) {
+  const B = useChg();
+  const scored = kpis.filter((k) => B.chg(k) !== null && k.higherIsBetter !== undefined);
+  const up = scored.filter((k) => tone(k, B.chg(k)) > 0).length; const down = scored.filter((k) => tone(k, B.chg(k)) < 0).length;
+  const share = scored.length ? up / scored.length : 0; const C = 2 * Math.PI * 30;
+  const lead = kpis.find((k) => (k.series ?? []).filter((x) => x !== null).length >= 3) ?? kpis[0];
+  const v = (lead.series ?? []).filter((x): x is number => x !== null && isFinite(x));
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1; const W = 360, H = 84;
+  const pts = v.map((x, i) => [(i / Math.max(1, v.length - 1)) * W, H - 6 - ((x - lo) / r) * (H - 16)] as const);
+  return (
+    <div className="epr-hero-gfx" aria-hidden>
+      <div className="ring"><svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="30" className="trk" /><circle cx="36" cy="36" r="30" className="val" strokeDasharray={`${share * C} ${C}`} transform="rotate(-90 36 36)" /></svg>
+        <div><b>{up}<i>/{scored.length}</i></b><span>improving</span></div></div>
+      <div className="ring-l"><span><i className="g" />{up} up</span><span><i className="b" />{down} down</span><span><i />{scored.length - up - down} flat</span></div>
+      {v.length >= 2 && <div className="trend"><div className="trend-h">{lead.label}<em>trend</em></div>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"><defs><linearGradient id="epr-hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity=".35" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>
+          <polygon points={`0,${H} ${pts.map((p) => p.join(',')).join(' ')} ${W},${H}`} fill="url(#epr-hg)" />
+          <polyline className="ln" points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          {pts.length > 0 && <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="4" fill="var(--accent)" className="pulse" />}</svg></div>}
+    </div>
+  );
+}
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
 function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak, vid }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string; vid?: string }) {
   const d = useRD(); const B = useChg();
@@ -967,9 +1000,10 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         </div>
       </div>
       {headline && <div className="epr-hero-quote">{headline}</div>}
-      {stats.length > 0 && <div className="epr-hero-stats">{stats.slice(0, 3).map((k) => { const t = tone(k, B.chg(k)); return (
-        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em></div>
-      ); })}</div>}
+      {stats.length > 0 && <HeroGraphic kpis={stats} />}
+      {stats.length > 0 && (() => { const list = heroPick(stats); return <div className="epr-hero-stats" style={{ ['--hc' as string]: list.length >= 10 ? 5 : Math.min(6, list.length) }}>{list.map((k) => { const t = tone(k, B.chg(k)); return (
+        <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em><HeroSpark values={k.series} tone={t} /></div>
+      ); })}</div>; })()}
     </header>
   );
 }
@@ -985,7 +1019,7 @@ function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; mo
   );
 }
 
-function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewrite }: { n: number; total: number; s: Section; ai?: SectionAI; live: boolean; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
+function ReviewSectionView({ req, n, total, s, ai, live, busy, base, P, canAi, onRewrite }: { req?: Review['request']; n: number; total: number; s: Section; ai?: SectionAI; live: boolean; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
   const note = (id: string) => ai?.notes?.[id] ?? s.notes[id];
   const d = useRD(); const ed = useEdit(); const B = useChg();
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
@@ -999,6 +1033,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
       <Analysis part={s.id} ai={ai} live={live} label="Chapter summary" fallback={s.ruleFindings.slice(0, 3)} />
       <Sub n={`${n}.2`} full title="The numbers" note="Click any number for the records behind it" />
       <KpiGrid kpis={s.kpis} base={base} P={P} />
+      {s.id === 'classes' && req && <div className="epr-full epr-classx no-print"><Sub n={`${n}.2b`} title="Class performance explorer" note="Rank every class by any grouping, criterion and filter — live" /><ClassExplorer start={req.start} end={req.end} locations={req.locations} /></div>}
       {(hasFeature || s.charts.length > 0 || s.tables.length > 0) && <div className="epr-detail"><Sub n={`${n}.3`} title="In detail" /></div>}
 
       {hasFeature && <div className="epr-detail epr-feature">

@@ -18,10 +18,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           <Logo size={42} />
           <div><div className="font-semibold">Physique 57 India</div><div className="text-xs text-ink-3">Business Intelligence</div></div>
         </div>
-        <label className="block text-xs font-medium text-ink-2">Email</label>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoFocus className="mt-1 h-10 w-full rounded-lg border border-line bg-bg px-3 text-sm outline-none focus:border-accent" />
+        <label className="block text-xs font-medium text-ink-2">Official email</label>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" placeholder="name@physique57india.com" autoFocus className="mt-1 h-10 w-full rounded-lg border border-line bg-bg px-3 text-sm outline-none focus:border-accent" />
         <label className="mt-4 block text-xs font-medium text-ink-2">Password</label>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="mt-1 h-10 w-full rounded-lg border border-line bg-bg px-3 text-sm outline-none focus:border-accent" />
+        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" className="mt-1 h-10 w-full rounded-lg border border-line bg-bg px-3 text-sm outline-none focus:border-accent" />
         {error && <div className="mt-3 text-sm text-bad">{error}</div>}
         <button disabled={busy} className="mt-6 h-10 w-full rounded-lg bg-ink text-sm font-medium text-bg disabled:opacity-50">{busy ? 'Signing in…' : 'Sign in'}</button>
       </form>

@@ -139,9 +139,19 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const [attX, funX, clsX, trSc, fmX, prods] = await Promise.all([attendanceExtras(req), funnelExtras(req), classExtras(req), trainerScorecard(req), formatComparison(req), productList(req)]);
   const S = { sales: sec(report, 'sales'), nc: sec(report, 'new_clients'), leads: sec(report, 'leads'), tr: sec(report, 'trainers'), cl: sec(report, 'classes'), fm: sec(report, 'formats'), ch: sec(report, 'churn'), late: sec(report, 'late'), st: sec(report, 'studios') };
   const sections: ReviewSection[] = [];
+  const SC = { kpis: report.scorecard };
+  const POOL: Partial<Record<ReviewSectionId, ({ kpis: Kpi[] } | undefined)[]>> = {
+    sales: [S.sales, SC], attendance: [S.cl, S.late, S.sales], funnel: [S.leads, S.nc], classes: [S.cl, S.late],
+    trainers: [S.tr, S.cl], formats: [S.fm, S.cl], churn: [S.ch, S.nc],
+  };
   let n = 0;
-  const push = (id: ReviewSectionId, x: Omit<ReviewSection, 'id' | 'title' | 'icon' | 'lead' | 'kicker' | 'notes' | 'ruleFindings'>, extraFind: string[] = []) => {
+  const push = (id: ReviewSectionId, x0: Omit<ReviewSection, 'id' | 'title' | 'icon' | 'lead' | 'kicker' | 'notes' | 'ruleFindings'>, extraFind: string[] = []) => {
+    let x = x0;
     const meta = REVIEW_SECTIONS.find((m) => m.id === id)!;
+    // hero shows a full 10-card grid: top up with related metrics from the same areas of the report
+    const seen = new Set(x.kpis.map((k) => k.id));
+    const extra = (POOL[id] ?? []).flatMap((p) => p?.kpis ?? []).filter((k) => k.value !== null && !seen.has(k.id) && seen.add(k.id));
+    x = { ...x, kpis: [...x.kpis, ...extra].slice(0, Math.max(10, x.kpis.length)) };
     sections.push({ ...meta, kicker: `Section ${String(++n).padStart(2, '0')}`, ...x, notes: notesFor(x.charts, x.tables), ruleFindings: [...kpiFindings(x.kpis, P), ...extraFind].slice(0, 6) });
   };
 

@@ -346,3 +346,16 @@ body { background:
 .dz-cell.small .kpi-card .text-\[28px\], .dz-cell.small .kpi-card [class*="text-[30px]"] { font-size: 22px; }
 .dz-page .panel { box-shadow: none; }
 @media print { body.dz-printing .dz-page button, body.dz-printing .dz-page select, body.dz-printing .dz-page input { display: none !important; } }
+
+/* Looping brand-mark animation: breathing tile, flowing ring dash, shimmering "57". */
+.logo-live { animation: logo-breathe 3.6s ease-in-out infinite; overflow: visible; }
+@keyframes logo-breathe { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); } 50% { transform: scale(1.06); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent)); } }
+.logo-dash { animation: logo-draw 1.2s cubic-bezier(.2,.8,.2,1) both, logo-flow 3.6s ease-in-out 1.2s infinite; }
+@keyframes logo-flow { 0%, 100% { stroke-dasharray: 70 34; } 50% { stroke-dasharray: 96 8; } }
+.logo-57 { animation: logo-57 3.6s ease-in-out infinite; }
+@keyframes logo-57 { 0%, 100% { opacity: 1; } 50% { opacity: .78; } }
+.p57-logo-anim { position: relative; display: inline-block; overflow: hidden; animation: p57-float 5s ease-in-out infinite; -webkit-mask: linear-gradient(#000 0 0); }
+.p57-logo-anim::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%); transform: translateX(-120%); animation: p57-shine 4s ease-in-out infinite; mix-blend-mode: overlay; pointer-events: none; }
+@keyframes p57-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes p57-shine { 0%, 55% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) { .logo-live, .logo-dash, .logo-57, .p57-logo-anim, .p57-logo-anim::after { animation: none !important; } }

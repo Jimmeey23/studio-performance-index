@@ -5,7 +5,7 @@ import clsx from 'clsx';
 export function Logo({ size = 32, busy = false, className }: { size?: number; busy?: boolean; className?: string }) {
   const id = useId().replace(/:/g, '');
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" className={clsx('shrink-0', className)} aria-label="Physique 57">
+    <svg width={size} height={size} viewBox="0 0 40 40" className={clsx('shrink-0 logo-live', className)} aria-label="Physique 57">
       <defs>
         <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="var(--accent)" />
@@ -15,9 +15,9 @@ export function Logo({ size = 32, busy = false, className }: { size?: number; bu
       </defs>
       <rect x="3" y="3" width="34" height="34" rx="11" fill="#14151c" stroke="rgba(255,255,255,.14)" strokeWidth="1" />
       <g className={busy ? 'logo-spin-fast' : 'logo-spin'} style={{ transformOrigin: '20px 20px' }}>
-        <circle cx="20" cy="20" r="16.5" fill="none" stroke={`url(#g${id})`} strokeWidth="2.2" strokeLinecap="round" strokeDasharray="70 34" className="logo-draw" />
+        <circle cx="20" cy="20" r="16.5" fill="none" stroke={`url(#g${id})`} strokeWidth="2.2" strokeLinecap="round" strokeDasharray="70 34" className="logo-draw logo-dash" />
       </g>
-      <text x="20" y="24.6" textAnchor="middle" fontSize="13" fontWeight="700" fontFamily="Plus Jakarta Sans, Inter, system-ui" fill="#ffffff" letterSpacing="-0.5">57</text>
+      <text x="20" y="24.6" textAnchor="middle" fontSize="13" fontWeight="700" fontFamily="Plus Jakarta Sans, Inter, system-ui" fill="#ffffff" letterSpacing="-0.5" className="logo-57">57</text>
       {busy && <circle cx="31" cy="9" r="2.6" fill="var(--accent-2)" className="pulse-dot" />}
     </svg>
   );

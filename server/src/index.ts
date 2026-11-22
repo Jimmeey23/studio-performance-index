@@ -13,6 +13,7 @@ import { appDb, usingPostgres, createUser, newId, parseJson, getResult, audit } 
 import { answer, hydrateMessage, type StreamEvent } from './ai/orchestrator.js';
 import { clearCoverageCache } from './ai/prompt.js';
 import { DOMAINS, domainById } from './ai/domains.js';
+import { allowedEmail, tooManyAttempts, clearAttempts, ADMIN_NAMES } from './allowlist.js';
 import { loadAppConfig, saveAppConfig, appConfig, defaults as configDefaults, visibleDomains, type AppConfig } from './store/appConfig.js';
 import { MODELS as TIER_MODELS } from './ai/router.js';
 import { catalog, runMetricsQuery, runDrill, QueryError } from './semantic/engine.js';
@@ -38,6 +39,7 @@ type User = { id: string; email: string; name: string; role: "admin" | "analyst"
 declare module 'express-serve-static-core' { interface Request { user?: User } }
 
 const app = express();
+app.set('trust proxy', 1);
 // gzip responses (less egress, faster pages) — but never buffer the streamed AI answers
 app.use(compression({ filter: (req, res) => !req.path.startsWith('/api/chat') && !String(res.getHeader('Content-Type') ?? '').includes('event-stream') && compression.filter(req, res) }));
 app.use(express.json({ limit: '5mb' }));
@@ -56,16 +58,30 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 function auth(req: Request, res: Response, next: NextFunction) {
   if (config.authDisabled) { req.user = { id: 'dev', email: 'dev@local', name: 'Developer', role: 'admin' }; return next(); }
   const token = req.cookies?.p57bi ?? (req.headers.authorization ?? '').replace(/^Bearer /, '');
-  try { req.user = jwt.verify(token, config.jwtSecret) as User; next(); } catch { res.status(401).json({ error: 'Not signed in' }); }
+  try {
+    const u = jwt.verify(token, config.jwtSecret) as User;
+    if (!allowedEmail(u.email)) { res.clearCookie('p57bi'); return res.status(401).json({ error: 'This account no longer has access' }); }
+    req.user = u; next();
+  } catch { res.status(401).json({ error: 'Not signed in' }); }
 }
 const adminOnly = (req: Request, res: Response, next: NextFunction) => (req.user?.role === 'admin' ? next() : res.status(403).json({ error: 'Admins only' }));
 
 app.post('/api/auth/login', wrap(async (req, res) => {
   const db = await appDb();
-  const u = await db.one<User & { password_hash: string }>(`select * from users where email = ?`, [String(req.body.email ?? '').toLowerCase()]);
-  if (!u || !bcrypt.compareSync(String(req.body.password ?? ''), u.password_hash)) return res.status(401).json({ error: 'Invalid email or password' });
+  const ok = allowedEmail(req.body.email); const pw = String(req.body.password ?? '');
+  const ipKey = `ip:${req.ip}`; const emKey = `em:${ok?.email ?? String(req.body.email ?? '').toLowerCase()}`;
+  if (tooManyAttempts(ipKey, 30) || tooManyAttempts(emKey)) return res.status(429).json({ error: 'Too many sign-in attempts. Try again in 15 minutes.' });
+  if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+  let u = await db.one<User & { password_hash: string }>(`select * from users where email = ?`, [ok.email]);
+  // first sign-in: provision the account with the team password
+  if (!u && config.teamPassword && pw === config.teamPassword) {
+    await createUser({ email: ok.email, name: ok.first[0].toUpperCase() + ok.first.slice(1), role: ADMIN_NAMES.has(ok.first) ? 'admin' : 'analyst', password: pw });
+    u = await db.one<User & { password_hash: string }>(`select * from users where email = ?`, [ok.email]);
+  }
+  if (!u || !bcrypt.compareSync(pw, u.password_hash)) return res.status(401).json({ error: 'Invalid email or password' });
+  clearAttempts(emKey);
   const user = { id: u.id, email: u.email, name: u.name, role: u.role };
-  res.cookie('p57bi', jwt.sign(user, config.jwtSecret, { expiresIn: '14d' }), { httpOnly: true, sameSite: 'lax', maxAge: 14 * 864e5 });
+  res.cookie('p57bi', jwt.sign(user, config.jwtSecret, { expiresIn: '14d' }), { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 14 * 864e5 });
   await audit(u.id, 'login', {});
   res.json(user);
 }));
