@@ -546,7 +546,6 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [pinBlock, setPinBlock] = useState<Block | null>(null);
   const [extras, setExtras] = useState<Extras>({ pins: [], notes: [] });
   const rootRef = useRef<HTMLDivElement>(null); const mainRef = useRef<HTMLDivElement>(null);
-  const exTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const revealRef = useReveal();
   const started = useRef<Set<string>>(new Set());
