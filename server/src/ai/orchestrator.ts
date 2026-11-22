@@ -123,7 +123,7 @@ async function loadHistory(conversationId: string): Promise<Anthropic.MessagePar
 
 export async function answer(opts: {
   conversationId?: string; userId: string; question: string; emit: (e: StreamEvent) => void; llm?: Llm;
-  controls?: Controls; domain?: string;
+  controls?: Controls; domain?: string; context?: string;
 }): Promise<void> {
   const { userId, question, emit, controls } = opts;
   const db = await appDb();
@@ -158,6 +158,7 @@ export async function answer(opts: {
 
   const { stable, dynamic } = await systemPrompt();
   const domainBrief = domain ? `\n\n# You are the ${domain.label} expert sub-agent\n${domain.expert}\nDefault focus metrics: ${domain.kpis.join(', ')}. Stay within this domain unless the user asks otherwise; pull in other datasets when they explain a result.` : '';
+  const ctxBrief = opts.context ? `\n\n# The user is reading this Executive Performance Review right now\nAnswer questions about anything in it (numbers, commentary, recommendations) from the digest below, and query the data with your tools for anything beyond it — other periods, studios, breakdowns or metrics. When asked to build something for the report (a table, chart, comparison or summary), build it with your tools as a complete, well-titled result; the user can add any result to a chapter with one click.\n\n${opts.context}` : '';
   const turn: Anthropic.MessageParam[] = [{ role: 'user', content: llmQuestion }];
   const results = new Map<string, AnyResult>();
   const blocks: Block[] = [];
@@ -190,7 +191,7 @@ export async function answer(opts: {
             ...thinkParams(model.id, modelTiers[0], undefined, thinkOff),
             system: [
               { type: 'text', text: stable, cache_control: { type: 'ephemeral' } },
-              { type: 'text', text: dynamic + domainBrief },
+              { type: 'text', text: dynamic + domainBrief + ctxBrief },
             ],
             tools: TOOLS,
             messages: [...history, ...turn],

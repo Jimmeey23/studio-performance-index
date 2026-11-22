@@ -20,8 +20,8 @@ const HOME_SUGGESTIONS = [
   { icon: Target, q: 'Forecast revenue for the next 3 months. What is driving the trend, and how confident is it?' },
 ];
 
-export default function Analyst({ onConversationsChange, domain, embedded, conversationId: fixedConv, seed }: {
-  onConversationsChange: () => void; domain?: DomainMeta; embedded?: boolean; conversationId?: string; seed?: { q: string; n: number };
+export default function Analyst({ onConversationsChange, domain, embedded, conversationId: fixedConv, seed, reviewId, prompts, intro }: {
+  onConversationsChange: () => void; domain?: DomainMeta; embedded?: boolean; conversationId?: string; seed?: { q: string; n: number }; reviewId?: string; prompts?: string[]; intro?: string;
 }) {
   const params = useParams();
   const routeId = embedded ? fixedConv : params.id;
@@ -57,7 +57,7 @@ export default function Analyst({ onConversationsChange, domain, embedded, conve
     const started = Date.now();
     abort.current = new AbortController();
     try {
-      await streamChat({ question, conversationId: convRef.current, controls: ctl, domain: domain?.id } as never, (e) => {
+      await streamChat({ question, conversationId: convRef.current, controls: ctl, domain: domain?.id, reviewId } as never, (e) => {
         switch (e.type) {
           case 'meta': update((m) => ({ ...m, model: String(e.modelLabel), tier: e.tier as Message['tier'], tierReason: String(e.reason) })); break;
           case 'step': update((m) => {
@@ -90,7 +90,7 @@ export default function Analyst({ onConversationsChange, domain, embedded, conve
       update((m) => ({ ...m, pending: false }));
       setBusy(false);
     }
-  }, [controls, domain?.id, embedded, navigate, onConversationsChange]);
+  }, [controls, domain?.id, embedded, navigate, onConversationsChange, reviewId]);
 
   // queue: anything asked while busy runs as soon as the current answer finishes
   const ask = useCallback((q: string) => { if (!q.trim()) return; if (busy) setQueue((x) => [...x, q]); else run(q); }, [busy, run]);
@@ -104,7 +104,7 @@ export default function Analyst({ onConversationsChange, domain, embedded, conve
   }, [loc.state, embedded, ask, navigate, loc.pathname]);
 
   const empty = messages.length === 0;
-  const suggestions = domain ? domain.presets.slice(0, 6).map((q) => ({ icon: Sparkles, q })) : HOME_SUGGESTIONS;
+  const suggestions = prompts ? prompts.map((q) => ({ icon: Sparkles, q })) : domain ? domain.presets.slice(0, 6).map((q) => ({ icon: Sparkles, q })) : HOME_SUGGESTIONS;
   return (
     <AskCtx.Provider value={ask}>
       <div className="flex h-full flex-col">
@@ -118,8 +118,9 @@ export default function Analyst({ onConversationsChange, domain, embedded, conve
                   <p className="mt-3 max-w-xl text-sm text-ink-3">Revenue, clients, conversion, renewals, churn, leads, classes or forecasts. Every number is computed from your synced sheets, with the method shown. Keep typing while an answer is being prepared — follow-ups queue up.</p>
                   {!me?.aiConfigured && <div className="mt-4 rounded-xl border border-warn/30 bg-warn/5 p-3 text-sm text-warn">The AI engine isn't configured yet — add ANTHROPIC_API_KEY to server/.env and restart. Data pages work without it.</div>}
                 </>}
+                {embedded && intro && <div className="mb-3 text-sm text-ink-3">{intro}</div>}
                 {embedded && domain && <div className="mb-3 text-sm text-ink-3">Ask the {domain.label} expert anything — it knows the definitions, data and levers for this area.</div>}
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className={embedded && prompts ? "mt-4 grid gap-2" : "mt-6 grid gap-3 sm:grid-cols-2"}>
                   {suggestions.map(({ icon: Icon, q }, i) => (
                     <button key={q} onClick={() => ask(q)} className="panel card-in lift group flex items-start gap-3 p-4 text-left text-[13.5px] leading-relaxed text-ink-2 hover:text-ink" style={{ animationDelay: `${i * 50}ms` }}>
                       <span className="panel-tile"><Icon size={15} /></span><span className="flex-1">{q}</span><ArrowRight size={14} className="mt-0.5 shrink-0 text-ink-3 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />

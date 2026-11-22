@@ -57,9 +57,9 @@ export interface Review {
 }
 
 /* ── AI commentary (stored per part) ── */
-export interface ReviewSectionAI { headline: string; summary: string; insights: string[]; findings: string[]; recommendations: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low' }[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
+export interface ReviewSectionAI { title?: string; lead?: string; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; timeline?: string; kpi?: string; impact?: string }[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
 export interface ReviewGlanceAI { headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string }
-export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; verification?: { checked: number; unmatched: string[] } }
+export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, ReviewSectionAI>; extras?: { pins?: unknown[]; notes?: unknown[] }; verification?: { checked: number; unmatched: string[] } }
 
 const cache = new Map<string, { review: Review; report: Report }>();
 export const getReview = (id: string) => cache.get(id);
@@ -202,8 +202,18 @@ function cLines(c: ReportChart) {
   const r = c.result; const m = r.columns.filter((x) => x.kind === 'metric'); const dims = r.columns.filter((x) => x.kind === 'period' || x.kind === 'dimension');
   return r.rows.slice(0, 40).map((row) => `${dims.map((d) => String(row[d.key]).slice(0, 24)).join('/')}: ${m.map((x) => `${x.label} ${fmtVal(Number(row[x.key]), x.format ?? 'number')}`).join(', ')}`).join('; ');
 }
+const FOCUS: Record<string, string> = {
+  sales: 'Focus: revenue vs net, paying clients, ATV, discount depth and share, product-family mix, top and bottom products, self-serve vs staff sales. Explain whether growth is volume- or price-led.',
+  attendance: 'Focus: total visits and growth, unique visiting members and visits per member, free vs paid visits, bookings, show-up and late cancels, sessions, class average, fill / capacity use, empty sessions; weekday vs weekend, morning vs evening, best and worst days and slots.',
+  funnel: 'Focus: leads by source and their quality, lead→trial→paid rates, speed to convert, second-visit rate, newcomer journeys by first-visit type, first classes visited, hosted-class performance, follow-up by associate, where the funnel leaks and what each leak is worth.',
+  classes: 'Focus: recurring-slot performance (fill, class average, empty rate, revenue per class), strongest vs weakest recurring classes, slots that changed trainer and the effect, best and worst class × trainer pairings, best start times; schedule pruning or adding opportunities.',
+  trainers: 'Focus: each trainer\'s draw (class average), fill, consistency, revenue per class, newcomer conversion and retention; who carries the schedule, who is under-used, coaching or rostering moves.',
+  formats: 'Focus: Barre vs powerCycle vs Strength Lab on demand, fill, class average, revenue per class/attendee, newcomer conversion, retention and LTV; cross-over and where each format should grow or shrink.',
+  churn: 'Focus: memberships expiring vs renewed, churn and lapse rates by membership, value at stake, early-warning signals and the save play.',
+};
 function sectionDigest(rv: Review, s: ReviewSection) {
-  const P = rv.period; const L: string[] = [`STUDIO REVIEW: ${rv.scope} — ${P.label} (${P.start} to ${P.end}). Baselines: ${P.prevLabel}; ${P.ytdLabel}; ${P.lyLabel}.`, `SECTION ${s.id} — ${s.title}`];
+  const P = rv.period; const L: string[] = [`STUDIO REVIEW: ${rv.scope} — ${P.label} (${P.start} to ${P.end}). Baselines: ${P.prevLabel}; ${P.ytdLabel}; ${P.lyLabel}.`, `SECTION ${s.id} — ${s.title}`, FOCUS[s.id] ?? ''];
+  L.push('STUDIO CONTEXT (headline scorecard, for cross-chapter links): ' + rv.scorecard.slice(0, 12).map((k) => `${k.label} ${fmtVal(k.value, k.format)} (${fmtChg(k)})`).join('; '));
   s.kpis.forEach((k) => L.push('- ' + kLine(k, P)));
   if (s.index) L.push(`ATTENDANCE INDEX ${s.index.value === null ? 'n/a' : s.index.value.toFixed(1)} / 100 (${s.index.note}) — parts: ${s.index.parts.map((p) => `${p.label} ${fmtVal(p.value, 'percent')}`).join(', ')}`);
   s.funnels?.forEach((f) => L.push(`FUNNEL ${f.title}: ${f.steps.map((x) => `${x.label} ${x.value ?? 'n/a'}`).join(' → ')}`));
@@ -224,9 +234,35 @@ function glanceDigest(rv: Review) {
   return L.join('\n');
 }
 const notesSchema = (ids: string[]) => ({ type: 'object', description: "One detailed note (70–110 words) per chart/table id, in exactly three parts separated by ' | ' — 'Shows: <what the visual shows, naming the specific leaders, laggards and figures>' | 'Why it matters: <the business implication, with comparisons>' | 'Action: <one concrete next step with an owner>'.", properties: Object.fromEntries(ids.map((id) => [id, { type: 'string' }])), required: ids });
-const recSchema = { type: 'array', description: '3–5 recommendations, each naming who should act.', items: { type: 'object', properties: { title: { type: 'string' }, detail: { type: 'string' }, owner: { type: 'string' }, priority: { type: 'string', enum: ['high', 'medium', 'low'] } }, required: ['title', 'detail', 'owner', 'priority'] } };
-const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India (premium barre, powerCycle and Strength Lab studios), writing a senior-management Executive Performance Review for a studio.
-Rules: use ONLY figures in the digest, copied exactly as formatted; never invent numbers; estimates must be labelled "~"/"estimate". Every KPI has three baselines (previous period, current-year monthly average, same period last year) — use them. Be specific: name products, trainers, classes, slots, sources, memberships. Explain drivers (volume vs rate, mix, seasonality, small samples). Mind polarity ([lower is better]). Elegant, decisive British/Indian English for a CEO; no markdown, no emojis. Call the tool exactly once.`;
+const recSchema = { type: 'array', description: '3–5 recommendations, ranked by impact. Each is a specific, testable change grounded in a finding — never generic.', items: { type: 'object', properties: {
+  title: { type: 'string', description: 'Imperative, specific action (≤ 12 words), e.g. "Move Tue 7:15 powerCycle to 6:30 and swap to Kajol".' },
+  detail: { type: 'string', description: '40–70 words: the evidence behind it, exactly what to do, and the expected effect.' },
+  owner: { type: 'string', description: 'Accountable role or named person.' },
+  priority: { type: 'string', enum: ['high', 'medium', 'low'] },
+  timeline: { type: 'string', description: 'When, e.g. "Next 2 weeks", "By end of month", "This quarter".' },
+  kpi: { type: 'string', description: 'The metric that proves it worked, with a target, e.g. "Fill rate 39% → 45% by next review".' },
+  impact: { type: 'string', description: 'Estimated stake with "~" if derived, e.g. "~₹1.2L a month" or "~40 more visits a week".' },
+}, required: ['title', 'detail', 'owner', 'priority', 'timeline', 'kpi'] } };
+const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India — premium boutique studios in Mumbai and Bengaluru running Barre, powerCycle and Strength Lab classes, sold as memberships (unlimited / time-based), class packs, single classes and newcomer offers, with trials, hosted (partner / corporate / influencer) classes, late-cancel penalties and trainer-led schedules. You are writing a senior-management Executive Performance Review that the CEO and studio heads will act on.
+
+HOW TO ANALYSE
+1. Decompose every movement into its drivers before explaining it:
+   - Revenue = paying clients × purchase frequency × ATV (watch discount rate and product mix: memberships vs packs vs singles vs newcomer offers).
+   - Attendance = sessions × class average; class average = capacity × fill; separate free/complimentary/trial visits from paid.
+   - Funnel = leads × lead→trial × trial→paid × retention; new-client value = conversion × LTV; speed (days to convert) and second-visit rate are leading indicators.
+   - Classes/trainers: separate slot effects (day, time, format) from trainer effects; a slot that changed trainer is a natural experiment.
+2. Read all three baselines together (previous period, current-year monthly average, same period last year) and classify each move: sustained trend, recovery, one-off spike/dip, or seasonal. Say which.
+3. Separate signal from noise: flag small samples (fewer than ~30 clients, ~10 sessions, or a single month) and mix shifts that flatter or hide a rate.
+4. Connect chapters: e.g. a discounting change that lifts conversion but lowers ATV; fill falling because sessions grew faster than demand; lead decline feeding into fewer new clients next month.
+5. Quantify the stake wherever the digest allows (₹, visits, clients, seats): "worth ~₹X a month", "~N empty seats a week". Label any derived figure with "~" and show the arithmetic basis briefly.
+
+HOW TO WRITE
+- Use ONLY figures present in the digest, copied exactly as formatted; never invent numbers, names or dates.
+- Be specific: name the products, trainers, classes, slots, days, sources, associates, memberships and studios involved.
+- Lead with the conclusion, then the evidence, then the implication ("so what").
+- Recommendations must be concrete and testable: what exactly to change, who owns it (a role such as Studio Manager, Head Trainer, Sales Lead, Marketing Lead, Operations, Finance, or a named trainer/associate where the data names them), by when, the KPI to watch and a target. Never write generic advice ("improve marketing", "engage clients").
+- Mind polarity: metrics marked [lower is better] improve when they fall.
+- Elegant, decisive British/Indian English for a CEO; plain sentences, no markdown, no emojis, no bold. Call the tool exactly once.`;
 
 async function callTool<T>(tool: Anthropic.Tool, content: string, tier: Tier): Promise<{ out: T; model: string } | null> {
   if (!config.anthropicKey) return null;
@@ -266,9 +302,10 @@ export async function writeSection(rv: Review, sid: string, tier: Tier = 'balanc
   if (!s) throw new Error('Unknown section');
   const ids = [...s.charts.map((c) => c.id), ...s.tables.map((t) => t.id)];
   const tool: Anthropic.Tool = { name: 'write_section', description: 'Write the commentary for one review section.', input_schema: { type: 'object', properties: {
-    headline: { type: 'string', description: 'One decisive sentence with the key number.' }, summary: { type: 'string', description: '90–140 words: performance vs all three baselines, drivers, implications.' },
-    insights: { type: 'array', items: { type: 'string' }, description: '3–4 sharp insights a template would miss (connections, outliers, inflections).' },
-    findings: { type: 'array', items: { type: 'string' }, description: '4–6 evidence findings with numbers and named entities.' },
+    headline: { type: 'string', description: 'One decisive sentence (≤ 28 words): the chapter\'s single most important story, with its key number and direction vs baseline.' },
+    summary: { type: 'string', description: '140–200 words in 2–3 short paragraphs (blank line between). Paragraph 1: the verdict and the numbers vs all three baselines. Paragraph 2: the drivers (decomposed), naming entities. Paragraph 3: the implication and what to watch next.' },
+    insights: { type: 'array', items: { type: 'string' }, description: '4–6 non-obvious insights a template would miss: cross-metric connections, mix shifts, outliers, inflection points, contradictions, small-sample warnings. Each 25–45 words with numbers.' },
+    findings: { type: 'array', items: { type: 'string' }, description: '5–7 evidence findings, each as observation → evidence (numbers, named entities) → so what. 25–45 words each.' },
     recommendations: recSchema, notes: notesSchema(ids),
   }, required: ['headline', 'summary', 'insights', 'findings', 'recommendations', 'notes'] } as Anthropic.Tool['input_schema'] };
   const res = await callTool<Partial<ReviewSectionAI>>(tool, sectionDigest(rv, s), tier);
@@ -284,10 +321,10 @@ export async function writeGlance(rv: Review, tier: Tier = 'balanced'): Promise<
   const tool: Anthropic.Tool = { name: 'write_glance', description: 'Write the cover headline and the At a glance page.', input_schema: { type: 'object', properties: {
     headline: { type: 'string', description: 'The review\'s main headline: one sentence, the single most important story with its number.' },
     tagline: { type: 'string', description: '4–8 words capturing the period\'s mood.' },
-    summary: { type: 'string', description: '160–220 words in 2 short paragraphs (blank line between): the whole studio story across sales, attendance, funnel, classes, trainers, formats and churn.' },
-    insights: { type: 'array', items: { type: 'string' }, description: '5–7 very useful, non-obvious insights connecting areas.' },
+    summary: { type: 'string', description: '220–300 words in 3 short paragraphs (blank line between). 1: the verdict on the period with the 3–4 numbers that matter most vs baselines. 2: the causal story connecting sales, attendance, funnel, classes, trainers, formats and churn. 3: the two or three priorities for next period and what is at stake.' },
+    insights: { type: 'array', items: { type: 'string' }, description: '6 non-obvious insights that connect chapters (e.g. pricing ↔ conversion, schedule ↔ fill, leads ↔ new clients), each 25–45 words with numbers.' },
     highlights: { type: 'array', description: 'One key finding per section, in order.', items: { type: 'object', properties: { section: { type: 'string', enum: secIds }, text: { type: 'string' } }, required: ['section', 'text'] } },
-    watch: { type: 'array', items: { type: 'string' }, description: '3–4 watch-outs.' }, notes: notesSchema(ids),
+    watch: { type: 'array', items: { type: 'string' }, description: '3–5 risks or early-warning signals to monitor next period, each with the metric and threshold that would trigger action.' }, notes: notesSchema(ids),
   }, required: ['headline', 'tagline', 'summary', 'insights', 'highlights', 'watch', 'notes'] } as Anthropic.Tool['input_schema'] };
   const res = await callTool<Partial<ReviewGlanceAI>>(tool, glanceDigest(rv), tier);
   const fb = rulesGlance(rv);
@@ -303,3 +340,18 @@ export function verify(rv: Review, ai: ReviewAI) {
   return verifyNarrative(text, entry.report.results);
 }
 export function remember(rv: Review) { if (!cache.has(rv.id)) cache.set(rv.id, { review: rv, report: { results: [] } as unknown as Report }); }
+
+/** Compact digest of a saved review (numbers + written commentary) for the chat assistant on the report page. */
+export function reviewContext(rv: Review, ai: ReviewAI): string {
+  const L: string[] = [glanceDigest(rv)];
+  for (const s of rv.sections) {
+    const a = ai.sections?.[s.id];
+    L.push(`\nCHAPTER ${s.id} — ${a?.title ?? s.title}`);
+    s.kpis.forEach((k) => L.push('- ' + kLine(k, rv.period)));
+    s.tables.slice(0, 4).forEach((t) => L.push(`TABLE "${t.title}": ${tLines(t)}`));
+    if (a) { L.push(`HEADLINE: ${a.headline}`, `SUMMARY: ${a.summary}`, ...a.findings.map((f) => `FINDING: ${f}`), ...a.recommendations.map((r) => `ACTION (${r.priority}, ${r.owner}): ${r.title} — ${r.detail}`)); }
+  }
+  if (ai.glance) L.push(`\nEXECUTIVE SUMMARY: ${ai.glance.summary}`);
+  const t = L.join('\n');
+  return t.length > 30000 ? t.slice(0, 30000) + '\n…(truncated)' : t;
+}

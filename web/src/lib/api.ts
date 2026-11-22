@@ -19,7 +19,7 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
 }
 
 /** POST /api/chat and parse the server-sent event stream. */
-export async function streamChat(body: { question: string; conversationId?: string; controls?: unknown; domain?: string }, onEvent: (e: Record<string, unknown>) => void, signal?: AbortSignal) {
+export async function streamChat(body: { question: string; conversationId?: string; controls?: unknown; domain?: string; reviewId?: string }, onEvent: (e: Record<string, unknown>) => void, signal?: AbortSignal) {
   const res = await fetch('/api/chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
   if (!res.ok || !res.body) throw new ApiError(res.statusText, res.status);
   const reader = res.body.getReader();
