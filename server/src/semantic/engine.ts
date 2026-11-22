@@ -317,6 +317,8 @@ const DRILL_BREAKDOWNS: Record<string, string[]> = {
   memberships: ['location', 'membership', 'status'],
   late_cancels: ['location', 'class_name', 'notice', 'membership'],
   teacher_month: ['teacher', 'location'],
+  client_formats: ['main_format', 'first_format', 'format_mix', 'location'],
+  membership_formats: ['credited_format', 'membership', 'status', 'location'],
 };
 
 /** The record population a metric is about: its single FILTER clause for counts/sums; the denominator population for ratios. */

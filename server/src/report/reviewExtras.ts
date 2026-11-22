@@ -136,8 +136,25 @@ export async function formatComparison(req: Req) {
     q(req, ['visits', 'visiting_clients', 'visits_per_client', 'trial_visits', 'complimentary_visits'], ['format']),
     q(req, ['fill_rate'], ['format'], { grain: 'month', start: monthsBack(req.end, 12) }),
   ]);
+  // format economics: the business each format brings (client-level profile + credited renewals)
+  const y12 = monthsBack(req.end, 12);
+  const [acq, depth, journeys, mixT, ren, rev] = await Promise.all([
+    q(req, ['format_new_clients', 'format_conversion_rate', 'format_retention_rate', 'client_avg_ltv', 'visits_per_active_month', 'multi_format_rate', 'avg_days_to_second_format'], ['first_format'], { sort: 'format_new_clients' }),
+    q(req, ['format_clients', 'visits_per_active_month', 'client_lifetime_visits', 'client_active_months', 'client_avg_ltv'], ['main_format'], { start: y12, sort: 'format_clients' }),
+    q(req, ['format_clients'], ['first_format', 'second_format'], { start: y12, sort: 'format_clients' }),
+    q(req, ['format_clients', 'visits_per_active_month', 'client_active_months', 'client_avg_ltv', 'format_retention_rate'], ['format_mix'], { start: y12 }),
+    q(req, ['credited_memberships_ending', 'credited_renewals', 'credited_renewal_rate', 'credited_renewal_value', 'term_visits_per_membership'], ['credited_format'], { sort: 'credited_memberships_ending' }),
+    q(req, ['strength_revenue_share', 'barre_revenue_share', 'cycle_revenue_share', 'format_lifetime_revenue'], ['location'], { start: y12, sort: 'format_lifetime_revenue' }),
+  ]);
+  const ATTR = 'Attribution is behavioural: the data does not record why a client paid or renewed.';
   return {
-    tables: compact([table('Format comparison — full metric set', join(a, [b, c], 'format'))]),
+    tables: compact([table('Format comparison — full metric set', join(a, [b, c], 'format')),
+      table('Format economics — new clients by first format', acq, 'Clients whose first class was in this period, grouped by the format of that class: conversion, retention, lifetime value, how often they come and how many try a second format.'),
+      table('Main format — frequency and value (clients who started in the last 12 months)', depth, 'Main format = the format with 60%+ of a client\'s classes; otherwise Mixed.'),
+      table('Cross-format journeys — first format → second format tried (12 months)', journeys, '"None yet" = still single-format.'),
+      table('Single vs multi-format clients (12 months)', mixT),
+      table('Renewals credited to each format', ren, `Each recurring membership ending this period is credited to the format the client attended most in its last 60 days. ${ATTR}`),
+      table('Revenue credited to each format by visit share (12 months)', rev, `Each client\'s total spend split by their share of Barre, powerCycle and Strength Lab classes. ${ATTR}`)]),
     charts: compact([chart('Fill rate by format — 12 months', trend, 'line', ['fill_rate'], 'format')]),
   };
 }
