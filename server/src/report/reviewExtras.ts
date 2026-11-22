@@ -101,10 +101,9 @@ export async function funnelExtras(req: Req) {
 /* ── classes: full recurring-slot tables, trainer changes, class × teacher combos, best times ── */
 export async function classExtras(req: Req) {
   const keep4 = (r: Record<string, unknown>) => Number(r.classes) >= 4;
-  const [strong, weak, changes, bestCombo, worstCombo, times] = await Promise.all([
+  const [strong, weak, bestCombo, worstCombo, times] = await Promise.all([
     q(req, CLASS_METRICS, ['recurring_class'], { sort: 'class_average', keep: keep4, limit: 25 }),
     q(req, CLASS_METRICS, ['recurring_class'], { sort: 'class_average', dir: 'asc', keep: keep4, limit: 25 }),
-    q(req, ['classes', 'session_teachers', 'class_average', 'fill_rate', 'empty_class_rate', 'class_checkins'], ['recurring_class'], { sort: 'session_teachers', keep: (r) => Number(r.session_teachers) >= 2 && Number(r.classes) >= 4, limit: 20 }),
     q(req, ['classes', 'class_average', 'fill_rate', 'class_checkins', 'empty_class_rate', 'revenue_per_class'], ['class_teacher'], { sort: 'class_average', keep: (r) => Number(r.classes) >= 3, limit: 12 }),
     q(req, ['classes', 'class_average', 'fill_rate', 'class_checkins', 'empty_class_rate', 'revenue_per_class'], ['class_teacher'], { sort: 'class_average', dir: 'asc', keep: (r) => Number(r.classes) >= 3, limit: 12 }),
     q(req, ['classes', 'class_average', 'fill_rate', 'empty_class_rate'], ['start_time'], { sort: 'class_average', keep: (r) => Number(r.classes) >= 4, limit: 12 }),
@@ -112,7 +111,6 @@ export async function classExtras(req: Req) {
   return {
     tables: compact([
       table('Strongest recurring classes (≥ 4 sessions) — full metric set', strong), table('Weakest recurring classes (≥ 4 sessions) — full metric set', weak),
-      table('Slots with trainer changes — effect on attendance', changes, 'Recurring slots taught by two or more trainers this period; compare class average and fill with the stable slots above.'),
       table('Best class × trainer combinations', bestCombo), table('Weakest class × trainer combinations', worstCombo), table('Best start times (≥ 4 sessions)', times),
     ]),
   };
@@ -162,4 +160,25 @@ export async function formatComparison(req: Req) {
 /** Full product list (every product, not just the top table) so the top / bottom toggle shows true bottom performers. */
 export async function productList(req: Req) {
   return q(req, ['revenue', 'units_sold', 'atv'], ['product'], { sort: 'revenue', limit: 500, keep: (r) => Number(r.revenue) > 0 });   // refunds / zero rows are not "bottom performers"
+}
+
+/* ── retention: who churns, the leading indicators and the value at stake ── */
+const RET = ['memberships_expiring', 'sheet_renewal_rate', 'churn_rate', 'lapsed_memberships', 'lapsed_value', 'expiring_value'];
+export async function retentionExtras(req: Req) {
+  const big = (r: Record<string, unknown>) => Number(r.memberships_expiring) >= 3;
+  const [usage, quiet, term, fam, mem, studio, seller, trend] = await Promise.all([
+    q(req, RET, ['usage_band']), q(req, RET, ['last_visit_gap']), q(req, RET, ['term_length']), q(req, RET, ['product_family'], { sort: 'memberships_expiring' }),
+    q(req, RET, ['membership'], { sort: 'lapsed_value', keep: big, limit: 15 }), q(req, RET, ['location'], { sort: 'memberships_expiring' }),
+    q(req, RET, ['sold_by'], { sort: 'memberships_expiring', keep: big, limit: 12 }),
+    q(req, ['sheet_renewal_rate', 'churn_rate'], [], { grain: 'month', start: monthsBack(req.end, 12) }),
+  ]);
+  return {
+    tables: compact([
+      table('Churn by usage — classes used during the membership', usage, 'Low usage is the strongest early-warning signal: members who barely use a membership rarely renew.'),
+      table('Churn by last visit before expiry', quiet, 'How long before the end date each member last attended. "Gone quiet" members are the save-play target.'),
+      table('Churn by membership length', term), table('Churn by product family', fam, 'Newcomer offers ending is structural churn; unlimited / class-pack lapses are true loss.'),
+      table('Memberships losing the most value', mem), table('Retention by studio', studio), table('Retention by seller', seller),
+    ]),
+    charts: compact([chart('Renewal and churn rate — 12 months', trend, 'line', ['sheet_renewal_rate', 'churn_rate'])]),
+  };
 }

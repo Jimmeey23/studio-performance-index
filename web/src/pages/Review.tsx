@@ -45,6 +45,7 @@ type Section = {
   heatmap?: { rows: string[]; cols: string[]; cells: Record<string, { fill: number | null; classes: number }> };
   formats?: { format: string; kpis: Kpi[] }[];
   spotlight?: { name: string; classes: number; checkins: number; avg: number | null; fill: number | null }[];
+  discounts?: { verdict: string; kpis: { label: string; value: number | null; compare?: number | null; format: Format }[] };
   index?: { value: number | null; parts: { label: string; value: number | null; weight: number }[]; note: string };
   notes: Record<string, string>; ruleFindings: string[];
 };
@@ -236,7 +237,65 @@ function ChartCard({ c, note, loading, part, h = 300, i = 0 }: { c: Chart; note?
     </figure>
   );
 }
+type Row = Record<string, unknown>;
+const VERDICT_TONE: Record<string, string> = { 'Strong improvement': 'g2', 'Good change': 'g1', Neutral: 'n', Weaker: 'b1', 'Poor change': 'b2', 'Too early to call': 'n' };
+/** Permanent trainer changes: before → after for every metric, with a verdict. */
+function TrainerChanges({ t, note, loading, part }: { t: Table; note?: string; loading?: boolean; part: string }) {
+  const rows = t.result.rows as Row[];
+  const [all, setAll] = useState(false);
+  const shown = all ? rows : rows.slice(0, 8);
+  const cnt = (re: RegExp) => rows.filter((r) => re.test(String(r.verdict))).length;
+  const M: [string, string, Format, boolean][] = [['classes', 'Classes', 'number', true], ['avg', 'Avg attendance', 'decimal', true], ['fill', 'Fill', 'percent', true], ['rev', 'Revenue / class', 'currency', true], ['empty', 'Empty classes', 'percent', false], ['showup', 'Show-up', 'percent', true], ['lcr', 'Late cancels', 'percent', false]];
+  return (
+    <div className="epr-card epr-card-wide epr-rv epr-tch">
+      <div className="epr-card-h"><span className="epr-card-t">{t.title}</span><span className="epr-card-tag">{rows.length} changes · <b className="g">{cnt(/improvement|Good/)} good</b> · <b className="b">{cnt(/Weaker|Poor/)} weaker</b> · {cnt(/Neutral|early/)} neutral / early</span></div>
+      <div className="epr-tch-list">{shown.map((r, i) => { const [from, to] = String(r.change).split(' → '); return (
+        <div key={i} className="epr-tch-row">
+          <div className="hd"><div className="min-w-0"><div className="slot">{String(r.slot)}</div><div className="who"><span>{from}</span><i>→</i><b>{to}</b><em>from {String(r.changed_on)}</em></div></div>
+            <span className={clsx('vd', VERDICT_TONE[String(r.verdict)] ?? 'n')}>{String(r.verdict)}<small>{Number(r.score) > 0 ? '+' : ''}{Number(r.score).toFixed(1)}</small></span></div>
+          <div className="mx">{M.map(([k, label, f, up]) => { const b = r[`${k}_before`] as number | null, a = r[`${k}_after`] as number | null;
+            const d = b === null || a === null ? null : a - b; const good = d === null || Math.abs(d) < 1e-9 || k === 'classes' ? 0 : (d > 0) === up ? 1 : -1;
+            return <div key={k}><span>{label}</span><div className="ba"><em>{fmt(b, f)}</em><i>→</i><b>{fmt(a, f)}</b></div><small className={good > 0 ? 'g' : good < 0 ? 'b' : ''}>{d === null || k === 'classes' ? '\u00a0' : `${d > 0 ? '▲' : d < 0 ? '▼' : '•'} ${f === 'percent' ? `${Math.abs(d * 100).toFixed(1)} pp` : fmt(Math.abs(d), f)}`}</small></div>; })}</div>
+        </div>); })}</div>
+      {rows.length > 8 && <button className="epr-tch-more" onClick={() => setAll((x) => !x)}>{all ? 'Show fewer' : `Show all ${rows.length} changes`}</button>}
+      <Note text={note ?? t.note} loading={loading} part={part} id={t.id} />
+    </div>
+  );
+}
+/** Trainer × format as a heat matrix: avg attendance per cell, fill and classes beneath, best format marked. */
+function TrainerFormat({ t, note, loading, part }: { t: Table; note?: string; loading?: boolean; part: string }) {
+  const rows = t.result.rows as Row[];
+  const fk = (r: Row) => String(r.format), tk = (r: Row) => String(r.teacher);
+  const formats = [...new Set(rows.map(fk))].filter((f) => f !== 'Other').sort();
+  const byT = new Map<string, Map<string, Row>>();
+  for (const r of rows) { if (!byT.has(tk(r))) byT.set(tk(r), new Map()); byT.get(tk(r))!.set(fk(r), r); }
+  const trainers = [...byT.keys()].sort((a, b) => [...byT.get(b)!.values()].reduce((x, r) => x + Number(r.classes ?? 0), 0) - [...byT.get(a)!.values()].reduce((x, r) => x + Number(r.classes ?? 0), 0));
+  const avgs = rows.map((r) => Number(r.class_average)).filter((x) => isFinite(x)); const lo = Math.min(...avgs), hi = Math.max(...avgs);
+  return (
+    <div className="epr-card epr-card-wide epr-rv">
+      <div className="epr-card-h"><span className="epr-card-t">Trainer × format</span><span className="epr-card-tag">{trainers.length} trainers · cell = avg attendance · ★ trainer's strongest format</span></div>
+      <div className="epr-tf-wrap"><table className="epr-tf"><thead><tr><th>Trainer</th>{formats.map((f) => <th key={f}>{f}</th>)}<th>Total classes</th></tr></thead>
+        <tbody>{trainers.map((tr) => { const m = byT.get(tr)!; const best = [...m.values()].filter((r) => Number(r.classes) >= 3).sort((a, b) => Number(b.class_average) - Number(a.class_average))[0];
+          return <tr key={tr}><th>{tr}</th>{formats.map((f) => { const r = m.get(f); if (!r) return <td key={f} className="e">—</td>; const a = Number(r.class_average); const x = hi > lo ? (a - lo) / (hi - lo) : 0.5;
+            return <td key={f} style={{ ['--h' as string]: x.toFixed(2) }}><b>{fmt(a, 'decimal')}{best === r && m.size > 1 ? <i>★</i> : null}</b><span>{fmt(r.fill_rate as number, 'percent')} fill · {String(r.classes)} cl</span></td>; })}
+            <td className="tot">{[...m.values()].reduce((x, r) => x + Number(r.classes ?? 0), 0)}</td></tr>; })}</tbody></table></div>
+      <Note text={note ?? t.note} loading={loading} part={part} id={t.id} />
+    </div>
+  );
+}
+/** Sales chapter: discount economics with a profitability verdict. */
+function Discounts({ d }: { d: NonNullable<Section['discounts']> }) {
+  const tone = /^Profitable/.test(d.verdict) ? 'g' : /^Marginal/.test(d.verdict) ? 'n' : 'b';
+  return (
+    <div className="epr-card epr-rv epr-disc">
+      <div className="epr-card-h"><span className="epr-card-t">Discount economics</span><span className={clsx('epr-disc-v', tone)}>{d.verdict}</span></div>
+      <div className="epr-disc-g">{d.kpis.map((k) => <div key={k.label}><span>{k.label}</span><b>{fmt(k.value, k.format)}</b>{k.compare !== undefined && <em>vs {fmt(k.compare ?? null, k.format)}</em>}</div>)}</div>
+    </div>
+  );
+}
 function TableCard({ t, note, loading, part, rows = 10 }: { t: Table; note?: string; loading?: boolean; part: string; rows?: number }) {
+  if ((t.result as { kind?: string }).kind === 'trainer_changes') return <TrainerChanges t={t} note={note} loading={loading} part={part} />;
+  if (/^Trainer × format/.test(t.title)) return <TrainerFormat t={t} note={note} loading={loading} part={part} />;
   const n = t.result.rows.length;
   return (
     <div className="epr-card epr-card-wide epr-rv">
@@ -304,7 +363,7 @@ function Heat({ hm }: { hm: NonNullable<Section['heatmap']> }) {
   const vals = Object.values(hm.cells).map((c) => c.fill).filter((v): v is number => v !== null);
   const max = Math.max(...vals, 0.01);
   return (
-    <div className="epr-card epr-rv">
+    <div className="epr-card epr-rv epr-heat-card">
       <div className="epr-card-h"><CalendarRange size={14} />Fill rate by weekday & hour</div>
       <div className="epr-heat-wrap"><table className="epr-heat"><thead><tr><th />{hm.cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
         <tbody>{hm.rows.map((r) => <tr key={r}><th>{r.slice(0, 3)}</th>{hm.cols.map((c) => { const cell = hm.cells[`${r}|${c}`]; if (!cell || cell.fill === null) return <td key={c} className="empty" />; const a = cell.fill / max;
@@ -1021,7 +1080,7 @@ function PartActions({ ai, busy, canAi, onRewrite }: { ai?: { source: string; mo
 function ReviewSectionView({ req, n, total, s, ai, live, busy, base, P, canAi, onRewrite }: { req?: Review['request']; n: number; total: number; s: Section; ai?: SectionAI; live: boolean; busy: boolean; base: Base; P: ReportPeriod; canAi: boolean; onRewrite: () => void }) {
   const note = (id: string) => ai?.notes?.[id] ?? s.notes[id];
   const d = useRD(); const ed = useEdit(); const B = useChg();
-  const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
+  const hasFeature = !!(s.discounts || s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
       <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Portfolio', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={chTitle(s)} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis} vid={s.id}
@@ -1036,6 +1095,7 @@ function ReviewSectionView({ req, n, total, s, ai, live, busy, base, P, canAi, o
       {(hasFeature || s.charts.length > 0 || s.tables.length > 0) && <div className="epr-detail"><Sub n={`${n}.3`} title="In detail" /></div>}
 
       {hasFeature && <div className="epr-detail epr-feature">
+        {s.discounts && <Discounts d={s.discounts} />}
         {s.index && (
           <div className="epr-index epr-rv">
             <Gauge v={s.index.value} />

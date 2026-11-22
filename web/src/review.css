@@ -1240,3 +1240,59 @@
 .epr-hero-stats em { font-size: 11.5px; }
 .epr-hspark { height: 30px; margin-top: 4px; }
 @media (max-width: 900px) { .epr-hero-quote { max-width: none; } .epr-hero-art { opacity: .15; } }
+
+/* fill heatmap: full width, cells stretch */
+.epr-heat-card { grid-column: 1 / -1; width: 100%; }
+.epr-heat-card .epr-heat-wrap { width: 100%; overflow-x: auto; }
+.epr-heat-card .epr-heat { width: 100%; table-layout: fixed; }
+.epr-heat-card .epr-heat th:first-child { width: 52px; }
+
+/* hero art: subtle, slowly breathing / drifting */
+.epr-hero-art { opacity: .16; }
+.epr-hero-art > g { animation: epr-art-drift 18s ease-in-out infinite; }
+.epr-hero-art > g > * { animation: epr-art-breathe 6s ease-in-out infinite; }
+.epr-hero-art > g > *:nth-child(2n) { animation-delay: -2s; } .epr-hero-art > g > *:nth-child(3n) { animation-delay: -4s; }
+@keyframes epr-art-drift { 0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); } 33% { transform: translate(-8px, -6px) rotate(3deg) scale(1.03); } 66% { transform: translate(6px, -10px) rotate(-2deg) scale(.98); } }
+@keyframes epr-art-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* trainer changes */
+.epr-tch .epr-card-tag b { font-weight: 600; } .epr-tch .epr-card-tag b.g { color: var(--epr-good); } .epr-tch .epr-card-tag b.b { color: var(--epr-bad); }
+.epr-tch-list { display: grid; gap: 10px; padding: 4px 0 8px; }
+.epr-tch-row { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--surface); }
+.epr-tch-row .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.epr-tch-row .slot { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epr-tch-row .who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 2px; font-size: 15px; }
+.epr-tch-row .who span { color: var(--ink-2); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--ink-3) 50%, transparent); } .epr-tch-row .who i { font-style: normal; color: var(--ink-3); } .epr-tch-row .who b { color: var(--ink); font-weight: 600; } .epr-tch-row .who em { font-style: normal; font-size: 12px; color: var(--ink-3); }
+.epr-tch-row .vd { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.epr-tch-row .vd small { font-weight: 400; opacity: .75; }
+.vd.g2 { background: color-mix(in srgb, var(--epr-good) 18%, transparent); color: var(--epr-good); } .vd.g1 { background: color-mix(in srgb, var(--epr-good) 10%, transparent); color: var(--epr-good); }
+.vd.n { background: var(--surface-2); color: var(--ink-2); }
+.vd.b1 { background: color-mix(in srgb, var(--epr-bad) 10%, transparent); color: var(--epr-bad); } .vd.b2 { background: color-mix(in srgb, var(--epr-bad) 18%, transparent); color: var(--epr-bad); }
+.epr-tch-row .mx { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.epr-tch-row .mx > div { padding: 8px 10px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.epr-tch-row .mx span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epr-tch-row .ba { display: flex; align-items: baseline; gap: 5px; margin-top: 4px; white-space: nowrap; } .epr-tch-row .ba em { font-style: normal; font-size: 12px; color: var(--ink-3); } .epr-tch-row .ba i { font-style: normal; font-size: 11px; color: var(--ink-3); } .epr-tch-row .ba b { font-size: 15px; color: var(--ink); }
+.epr-tch-row .mx small { display: block; font-size: 11px; margin-top: 2px; color: var(--ink-3); } .epr-tch-row .mx small.g { color: var(--epr-good); } .epr-tch-row .mx small.b { color: var(--epr-bad); }
+.epr-tch-more { margin: 2px 0 8px; font-size: 12.5px; color: var(--accent); }
+@media (max-width: 1000px) { .epr-tch-row .mx { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* trainer × format matrix */
+.epr-tf-wrap { overflow-x: auto; }
+.epr-tf { width: 100%; border-collapse: separate; border-spacing: 4px; font-size: 13px; }
+.epr-tf thead th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); text-align: center; padding: 4px 6px; }
+.epr-tf thead th:first-child, .epr-tf tbody th { text-align: left; }
+.epr-tf tbody th { font-weight: 500; color: var(--ink); padding: 0 10px 0 2px; white-space: nowrap; }
+.epr-tf td { text-align: center; padding: 8px 6px; border-radius: 10px; background: color-mix(in srgb, var(--accent) calc(var(--h, 0) * 32% + 4%), var(--surface)); }
+.epr-tf td b { display: block; font-size: 16px; color: var(--ink); } .epr-tf td b i { font-style: normal; color: #d4a017; margin-left: 4px; font-size: 12px; }
+.epr-tf td span { display: block; font-size: 10.5px; color: var(--ink-3); margin-top: 1px; }
+.epr-tf td.e { background: transparent; color: var(--ink-3); }
+.epr-tf td.tot { background: var(--surface-2); font-weight: 600; color: var(--ink-2); }
+
+/* discount economics */
+.epr-disc { grid-column: 1 / -1; }
+.epr-disc-v { margin-left: auto; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.epr-disc-v.g { background: color-mix(in srgb, var(--epr-good) 14%, transparent); color: var(--epr-good); } .epr-disc-v.n { background: var(--surface-2); color: var(--ink-2); } .epr-disc-v.b { background: color-mix(in srgb, var(--epr-bad) 14%, transparent); color: var(--epr-bad); }
+.epr-disc-g { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 6px 0 4px; }
+.epr-disc-g > div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.epr-disc-g span { display: block; font-size: 11.5px; color: var(--ink-3); } .epr-disc-g b { display: block; font-size: 22px; margin-top: 4px; color: var(--ink); font-family: var(--epr-serif); font-weight: 400; } .epr-disc-g em { font-style: normal; font-size: 12px; color: var(--ink-3); }
+@media (max-width: 900px) { .epr-disc-g { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

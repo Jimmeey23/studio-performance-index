@@ -16,7 +16,9 @@ import { runMetricsQuery } from '../semantic/engine.js';
 import { metricById, modelById } from '../semantic/metrics.js';
 import { ROLES, normaliseOwner } from './roles.js';
 import { log } from '../util/log.js';
-import { attendanceExtras, classExtras, formatComparison, funnelExtras, productList, trainerScorecard } from './reviewExtras.js';
+import { attendanceExtras, classExtras, formatComparison, funnelExtras, productList, retentionExtras, trainerScorecard } from './reviewExtras.js';
+import { discountAnalysis } from '../analytics/discounts.js';
+import { trainerChanges } from '../analytics/trainerChanges.js';
 import { buildReport, fmtVal, fmtChg, type Kpi, type Report, type ReportChart, type ReportSection, type ReportTable } from './build.js';
 
 export const ReviewRequestSchema = z.object({
@@ -46,6 +48,7 @@ export interface ReviewSection {
   heatmap?: NonNullable<ReportSection['visuals']>['heatmap'];
   formats?: NonNullable<ReportSection['visuals']>['formats'];
   spotlight?: NonNullable<ReportSection['visuals']>['spotlight'];
+  discounts?: { verdict: string; kpis: { label: string; value: number | null; compare?: number | null; format: string }[] };
   index?: { value: number | null; parts: { label: string; value: number | null; weight: number }[]; note: string };
   /** rule-based notes per chart / table id — always present; AI notes replace them */
   notes: Record<string, string>;
@@ -136,7 +139,9 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const report = await buildReport({ start: req.start, end: req.end, locations: req.locations, kind: 'custom', depth: 'detailed', audience: 'leadership', title: 'Executive Performance Review',
     topics: ['sales', 'new_clients', 'leads', 'trainers', 'classes', 'formats', 'churn', 'late', ...(multi ? ['studios'] : [])] });
   const P = report.period;
-  const [attX, funX, clsX, trSc, fmX, prods] = await Promise.all([attendanceExtras(req), funnelExtras(req), classExtras(req), trainerScorecard(req), formatComparison(req), productList(req)]);
+  const [attX, funX, clsX, trSc, fmX, prods, disc, trCh, retX] = await Promise.all([attendanceExtras(req), funnelExtras(req), classExtras(req), trainerScorecard(req), formatComparison(req), productList(req),
+    discountAnalysis(req).catch((e) => { log.warn({ err: (e as Error).message }, 'discount analysis failed'); return null; }),
+    trainerChanges(req).catch((e) => { log.warn({ err: (e as Error).message }, 'trainer changes failed'); return null; }), retentionExtras(req)]);
   const S = { sales: sec(report, 'sales'), nc: sec(report, 'new_clients'), leads: sec(report, 'leads'), tr: sec(report, 'trainers'), cl: sec(report, 'classes'), fm: sec(report, 'formats'), ch: sec(report, 'churn'), late: sec(report, 'late'), st: sec(report, 'studios') };
   const sections: ReviewSection[] = [];
   const SC = { kpis: report.scorecard };
@@ -155,7 +160,7 @@ export async function buildReview(raw: unknown): Promise<Review> {
     sections.push({ ...meta, kicker: `Section ${String(++n).padStart(2, '0')}`, ...x, notes: notesFor(x.charts, x.tables), ruleFindings: [...kpiFindings(x.kpis, P), ...extraFind].slice(0, 6) });
   };
 
-  if (S.sales) push('sales', { kpis: S.sales.kpis, charts: S.sales.charts, tables: S.sales.tables }, S.sales.insights);
+  if (S.sales) push('sales', { kpis: S.sales.kpis, charts: S.sales.charts, tables: [...(disc?.tables ?? []) as unknown as ReportTable[], ...S.sales.tables], ...(disc ? { discounts: { verdict: disc.verdict, kpis: disc.kpis } } : {}) }, [...S.sales.insights, ...(disc ? [`Discounts: ${disc.verdict}.`] : [])]);
 
   // attendance index: show-up, booking fill and (1 − late-cancel rate), weighted
   const allK = [...(S.cl?.kpis ?? []), ...(S.late?.kpis ?? [])];
@@ -177,10 +182,10 @@ export async function buildReview(raw: unknown): Promise<Review> {
     funnels: [S.leads?.visuals?.funnel && { title: 'Lead funnel', steps: S.leads.visuals.funnel }, S.nc?.visuals?.funnel && { title: 'Newcomer journey', steps: S.nc.visuals.funnel }].filter(Boolean) as ReviewSection['funnels'],
   }, [...(S.leads?.insights ?? []), ...(S.nc?.insights ?? [])]);
 
-  if (S.cl) push('classes', { kpis: pickK([...S.cl.kpis, ...report.scorecard], ['classes', 'class_average', 'fill_rate', 'empty_classes', 'empty_class_rate', 'sold_out_rate', 'booking_fill_rate', 'revenue_per_class']), charts: S.cl.charts.slice(0, 1), tables: clsX.tables.length ? clsX.tables : S.cl.tables.filter((t) => !/Weekday vs weekend/.test(t.title)), heatmap: S.cl.visuals?.heatmap }, S.cl.insights);
+  if (S.cl) push('classes', { kpis: pickK([...S.cl.kpis, ...report.scorecard], ['classes', 'class_average', 'fill_rate', 'empty_classes', 'empty_class_rate', 'sold_out_rate', 'booking_fill_rate', 'revenue_per_class']), charts: S.cl.charts.slice(0, 1), tables: [...(trCh ? [trCh as unknown as ReportTable] : []), ...(clsX.tables.length ? clsX.tables : S.cl.tables.filter((t) => !/Weekday vs weekend/.test(t.title)))], heatmap: S.cl.visuals?.heatmap }, S.cl.insights);
   if (S.tr) { const tc = await trainerCharts(req); push('trainers', { kpis: S.tr.kpis, charts: tc, tables: [...(trSc ? [trSc] : []), ...S.tr.tables.filter((t) => !trSc || !/leaderboard|scorecard/i.test(t.title))], spotlight: S.tr.visuals?.spotlight }, S.tr.insights); }
   if (S.fm) push('formats', { kpis: S.fm.kpis, charts: [...S.fm.charts.slice(0, 1), ...fmX.charts].slice(0, 2), tables: [...fmX.tables, ...S.fm.tables.slice(0, 2)], formats: S.fm.visuals?.formats }, S.fm.insights);
-  if (S.ch) push('churn', { kpis: S.ch.kpis, charts: S.ch.charts, tables: S.ch.tables }, S.ch.insights);
+  if (S.ch) push('churn', { kpis: S.ch.kpis, charts: [...S.ch.charts, ...retX.charts].slice(0, 3), tables: [...retX.tables, ...S.ch.tables] }, S.ch.insights);
 
   // at a glance: 8 cards, 4 tables, top / bottom lists, 3 charts
   const glTables = [S.st?.tables[0] ?? tbl(S.sales, /Product families/), tbl(S.leads, /Lead sources/), tbl(S.cl, /Strongest recurring/), tbl(S.tr, /leaderboard/)].filter(Boolean) as ReportTable[];
@@ -215,18 +220,19 @@ function cLines(c: ReportChart) {
   return r.rows.slice(0, 40).map((row) => `${dims.map((d) => String(row[d.key]).slice(0, 24)).join('/')}: ${m.map((x) => `${x.label} ${fmtVal(Number(row[x.key]), x.format ?? 'number')}`).join(', ')}`).join('; ');
 }
 const FOCUS: Record<string, string> = {
-  sales: 'Focus: revenue vs net, paying clients, ATV, discount depth and share, product-family mix, top and bottom products, self-serve vs staff sales. Explain whether growth is volume- or price-led.',
+  sales: 'Focus: revenue vs net, paying clients, ATV, product-family mix, top and bottom products, self-serve vs staff sales; explain whether growth is volume- or price-led. DISCOUNTS (mandatory): compare discounted vs full-price sales (revenue, ATV, depth, new-client share, 90-day repeat rate), name the best and worst codes from the discount-code table, quantify the revenue boost and discount cost, and state plainly whether discounting is profitable using the DISCOUNT VERDICT — then recommend which codes to keep, cap or retire.',
   attendance: 'Focus: total visits and growth, unique visiting members and visits per member, free vs paid visits, bookings, show-up and late cancels, sessions, class average, fill / capacity use, empty sessions; weekday vs weekend, morning vs evening, best and worst days and slots.',
   funnel: 'Focus: leads by source and their quality, lead→trial→paid rates, speed to convert, second-visit rate, newcomer journeys by first-visit type, first classes visited, hosted-class performance, follow-up by associate, where the funnel leaks and what each leak is worth.',
   classes: 'Focus: recurring-slot performance (fill, class average, empty rate, revenue per class), strongest vs weakest recurring classes, slots that changed trainer and the effect, best and worst class × trainer pairings, best start times; schedule pruning or adding opportunities.',
   trainers: 'Focus: each trainer\'s draw (class average), fill, consistency, revenue per class, newcomer conversion and retention; who carries the schedule, who is under-used, coaching or rostering moves.',
   formats: 'Focus: Barre vs powerCycle vs Strength Lab on demand, fill, class average, revenue per class/attendee, newcomer conversion, retention and LTV; cross-over and where each format should grow or shrink. Use the format-economics tables to say the business each format brings: new clients acquired through it (first format), their conversion, retention, LTV and visit frequency, how many cross to a second format and how fast, renewals credited to it and its renewal rate, and revenue credited by visit share — always noting that credit is behavioural, not a recorded reason.',
-  churn: 'Focus: memberships expiring vs renewed, churn and lapse rates by membership, value at stake, early-warning signals and the save play.',
+  churn: 'Focus: go deep. Use every retention table: churn by usage band (classes used), by how long before expiry the client last visited, by term length, by product family, by membership, by studio and by seller, plus the 12-month trend. Identify the leading indicators of churn (e.g. low usage, going quiet N days before expiry), size each at-risk group in members and ₹ value at stake, contrast the best- and worst-retaining memberships and sellers, and separate structural churn (newcomer offers ending) from true loss. Recommendations must be specific save plays with a trigger (e.g. no visit in 21 days before expiry), an owner, a target group size and expected ₹ saved; give at least 5 insights and 4 recommendations.',
 };
 function sectionDigest(rv: Review, s: ReviewSection) {
   const P = rv.period; const L: string[] = [`STUDIO REVIEW: ${rv.scope} — ${P.label} (${P.start} to ${P.end}). Baselines: ${P.prevLabel}; ${P.ytdLabel}; ${P.lyLabel}.`, `SECTION ${s.id} — ${s.title}`, FOCUS[s.id] ?? ''];
   L.push('STUDIO CONTEXT (headline scorecard, for cross-chapter links): ' + rv.scorecard.slice(0, 12).map((k) => `${k.label} ${fmtVal(k.value, k.format)} (${fmtChg(k)})`).join('; '));
   s.kpis.forEach((k) => L.push('- ' + kLine(k, P)));
+  if (s.discounts) L.push(`DISCOUNT VERDICT: ${s.discounts.verdict}. ` + s.discounts.kpis.map((k) => `${k.label} ${fmtVal(k.value, k.format)}${k.compare !== undefined ? ` vs ${fmtVal(k.compare ?? null, k.format)}` : ''}`).join('; '));
   if (s.index) L.push(`ATTENDANCE INDEX ${s.index.value === null ? 'n/a' : s.index.value.toFixed(1)} / 100 (${s.index.note}) — parts: ${s.index.parts.map((p) => `${p.label} ${fmtVal(p.value, 'percent')}`).join(', ')}`);
   s.funnels?.forEach((f) => L.push(`FUNNEL ${f.title}: ${f.steps.map((x) => `${x.label} ${x.value ?? 'n/a'}`).join(' → ')}`));
   s.spotlight?.forEach((t) => L.push(`TOP DRAW: ${t.name} avg ${fmtVal(t.avg, 'decimal')} over ${t.classes} classes, fill ${fmtVal(t.fill, 'percent')}`));
