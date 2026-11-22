@@ -660,3 +660,56 @@
 .epr-standalone .epr-find { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); column-gap: 40px; }
 .epr-standalone .epr-find li, .epr-standalone .epr-find li:first-child { padding: 14px 0; border-top: 1px solid var(--line); }
 .epr-standalone .epr-rec { padding: 18px 20px; }
+
+/* ═════════ summaries: editorial standfirst + side byline ═════════ */
+.epr-standalone .epr-analysis { border-top: 1px solid var(--ink); }
+.epr-sum { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 40px; padding: 30px 0 10px; }
+.epr-sum-side { display: flex; flex-direction: column; gap: 12px; }
+.epr-sum-mark { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--ink); color: var(--bg); }
+.epr-sum-label { font-family: var(--epr-serif); font-size: 18px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); }
+.epr-sum-side dl { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.epr-sum-side dt { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.epr-sum-side dd { margin-top: 2px; font-size: 12.5px; color: var(--ink-2); }
+.epr-standalone .epr-analysis-main { display: none; }
+
+.epr-sum .epr-prose { columns: auto; padding: 0; }
+.epr-sum .epr-prose p { max-width: 68ch; font-size: var(--fs-body); line-height: 1.8; color: var(--ink-2); }
+.epr-sum .epr-prose p + p { margin-top: 14px; }
+.epr-sum .epr-prose p.lead { position: relative; max-width: 30em; margin-bottom: 22px; padding-bottom: 22px; border-bottom: 1px solid var(--line);
+  font-family: var(--epr-serif); font-size: clamp(19px, 1.9vw, 24px); line-height: 1.45; letter-spacing: -.012em; color: var(--ink); }
+.epr-sum .epr-prose p.lead::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 48px; height: 2px; background: var(--accent); }
+.epr-sum .epr-prose p:not(.lead) { padding-left: 18px; border-left: 1px solid var(--line); }
+
+/* executive summary (chapter 01): set apart on a warm panel */
+.epr-analysis.exec .epr-sum { padding: 36px 40px 32px; margin-top: 8px; border-radius: 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface-2)), var(--surface-2)); }
+.epr-standalone .epr-analysis.exec { border-top: 0; }
+.epr-analysis.exec .epr-sum-mark { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+.epr-analysis.exec .epr-prose p.lead { font-size: clamp(21px, 2.1vw, 27px); }
+.epr-analysis.exec .epr-prose p:not(.lead) { border-left-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+
+/* insights: white tiles with accent numerals */
+.epr-standalone .epr-analysis .epr-insights { margin-top: 24px; padding-top: 24px; }
+.epr-standalone .epr-insights li, .epr-standalone .epr-insights li:first-child { background: var(--surface); border: 1px solid var(--line); padding: 20px 20px 20px 58px; transition: border-color .2s, transform .25s; }
+.epr-standalone .epr-insights li:hover { border-color: var(--ink-3); transform: translateY(-2px); }
+.epr-standalone .epr-insights li::before, .epr-standalone .epr-insights li:first-child::before { left: 20px; top: 18px; font-size: 22px; font-weight: 300; }
+
+@media (max-width: 760px) {
+  .epr-sum { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .epr-sum-side { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .epr-sum-side dl { display: none; }
+  .epr-analysis.exec .epr-sum { padding: 22px 18px; }
+}
+
+/* ═════════ hover without clipping ═════════
+   Rows and tiles highlight in place: no negative margins, lifts or scaling that
+   overflow their (scroll-clipped) containers; card borders never appear on hover. */
+.epr-wrap { overflow-x: visible; }
+.epr-standalone .epr-scroll, .epr-standalone > .min-h-0 { overflow-x: hidden; }
+.epr-standalone .epr-card, .epr-standalone .epr-card:hover { border-left: 0; border-right: 0; border-bottom: 0; border-top-color: var(--line); }
+.epr-table { margin: 0; }
+.epr-tb-list li, .epr-signals-col li { margin: 0; padding-left: 8px; padding-right: 8px; }
+.epr-tb-list .rk { padding-left: 0; }
+.epr-heat td[data-drill]:hover { transform: none; box-shadow: inset 0 0 0 2px var(--ink); }
+.epr-standalone :is(.epr-hl, .epr-spot-c, .epr-land-c, .epr-insights li):hover { transform: none !important; }
+.epr-kpi[data-drill]::after { transform: none; }
+.epr-score-wrap, .epr-heat-wrap, .epr-table { padding-bottom: 2px; }
