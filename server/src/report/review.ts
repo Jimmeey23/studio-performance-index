@@ -14,6 +14,7 @@ import { isNotFound, markMissing } from '../ai/models.js';
 import { verifyNarrative } from '../ai/verify.js';
 import { runMetricsQuery } from '../semantic/engine.js';
 import { metricById, modelById } from '../semantic/metrics.js';
+import { ROLES, normaliseOwner } from './roles.js';
 import { log } from '../util/log.js';
 import { attendanceExtras, classExtras, formatComparison, funnelExtras, productList, trainerScorecard } from './reviewExtras.js';
 import { buildReport, fmtVal, fmtChg, type Kpi, type Report, type ReportChart, type ReportSection, type ReportTable } from './build.js';
@@ -238,13 +239,13 @@ const notesSchema = (ids: string[]) => ({ type: 'object', description: "One deta
 const recSchema = { type: 'array', description: '3–5 recommendations, ranked by impact. Each is a specific, testable change grounded in a finding — never generic.', items: { type: 'object', properties: {
   title: { type: 'string', description: 'Imperative, specific action (≤ 12 words), e.g. "Move Tue 7:15 powerCycle to 6:30 and swap to Kajol".' },
   detail: { type: 'string', description: '40–70 words: the evidence behind it, exactly what to do, and the expected effect.' },
-  owner: { type: 'string', description: 'Accountable role or named person.' },
+  owner: { type: 'string', enum: [...ROLES], description: 'The single accountable role — exactly one of the listed roles, never anything else.' },
   priority: { type: 'string', enum: ['high', 'medium', 'low'] },
   timeline: { type: 'string', description: 'When, e.g. "Next 2 weeks", "By end of month", "This quarter".' },
   kpi: { type: 'string', description: 'The metric that proves it worked, with a target, e.g. "Fill rate 39% → 45% by next review".' },
   impact: { type: 'string', description: 'Estimated stake with "~" if derived, e.g. "~₹1.2L a month" or "~40 more visits a week".' },
 }, required: ['title', 'detail', 'owner', 'priority', 'timeline', 'kpi'] } };
-const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India — premium boutique studios in Mumbai and Bengaluru running Barre, powerCycle and Strength Lab classes, sold as memberships (unlimited / time-based), class packs, single classes and newcomer offers, with trials, hosted (partner / corporate / influencer) classes, late-cancel penalties and trainer-led schedules. You are writing a senior-management Executive Performance Review that the CEO and studio heads will act on.
+const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India — premium boutique studios in Mumbai and Bengaluru running Barre, powerCycle and Strength Lab classes, sold as memberships (unlimited / time-based), class packs, single classes and newcomer offers, with trials, hosted (partner / corporate / influencer) classes, late-cancel penalties and trainer-led schedules. You are writing a senior-management Executive Performance Review that the MD, COO and studio leadership will act on.
 
 HOW TO ANALYSE
 1. Decompose every movement into its drivers before explaining it:
@@ -261,9 +262,9 @@ HOW TO WRITE
 - Use ONLY figures present in the digest, copied exactly as formatted; never invent numbers, names or dates.
 - Be specific: name the products, trainers, classes, slots, days, sources, associates, memberships and studios involved.
 - Lead with the conclusion, then the evidence, then the implication ("so what").
-- Recommendations must be concrete and testable: what exactly to change, who owns it (a role such as Studio Manager, Head Trainer, Sales Lead, Marketing Lead, Operations, Finance, or a named trainer/associate where the data names them), by when, the KPI to watch and a target. Never write generic advice ("improve marketing", "engage clients").
+- Recommendations must be concrete and testable: what exactly to change, who owns it — exactly one of these roles and no other: ${ROLES.join(', ')} (name a specific trainer or associate inside the action text when the data names them, but the owner field is always one of these roles), by when, the KPI to watch and a target. Never write generic advice ("improve marketing", "engage clients").
 - Mind polarity: metrics marked [lower is better] improve when they fall.
-- Elegant, decisive British/Indian English for a CEO; plain sentences, no markdown, no emojis, no bold. Call the tool exactly once.`;
+- Elegant, decisive British/Indian English for the MD; plain sentences, no markdown, no emojis, no bold. Call the tool exactly once.`;
 
 async function callTool<T>(tool: Anthropic.Tool, content: string, tier: Tier): Promise<{ out: T; model: string } | null> {
   if (!config.anthropicKey) return null;
@@ -318,7 +319,7 @@ export async function writeSection(rv: Review, sid: string, tier: Tier = 'balanc
   const o = res.out; const fb = rulesSection(s);
   const notes = typeof o.notes === 'object' && o.notes ? Object.fromEntries(Object.entries(o.notes).filter(([k, v]) => ids.includes(k) && typeof v === 'string')) : {};
   return { headline: o.headline || fb.headline, summary: o.summary || fb.summary, insights: strs(o.insights), findings: strs(o.findings).length ? strs(o.findings) : fb.findings,
-    recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).filter((r) => r && r.title), notes: { ...s.notes, ...notes }, model: res.model, source: 'ai', at: now() };
+    recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).filter((r) => r && r.title).map((r) => ({ ...r, owner: normaliseOwner(r.owner) })), notes: { ...s.notes, ...notes }, model: res.model, source: 'ai', at: now() };
 }
 export async function writeGlance(rv: Review, tier: Tier = 'balanced'): Promise<ReviewGlanceAI> {
   const ids = [...rv.glance.charts.map((c) => c.id), ...rv.glance.tables.map((t) => t.id)];
