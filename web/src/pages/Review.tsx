@@ -790,7 +790,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
         return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')} aria-current={active === n.id ? 'true' : undefined}>
           <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{RAIL_SHORT[n.id] ?? n.title}</span></button>;
-      })}<RailSlides /></nav>}
+      })}<div className="epr-rail2-prog" aria-label={`${Math.round(progress * 100)}% read`}><div className="trk"><i style={{ height: `${Math.max(2, progress * 100)}%` }} /></div><b>{Math.round(progress * 100)}<em>%</em></b></div><RailSlides /></nav>}
       <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
@@ -956,34 +956,32 @@ function HeroSpark({ values, tone: t }: { values?: (number | null)[]; tone: numb
   const c = t > 0 ? 'var(--epr-good)' : t < 0 ? 'var(--epr-bad)' : 'var(--accent)';
   return <svg className="epr-hspark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden><polygon points={`0,${H} ${pts.join(' ')} ${W},${H}`} fill={c} opacity=".12" /><polyline points={pts.join(' ')} fill="none" stroke={c} strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></svg>;
 }
-/** Chapter hero graphic: momentum ring (share of metrics improving) + trend of the lead metric. */
-function HeroGraphic({ kpis }: { kpis: Kpi[] }) {
-  const B = useChg();
-  const scored = kpis.filter((k) => B.chg(k) !== null && k.higherIsBetter !== undefined);
-  const up = scored.filter((k) => tone(k, B.chg(k)) > 0).length; const down = scored.filter((k) => tone(k, B.chg(k)) < 0).length;
-  const share = scored.length ? up / scored.length : 0; const C = 2 * Math.PI * 30;
-  const lead = kpis.find((k) => (k.series ?? []).filter((x) => x !== null).length >= 3) ?? kpis[0];
-  const v = (lead.series ?? []).filter((x): x is number => x !== null && isFinite(x));
-  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1; const W = 360, H = 84;
-  const pts = v.map((x, i) => [(i / Math.max(1, v.length - 1)) * W, H - 6 - ((x - lo) / r) * (H - 16)] as const);
+/** Decorative line-art motif for each chapter hero (illustration, not data). */
+function HeroArt({ id }: { id: string }) {
+  const g = `epr-art-${id}`;
+  const motif: Record<string, ReactNode> = {
+    glance: <>{[0, 30, 60, 90, 120, 150].map((r) => <ellipse key={r} cx="150" cy="110" rx="92" ry="34" transform={`rotate(${r} 150 110)`} />)}<circle cx="150" cy="110" r="10" className="f" /></>,
+    sales: <>{[0, 1, 2, 3, 4].map((i) => <rect key={i} x={52 + i * 42} y={170 - (i + 1) * 26} width="26" height={(i + 1) * 26} rx="6" />)}<path d="M40 150 C 110 120, 170 90, 262 30" className="a" /><circle cx="262" cy="30" r="6" className="f" /></>,
+    attendance: <>{[18, 38, 58, 78, 98].map((r) => <circle key={r} cx="150" cy="110" r={r} className="p" style={{ animationDelay: `${r * 18}ms` }} />)}<circle cx="150" cy="110" r="7" className="f" /></>,
+    funnel: <>{[0, 1, 2, 3, 4].map((i) => <ellipse key={i} cx="150" cy={30 + i * 38} rx={110 - i * 22} ry={14 - i * 2} />)}<path d="M150 182 L150 210" className="a" /><circle cx="150" cy="212" r="5" className="f" /></>,
+    classes: <>{Array.from({ length: 28 }, (_, i) => <rect key={i} x={46 + (i % 7) * 31} y={34 + Math.floor(i / 7) * 40} width="22" height="26" rx="6" className={[3, 9, 12, 17, 22, 26].includes(i) ? 'f' : ''} />)}</>,
+    trainers: <>{[0, 1, 2].map((i) => <g key={i} transform={`translate(${70 + i * 80} ${i === 1 ? 20 : 40})`}><circle cx="0" cy="30" r="18" /><path d="M-34 140 C -34 80, 34 80, 34 140" /></g>)}<path d="M40 190 H 260" className="a" /></>,
+    formats: <><circle cx="115" cy="90" r="58" /><circle cx="185" cy="90" r="58" /><circle cx="150" cy="148" r="58" /><circle cx="150" cy="110" r="6" className="f" /></>,
+    churn: <><path d="M80 110 A 70 70 0 1 1 150 180" className="a" /><path d="M150 180 l -14 -10 M150 180 l -12 12" className="a" /><circle cx="150" cy="110" r="38" /><circle cx="150" cy="110" r="6" className="f" /></>,
+    closing: <><path d="M60 180 L 150 40 L 240 180 Z" /><path d="M105 110 H 195" /><path d="M150 40 V 12" className="a" /><path d="M150 12 h 34 l -8 9 l 8 9 h -34" className="f" /></>,
+  };
   return (
-    <div className="epr-hero-gfx" aria-hidden>
-      <div className="ring"><svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="30" className="trk" /><circle cx="36" cy="36" r="30" className="val" strokeDasharray={`${share * C} ${C}`} transform="rotate(-90 36 36)" /></svg>
-        <div><b>{up}<i>/{scored.length}</i></b><span>improving</span></div></div>
-      <div className="ring-l"><span><i className="g" />{up} up</span><span><i className="b" />{down} down</span><span><i />{scored.length - up - down} flat</span></div>
-      {v.length >= 2 && <div className="trend"><div className="trend-h">{lead.label}<em>trend</em></div>
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"><defs><linearGradient id="epr-hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity=".35" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>
-          <polygon points={`0,${H} ${pts.map((p) => p.join(',')).join(' ')} ${W},${H}`} fill="url(#epr-hg)" />
-          <polyline className="ln" points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-          {pts.length > 0 && <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="4" fill="var(--accent)" className="pulse" />}</svg></div>}
-    </div>
+    <svg className="epr-hero-art" viewBox="0 0 300 220" aria-hidden>
+      <defs><linearGradient id={g} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--accent)" /><stop offset="1" stopColor="var(--accent-2)" /></linearGradient></defs>
+      <g stroke={`url(#${g})`} fill="none" strokeWidth="1.6" style={{ ['--art' as string]: `url(#${g})` }}>{motif[id] ?? motif.glance}</g>
+    </svg>
   );
 }
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
 function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak, vid }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string; vid?: string }) {
   const d = useRD(); const B = useChg();
   return (
-    <header className="epr-hero">
+    <header className="epr-hero"><div className="epr-hero-bg" aria-hidden /><HeroArt id={vid ?? 'closing'} />
       <div className="epr-hero-top">
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
@@ -999,7 +997,6 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         </div>
       </div>
       {headline && <div className="epr-hero-quote">{headline}</div>}
-      {stats.length > 0 && <HeroGraphic kpis={stats} />}
       {stats.length > 0 && (() => { const list = heroPick(stats); return <div className="epr-hero-stats" style={{ ['--hc' as string]: list.length >= 10 ? 5 : Math.min(6, list.length) }}>{list.map((k) => { const t = tone(k, B.chg(k)); return (
         <div key={k.id} {...clickable(d ? () => d.kpi(k) : undefined)}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b><em className={t > 0 ? 'good' : t < 0 ? 'bad' : ''}>{fmtDelta(B.chg(k), k.format)} <i>vs {B.label}</i></em><HeroSpark values={k.series} tone={t} /></div>
       ); })}</div>; })()}
