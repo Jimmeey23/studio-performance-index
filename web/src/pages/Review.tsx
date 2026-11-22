@@ -82,6 +82,32 @@ function useChg() {
   return { chg, label };
 }
 
+/* ── chapter video explainers (NotebookLM): status per chapter, player when ready ── */
+type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?: string; progress: number; startedAt?: string; error?: string };
+const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null } | null>(null);
+function VideoExplainer({ part, title }: { part: string; title: string }) {
+  const c = useContext(RVideo); const [open, setOpen] = useState(false);
+  if (!c || !c.available) return null;
+  const v = c.videos[part];
+  if (!v) return null;
+  if (v.status === 'ready') return <>
+    <button className="epr-vid ready no-print" onClick={() => setOpen(true)} title="Play the video explainer for this chapter"><span className="ic"><Play size={12} /></span>Video explainer</button>
+    {open && <div className="epr-modal no-print" onClick={() => setOpen(false)}><div className="epr-vid-player" onClick={(e) => e.stopPropagation()}>
+      <div className="epr-modal-h"><Play size={15} /><b>{title}</b><button onClick={() => setOpen(false)}><X size={15} /></button></div>
+      <video src={`/api/public/review/${c.rid}/video/${part}`} controls autoPlay playsInline preload="metadata" />
+      <a className="epr-small" href={`/api/public/review/${c.rid}/video/${part}`} download={`${title}.mp4`}>Download MP4</a>
+    </div></div>}
+  </>;
+  if (v.status === 'failed') return <span className="epr-vid failed no-print" title={v.error}>Video unavailable{c.retry && <button onClick={() => c.retry!(part)}>Retry</button>}</span>;
+  const pct = Math.max(2, Math.min(99, v.progress));
+  return (
+    <span className="epr-vid busy no-print" title={v.step}>
+      <svg viewBox="0 0 20 20" aria-hidden><circle cx="10" cy="10" r="8" className="t" /><circle cx="10" cy="10" r="8" className="v" strokeDasharray={`${(pct / 100) * 50.3} 50.3`} /></svg>
+      {v.status === 'queued' ? 'Video queued' : `Video processing · ${pct}%`}<em>{v.step}</em>
+    </span>
+  );
+}
+
 /* ── drill-down: every number in the review opens the records behind it ── */
 type DrillApi = { kpi: (k: Kpi, extra?: DrillFilter[], ctx?: string[]) => void; slice: (metric: string, filters: DrillFilter[], ctx: string[], expected?: number | null) => void };
 const RDrill = createContext<DrillApi | null>(null);
@@ -487,6 +513,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [askOpen, setAskOpen] = useState(false);
   const [spkOpen, setSpkOpen] = useState(false); const [viewOpen, setViewOpen] = useState(false);
   const [spkNotes, setSpkNotes] = useState<Record<string, string>>({});
+  const [vids, setVids] = useState<{ available: boolean; videos: Record<string, VideoState> }>({ available: false, videos: {} });
+  const vidAsked = useRef<string | null>(null);
   const [tool, setTool] = useState<Tool>('none');
   const [ink, setInk] = useState('#e11d48');
   const [clearK, setClearK] = useState(0); const [undoK, setUndoK] = useState(0);
@@ -604,6 +632,27 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [nav, active, present]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // video explainers: poll status while anything is queued/processing; once every chapter's text exists, queue them (signed-in only)
+  const allWritten = !!rv && !!ai?.glance && rv.sections.every((x) => !!ai?.sections?.[x.id]);
+  useEffect(() => {
+    if (!rv) return; let live = true; let t: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const r = await api<{ available: boolean; videos: Record<string, VideoState> }>(`/api/public/review/${rv.id}/explainers`);
+        if (!live) return; setVids(r);
+        if (r.available && !publicView && allWritten && vidAsked.current !== rv.id) {
+          const missing = ['glance', ...rv.sections.map((x) => x.id)].filter((p) => !r.videos[p]);
+          vidAsked.current = rv.id;
+          if (missing.length) { const q = await api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: missing } }).catch(() => null); if (q && live) setVids({ available: true, videos: q.videos }); }
+        }
+        const pending = Object.values(r.videos).some((v) => v.status === 'queued' || v.status === 'processing');
+        if (live && (pending || (r.available && !allWritten))) t = setTimeout(load, 15_000);
+      } catch { /* offline / not set up */ }
+    };
+    load(); return () => { live = false; clearTimeout(t); };
+  }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
+
   const openDrill = useDrill();
   const drillApi: DrillApi | null = rv && P && openDrill ? (() => {
     const loc: DrillFilter[] = rv.request.locations.length ? [{ dimension: 'location', op: 'in', values: rv.request.locations }] : [];
@@ -685,7 +734,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
-            <RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
+            <RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
@@ -695,7 +744,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
                 {!building && !!saved?.definitions?.length && <Definitions defs={saved.definitions} />}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
-            </RDrill.Provider></RBase.Provider>
+            </RDrill.Provider></RBase.Provider></RVideo.Provider>
           )}
         </div>
       </div>
@@ -771,7 +820,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
   const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} />
+      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title="At a glance" lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={rv.cover.headlineKpis} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
       <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
@@ -835,7 +884,7 @@ function Analysis({ part, ai, live, label, fallback }: { part: string; ai?: { su
 }
 
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
-function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string }) {
+function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak, vid }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string; vid?: string }) {
   const d = useRD(); const B = useChg();
   return (
     <header className="epr-hero">
@@ -843,6 +892,7 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
         {speak && <AudioSummary text={`Chapter ${n}. ${title}. ${speak}`} />}
+        {vid && <VideoExplainer part={vid} title={title} />}
         {right}
       </div>
       <div className="epr-hero-body">
@@ -877,7 +927,7 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
   const hasFeature = !!(s.index || s.funnels?.length || s.spotlight?.length || s.formats?.length || (s.heatmap && s.heatmap.rows.length));
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Product', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis}
+      <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Product', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={ai?.title ?? s.title} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis} vid={s.id}
         speak={ai ? [ai.headline, ai.summary, ai.insights.length ? `Key insights. ${ai.insights.slice(0, 3).join(' ')}` : ''].join(' ') : undefined}
         headline={ai ? (live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />) : undefined} />
 

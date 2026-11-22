@@ -32,3 +32,11 @@ export async function saveNew(uid: string, key: string, rv: Review) {
 export async function saveAi(id: string, ai: ReviewAI) { await (await db()).all(`update exec_reviews set ai = ?, updated_at = now() where id = ?`, [JSON.stringify(ai), id]); }
 export async function touch(uid: string, id: string) { await (await db()).all(`update exec_reviews set updated_at = now() where id = ? and user_id = ?`, [id, uid]); }
 export async function remove(uid: string, id: string) { await (await db()).all(`delete from exec_reviews where id = ? and user_id = ?`, [id, uid]); }
+
+/** Serialises read-modify-write updates of one review's AI/extras blob (shared by routes and background jobs). */
+export const reviewLocks = new Map<string, Promise<unknown>>();
+export function locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  const run = (reviewLocks.get(id) ?? Promise.resolve()).then(fn);
+  reviewLocks.set(id, run.catch(() => {}));
+  return run;
+}
