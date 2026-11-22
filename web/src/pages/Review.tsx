@@ -23,6 +23,7 @@ import { AdvancedTable } from '../components/blocks/AdvancedTable';
 import { CountUp, Sparkline } from '../components/Animated';
 import { useDrill, type DrillFilter } from '../lib/drill';
 import { TrainerAvatar } from '../lib/trainers';
+import { ROLES, normaliseOwner } from '../lib/roles';
 import { PinCtx } from '../lib/pin';
 import type { Block } from '../lib/types';
 import { BlockView } from '../components/blocks/Blocks';
@@ -376,7 +377,7 @@ function Recs({ recs, part }: { recs: Rec[]; part: string }) {
       <Ed as="div" className="epr-rec-t" part={part} path={['recommendations', i, 'title']} value={r.title} />
       <Ed as="p" part={part} path={['recommendations', i, 'detail']} value={r.detail} />
       <dl className="epr-rec-meta">
-        <div><dt>Owner</dt><dd><Ed part={part} path={['recommendations', i, 'owner']} value={r.owner} /></dd></div>
+        <div><dt>Owner</dt><dd><Ed part={part} path={['recommendations', i, 'owner']} value={normaliseOwner(r.owner)} /></dd></div>
         {r.timeline && <div><dt>When</dt><dd><Ed part={part} path={['recommendations', i, 'timeline']} value={r.timeline} /></dd></div>}
         {r.kpi && <div className="w"><dt>Measure</dt><dd><Ed part={part} path={['recommendations', i, 'kpi']} value={r.kpi} /></dd></div>}
         {r.impact && <div className="w"><dt>Impact</dt><dd><Ed part={part} path={['recommendations', i, 'impact']} value={r.impact} /></dd></div>}
@@ -604,7 +605,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const speakerChapters: SpeakerChapter[] = useMemo(() => {
     if (!rv) return [];
     const num = (k: Kpi) => { const c = base === 'prev' ? k.chg : base === 'ytd' ? k.chgYtd : k.chgLy; return { label: k.label, value: fmtK(k.value, k.format), delta: fmtDelta(c, k.format), tone: tone(k, c) }; };
-    const recs = (r?: Rec[]) => (r ?? []).map((x) => `${x.title} — ${x.owner}${x.timeline ? `, ${x.timeline}` : ''}`);
+    const recs = (r?: Rec[]) => (r ?? []).map((x) => `${x.title} — ${normaliseOwner(x.owner)}${x.timeline ? `, ${x.timeline}` : ''}`);
     return [
       { id: 'glance', n: '01', title: 'At a glance', headline: ai?.glance?.headline, summary: ai?.glance?.summary, points: ai?.glance?.insights ?? [], numbers: rv.cover.headlineKpis.map(num), actions: ai?.glance?.watch ?? [] },
       ...rv.sections.map((x, i) => { const a = ai?.sections[x.id]; return { id: x.id, n: String(i + 2).padStart(2, '0'), title: a?.title ?? x.title, headline: a?.headline, summary: a?.summary, points: a?.insights?.length ? a.insights : x.ruleFindings.slice(0, 4), numbers: x.kpis.slice(0, 5).map(num), actions: recs(a?.recommendations) }; }),
@@ -973,14 +974,29 @@ function ReviewSectionView({ n, total, s, ai, live, busy, base, P, canAi, onRewr
   );
 }
 
+type PlanRec = Rec & { sid: string; chapter: string };
+function ActionCard({ r, n, jump, compact }: { r: PlanRec; n: number; jump: (id: string) => void; compact?: boolean }) {
+  const [more, setMore] = useState(false);
+  return (
+    <article className={clsx('epr-ac epr-rv', r.priority, compact && 'compact')}>
+      <div className="epr-ac-top"><span className="n">{String(n).padStart(2, '0')}</span>{!compact && <span className="own">{r.owner}</span>}<span className="w">{r.timeline || WHEN[r.priority]}</span></div>
+      <h4>{r.title}</h4>
+      <p className={clsx(!more && 'clamp')} onClick={() => setMore((m) => !m)}>{r.detail}</p>
+      {(r.kpi || r.impact) && <dl>{r.kpi && <div><dt>Measure</dt><dd>{r.kpi}</dd></div>}{r.impact && <div><dt>Impact</dt><dd>{r.impact}</dd></div>}</dl>}
+      <button className="epr-ac-ch" onClick={() => jump(r.sid)}>{r.chapter}<ArrowRight size={11} /></button>
+    </article>
+  );
+}
+
 /* ── closing chapter: main findings in brief + the full action plan with owners and timelines ── */
 const WHEN: Record<Rec['priority'], string> = { high: 'Next 2 weeks', medium: 'Within 30 days', low: 'This quarter' };
 function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; jump: (id: string) => void }) {
   const [owner, setOwner] = useState<string>('all');
-  const recs = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, sid: s.id, chapter: ai?.sections[s.id]?.title ?? s.title })));
+  const recs = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), sid: s.id, chapter: ai?.sections[s.id]?.title ?? s.title })));
   const order = { high: 0, medium: 1, low: 2 } as const;
   recs.sort((a, b) => order[a.priority] - order[b.priority]);
-  const owners = [...new Set(recs.map((r) => r.owner).filter(Boolean))];
+  const owners = ROLES.filter((x) => recs.some((r) => r.owner === x));
+  const [view, setView] = useState<'time' | 'owner'>('time');
   const shown = owner === 'all' ? recs : recs.filter((r) => r.owner === owner);
   const n = rv.sections.length + 2;
   return (
@@ -996,20 +1012,29 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
       <ChapterNotes sec="closing" />
       <Pins part="closing" n={`${n}.+`} />
       <Sub n={`${n}.2`} title="Action plan" note={`${recs.length} actions · ${recs.filter((r) => r.priority === 'high').length} high priority`} />
-      {owners.length > 1 && <div className="epr-seg sm epr-plan-f">{['all', ...owners].map((o) => <button key={o} className={clsx(owner === o && 'on')} onClick={() => setOwner(o)}>{o === 'all' ? 'All owners' : o}</button>)}</div>}
-      <div className="epr-plan-wrap"><table className="epr-plan">
-        <thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Timeline & measure</th><th>Priority</th><th>Chapter</th></tr></thead>
-        <tbody>{shown.map((r, i) => (
-          <tr key={i} className="epr-rv">
-            <td className="n">{String(i + 1).padStart(2, '0')}</td>
-            <td><b>{r.title}</b><p>{r.detail}</p></td>
-            <td className="o">{r.owner}</td>
-            <td className="w">{r.timeline || WHEN[r.priority]}{r.kpi && <em className="epr-plan-kpi">{r.kpi}</em>}</td>
-            <td><span className={clsx('epr-pri', r.priority)}>{r.priority}</span></td>
-            <td><button className="epr-plan-ch" onClick={() => jump(r.sid)}>{r.chapter} <ArrowRight size={11} /></button></td>
-          </tr>
-        ))}</tbody>
-      </table></div>
+      <div className="epr-ap-sum">
+        {(['high', 'medium', 'low'] as const).map((p) => <div key={p} className={clsx('epr-ap-stat', p)}><b>{recs.filter((r) => r.priority === p).length}</b><span>{p} priority</span><em>{WHEN[p]}</em></div>)}
+        <div className="epr-ap-stat own"><b>{owners.length}</b><span>owners</span><em>{owners.slice(0, 3).join(' · ')}{owners.length > 3 ? ' …' : ''}</em></div>
+      </div>
+      <div className="epr-ap-ctrl">
+        <div className="epr-seg sm"><button className={clsx(view === 'time' && 'on')} onClick={() => setView('time')}>By timeline</button><button className={clsx(view === 'owner' && 'on')} onClick={() => setView('owner')}>By owner</button></div>
+        {owners.length > 1 && <div className="epr-ap-chips">{['all', ...owners].map((o) => <button key={o} className={clsx(owner === o && 'on')} onClick={() => setOwner(o)}>{o === 'all' ? 'All owners' : o}<i>{o === 'all' ? recs.length : recs.filter((r) => r.owner === o).length}</i></button>)}</div>}
+      </div>
+      {view === 'time' ? (
+        <div className="epr-ap-board">{(['high', 'medium', 'low'] as const).map((p) => { const col = shown.filter((r) => r.priority === p); return (
+          <div key={p} className={clsx('epr-ap-col', p)}>
+            <div className="epr-ap-col-h"><span className={clsx('epr-pri', p)}>{p}</span><b>{WHEN[p]}</b><i>{col.length}</i></div>
+            {col.length ? col.map((r) => <ActionCard key={`${r.sid}-${r.title}`} r={r} n={recs.indexOf(r) + 1} jump={jump} />) : <p className="epr-small">Nothing at this priority.</p>}
+          </div>
+        ); })}</div>
+      ) : (
+        <div className="epr-ap-owners">{owners.filter((o) => owner === 'all' || owner === o).map((o) => (
+          <div key={o} className="epr-ap-own">
+            <div className="epr-ap-own-h"><span className="av">{o.replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span><b>{o}</b><i>{recs.filter((r) => r.owner === o).length} actions</i></div>
+            <div className="epr-ap-own-l">{recs.filter((r) => r.owner === o).map((r) => <ActionCard key={`${r.sid}-${r.title}`} r={r} n={recs.indexOf(r) + 1} jump={jump} compact />)}</div>
+          </div>
+        ))}</div>
+      )}
     </section>
   );
 }
