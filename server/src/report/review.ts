@@ -28,13 +28,13 @@ export const ReviewRequestSchema = z.object({
 export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
 
 export const REVIEW_SECTIONS = [
-  { id: 'sales', title: 'Sales', icon: 'IndianRupee', lead: 'Cash collected, pricing, product mix, associates and payment behaviour.' },
-  { id: 'attendance', title: 'Attendance, Bookings & Cancellations Index', icon: 'Activity', lead: 'How clients book, show up, visit and cancel — rolled into one attendance health index.' },
-  { id: 'funnel', title: 'Funnel Health', icon: 'Filter', lead: 'Leads to trials to paying members — volume, quality, speed and where the funnel leaks.' },
-  { id: 'classes', title: 'Class Performance', icon: 'CalendarRange', lead: 'Schedule productivity — fill, class size, empty classes, the best and weakest slots.' },
-  { id: 'trainers', title: 'Trainer Performance', icon: 'GraduationCap', lead: 'Draw, fill, consistency, yield and newcomer conversion by trainer.' },
-  { id: 'formats', title: 'Format Comparison', icon: 'Shapes', lead: 'Barre vs powerCycle vs Strength Lab — demand, fill, yield and cross-over.' },
-  { id: 'churn', title: 'Churn & Lapsed Members', icon: 'UserMinus', lead: 'Recurring memberships ending — renewals, lapses and the value at stake.' },
+  { id: 'sales', title: 'Revenue \& Commercial Performance', icon: 'IndianRupee', lead: 'Cash collected, pricing, product mix, associates and payment behaviour.' },
+  { id: 'attendance', title: 'Client Engagement \& Attendance', icon: 'Activity', lead: 'How clients book, show up, visit and cancel — rolled into one attendance health index.' },
+  { id: 'funnel', title: 'Client Acquisition \& Conversion', icon: 'Filter', lead: 'Leads to trials to paying members — volume, quality, speed and where the funnel leaks.' },
+  { id: 'classes', title: 'Schedule \& Class Utilisation', icon: 'CalendarRange', lead: 'Schedule productivity — fill, class size, empty classes, the best and weakest slots.' },
+  { id: 'trainers', title: 'Instructor Performance', icon: 'GraduationCap', lead: 'Draw, fill, consistency, yield and newcomer conversion by trainer.' },
+  { id: 'formats', title: 'Format Portfolio \& Economics', icon: 'Shapes', lead: 'Barre vs powerCycle vs Strength Lab — demand, fill, yield and cross-over.' },
+  { id: 'churn', title: 'Membership Retention \& Renewals', icon: 'UserMinus', lead: 'Recurring memberships ending — renewals, lapses and the value at stake.' },
 ] as const;
 export type ReviewSectionId = typeof REVIEW_SECTIONS[number]['id'];
 

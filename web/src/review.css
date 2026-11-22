@@ -876,7 +876,7 @@
 
 /* left chapter rail: slim, expands as an overlay on hover so it never narrows the report */
 .epr-rail2 { position: relative; z-index: 15; flex-shrink: 0; width: 58px; display: flex; flex-direction: column; gap: 2px; padding: 14px 8px; border-right: 1px solid var(--line); background: var(--bg); overflow: hidden; transition: width .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s; }
-.epr-rail2:hover, .epr-rail2:focus-within { width: 260px; box-shadow: 20px 0 40px -30px rgb(0 0 0 / .35); margin-right: -202px; }
+.epr-rail2:hover, .epr-rail2:focus-within { width: 260px; }
 .epr-rail2 button { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 8px; border-radius: 10px; color: var(--ink-3); white-space: nowrap; text-align: left; transition: background .15s, color .15s; }
 .epr-rail2 button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 .epr-rail2 button.on { background: var(--ink); color: var(--bg); }
