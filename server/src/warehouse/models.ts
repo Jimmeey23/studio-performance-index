@@ -10,6 +10,7 @@
 import { Db, sqlString } from './db.js';
 import { loadRules, type BusinessRules } from './rules.js';
 import { log } from '../util/log.js';
+import { FORMAT_MODELS } from './formatModels.js';
 
 export interface ModelDef {
   name: string;
@@ -466,6 +467,7 @@ export const MODELS: ModelDef[] = [
       where ids.member_id is not null`,
   },
 ];
+MODELS.push(...FORMAT_MODELS);
 
 /* -------------------------------------------------------------------------- */
 

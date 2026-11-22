@@ -327,6 +327,37 @@ ${COMMON_METHOD}`,
       'Should we move slots between formats? Show sold-out vs under-filled classes by format and slot.',
     ],
   },
+  {
+    id: 'format_economics', label: 'Format economics', icon: 'Gem',
+    blurb: 'The business each format brings: new clients, conversion, retention, LTV, frequency, cross-format journeys and renewals credited to each format.',
+    expert: `You are the Format Economics expert — you measure the commercial value each format (Barre, powerCycle, Strength Lab) brings to Physique 57, client by client.
+Data: fct_client_format has one row per client — first format (first attended class), main format (60%+ of their classes, else "Mixed"), format mix (single / two / all three), visits by format, visits per active month, active months, lifetime revenue (all sales), revenue split across formats by visit share, and new-client outcomes (converted, retained). fct_membership_format credits each ending recurring membership to the format the client attended most in its last 60 days.
+Use: "how many new clients came through X" = format_new_clients by first_format; "their LTV / retention / conversion" = client_avg_ltv, format_retention_rate, format_conversion_rate by first_format; "frequency" = visits_per_active_month by main_format or frequency_band; "cross-format behaviour" = multi_format_rate, format_mix, second_format by first_format, avg_days_to_second_format; "renewed mostly due to X" = credited_renewals and credited_renewal_rate by credited_format; "revenue X brings" = barre/cycle/strength_revenue_share.
+Caveats you always state: revenue split and renewal credit are behavioural attributions (the data does not record why a client paid or renewed); client_avg_ltv credits the whole client to one segment; the client profile is cohorted by first class date, so recent cohorts look smaller on tenure and LTV — compare like-for-like cohorts; Strength Lab is newer, so samples are small.
+${COMMON_METHOD}`,
+    kpis: ['format_new_clients', 'format_conversion_rate', 'format_retention_rate', 'client_avg_ltv', 'visits_per_active_month', 'multi_format_rate', 'credited_renewal_rate'],
+    widgets: [
+      { type: 'kpis', title: 'Headline', metrics: ['format_clients', 'format_new_clients', 'format_conversion_rate', 'format_retention_rate', 'client_avg_ltv', 'visits_per_active_month', 'multi_format_rate', 'credited_renewal_rate'] },
+      { type: 'table', title: 'Acquisition → LTV by first format', section: 'Acquisition & value', metrics: ['format_clients', 'format_new_clients', 'format_conversion_rate', 'format_retention_rate', 'client_avg_ltv', 'client_lifetime_visits', 'client_active_months', 'visits_per_active_month', 'multi_format_rate', 'avg_days_to_second_format'], dimensions: ['first_format'], view: 'transposed', span: 2 },
+      { type: 'chart', title: 'New clients by first format', section: 'Acquisition & value', metrics: ['format_new_clients'], dimension: 'first_format', chart: 'stacked_bar', span: 2 },
+      { type: 'table', title: 'Revenue credited to each format (visit share)', section: 'Acquisition & value', metrics: ['barre_revenue_share', 'cycle_revenue_share', 'strength_revenue_share', 'format_lifetime_revenue'], dimensions: ['location'], span: 2 },
+      { type: 'table', title: 'Main format: depth and value', section: 'Frequency & loyalty', metrics: ['format_clients', 'visits_per_active_month', 'client_lifetime_visits', 'client_active_months', 'client_avg_ltv'], dimensions: ['main_format'], view: 'transposed', span: 2 },
+      { type: 'table', title: 'Frequency bands by main format', section: 'Frequency & loyalty', metrics: ['format_clients', 'client_avg_ltv', 'client_active_months'], dimensions: ['main_format', 'frequency_band'], view: 'pivot', span: 2 },
+      { type: 'table', title: 'Where clients go next (first → second format)', section: 'Cross-format journeys', metrics: ['format_clients'], dimensions: ['first_format', 'second_format'], view: 'pivot', span: 2 },
+      { type: 'table', title: 'Single vs multi-format clients', section: 'Cross-format journeys', metrics: ['format_clients', 'visits_per_active_month', 'client_active_months', 'client_avg_ltv', 'format_retention_rate'], dimensions: ['format_mix'], view: 'transposed', span: 2 },
+      { type: 'table', title: 'Renewals credited to each format', section: 'Renewals', metrics: ['credited_memberships_ending', 'credited_renewals', 'credited_renewal_rate', 'credited_renewal_value', 'term_visits_per_membership'], dimensions: ['credited_format'], view: 'transposed', span: 2 },
+      { type: 'table', title: 'Renewal: single vs multi-format members', section: 'Renewals', metrics: ['credited_memberships_ending', 'credited_renewal_rate', 'term_visits_per_membership'], dimensions: ['format_mix'], span: 2 },
+      { type: 'table', title: 'Renewal by format × studio', section: 'Renewals', metrics: ['credited_memberships_ending', 'credited_renewals', 'credited_renewal_rate'], dimensions: ['credited_format', 'location'], view: 'grouped', span: 2 },
+      { type: 'mom', title: 'Month-on-month new clients by first format', section: 'Acquisition & value', metrics: ['format_new_clients', 'format_conversion_rate', 'format_retention_rate'], dimension: 'first_format' },
+    ],
+    presets: [
+      'How many new clients came through Strength Lab in the last 6 months, and what are their conversion, retention and average LTV vs Barre and powerCycle?',
+      'How often do Strength Lab-first clients attend, and how many go on to try Barre or powerCycle?',
+      'How many renewals in the last quarter were credited to Strength Lab, and what is its renewal rate vs other formats?',
+      'Do multi-format clients stay longer and spend more than single-format clients?',
+      'How much revenue does each format bring when we split each client by their visit share?',
+    ],
+  },
 ];
 
 export const domainById = new Map(DOMAINS.map((d) => [d.id, d]));
