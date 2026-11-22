@@ -9,7 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, MessageSquare, Pin, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -27,6 +27,7 @@ import { PinCtx } from '../lib/pin';
 import type { Block } from '../lib/types';
 import { BlockView } from '../components/blocks/Blocks';
 import Analyst from './Analyst';
+import { SpeakerPanel, type SpeakerChapter } from '../components/report/Speaker';
 import { ChapterNotes, InkLayer, NotesCtx, NOTE_COLORS, PointerFx, PresenterBar, type ReviewNote, type Tool } from '../components/report/Presenter';
 import '../review.css';
 
@@ -49,7 +50,7 @@ type Rec = { title: string; detail: string; owner: string; priority: 'high' | 'm
 type SectionAI = { title?: string; lead?: string; edited?: boolean; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: Rec[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
 type GlanceAI = { edited?: boolean; headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
 type PinItem = { id: string; part: string; block: Block; at: string };
-type Extras = { pins: PinItem[]; notes: ReviewNote[] };
+type Extras = { pins: PinItem[]; notes: ReviewNote[]; speaker?: Record<string, string> };
 type AI = { glance?: GlanceAI; sections: Record<string, SectionAI>; extras?: Partial<Extras> };
 /** Assistant results the user pinned into a chapter. */
 const PinsCtx = createContext<{ pins: PinItem[]; remove: (id: string) => void } | null>(null);
@@ -455,11 +456,11 @@ function Landing() {
 }
 
 /* ═════════ page ═════════ */
-export default function Review({ standalone }: { embedded?: boolean; standalone?: boolean }) {
-  return standalone ? <ReviewDoc /> : <Landing />;
+export default function Review({ standalone, publicView }: { embedded?: boolean; standalone?: boolean; publicView?: boolean }) {
+  return standalone ? <ReviewDoc publicView={!!publicView} /> : <Landing />;
 }
 
-function ReviewDoc() {
+function ReviewDoc({ publicView }: { publicView: boolean }) {
   const me = useMe();
   const isAdmin = me?.role === 'admin';
   const { reviewId } = useParams();
@@ -480,6 +481,8 @@ function ReviewDoc() {
   const [progress, setProgress] = useState(0);
   const [startedAt] = useState(Date.now());
   const [askOpen, setAskOpen] = useState(false);
+  const [spkOpen, setSpkOpen] = useState(false); const [viewOpen, setViewOpen] = useState(false);
+  const [spkNotes, setSpkNotes] = useState<Record<string, string>>({});
   const [tool, setTool] = useState<Tool>('none');
   const [ink, setInk] = useState('#e11d48');
   const [clearK, setClearK] = useState(0); const [undoK, setUndoK] = useState(0);
@@ -497,14 +500,15 @@ function ReviewDoc() {
 
   useEffect(() => {
     setLoading(true); setSaved(null); started.current = new Set();
-    api<Saved>(`/api/review/${reviewId}`).then(setSaved).catch((e) => setErr((e as Error).message)).finally(() => setLoading(false));
+    api<Saved>(publicView ? `/api/public/review/${reviewId}` : `/api/review/${reviewId}`).then(setSaved).catch((e) => setErr((e as Error).message)).finally(() => setLoading(false));
   }, [reviewId]);
   useEffect(() => { try { localStorage.setItem('epr-scale', String(scale)); } catch { /* */ } }, [scale]);
   const loadedExtras = useRef<string | null>(null);
-  useEffect(() => { if (saved && loadedExtras.current !== saved.review.id) { loadedExtras.current = saved.review.id; setExtras({ pins: (saved.ai.extras?.pins ?? []) as PinItem[], notes: (saved.ai.extras?.notes ?? []) as ReviewNote[] }); } }, [saved]);
+  useEffect(() => { if (saved && loadedExtras.current !== saved.review.id) { loadedExtras.current = saved.review.id; setExtras({ pins: (saved.ai.extras?.pins ?? []) as PinItem[], notes: (saved.ai.extras?.notes ?? []) as ReviewNote[], speaker: saved.ai.extras?.speaker }); let sp = saved.ai.extras?.speaker ?? {}; if (publicView) { try { sp = { ...sp, ...JSON.parse(localStorage.getItem(`epr-spk-${saved.review.id}`) ?? '{}') }; } catch { /* */ } } setSpkNotes(sp); } }, [saved]);
   const saveExtras = (next: Extras) => {
     setExtras(next);
     if (exTimer.current) clearTimeout(exTimer.current);
+    if (publicView) return;
     exTimer.current = setTimeout(() => { if (saved) api(`/api/review/${saved.review.id}/extras`, { method: 'PUT', json: { extras: next } }).catch((e) => setErr(`Could not save: ${(e as Error).message}`)); }, 500);
   };
   const addPin = (part: string) => { if (!pinBlock) return; saveExtras({ ...extras, pins: [...extras.pins, { id: `p${Date.now().toString(36)}`, part, block: pinBlock, at: new Date().toISOString() }] }); setPinBlock(null); setTimeout(() => document.getElementById(`epr-${part}`)?.querySelector('.epr-pins')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200); };
@@ -530,7 +534,7 @@ function ReviewDoc() {
   }, []);
   // plan first (the overview reads every section), then write the sections three at a time
   useEffect(() => {
-    if (!saved) return;
+    if (!saved || publicView) return;   // public viewers never trigger AI
     const id = saved.review.id;
     const missing = (p: string) => !(p === 'glance' ? saved.ai.glance : saved.ai.sections?.[p]) && !started.current.has(`${id}:${p}`);
     const secs = saved.review.sections.map((s) => s.id).filter(missing);
@@ -559,12 +563,22 @@ function ReviewDoc() {
   const rv = saved?.review; const ai = saved?.ai; const P = rv?.period;
   const gl = ai?.glance;
   const order = useMemo(() => (rv ? ['glance', ...rv.sections.map((s) => s.id)] : []), [rv]);
-  const has = (p: string) => !!(p === 'glance' ? ai?.glance : ai?.sections?.[p]) || failed.has(p);
+  const has = (p: string) => publicView || !!(p === 'glance' ? ai?.glance : ai?.sections?.[p]) || failed.has(p);
   // the report assembles in order: a part shows only once it and everything before it is written
   const shown = (() => { let n = 0; for (const p of order) { if (has(p)) n++; else break; } return n; })();
   const building = shown < order.length;
   const visible = new Set(order.slice(0, shown));
   const nav = useMemo(() => rv ? [{ id: 'cover', title: 'Cover' }, { id: 'glance', title: 'At a glance' }, ...rv.sections.map((s) => ({ id: s.id, title: ai?.sections?.[s.id]?.title ?? s.title })), { id: 'closing', title: 'Action plan' }] : [], [rv, ai]);
+  const speakerChapters: SpeakerChapter[] = useMemo(() => {
+    if (!rv) return [];
+    const num = (k: Kpi) => { const c = base === 'prev' ? k.chg : base === 'ytd' ? k.chgYtd : k.chgLy; return { label: k.label, value: fmtK(k.value, k.format), delta: fmtDelta(c, k.format), tone: tone(k, c) }; };
+    const recs = (r?: Rec[]) => (r ?? []).map((x) => `${x.title} — ${x.owner}${x.timeline ? `, ${x.timeline}` : ''}`);
+    return [
+      { id: 'glance', n: '01', title: 'At a glance', headline: ai?.glance?.headline, summary: ai?.glance?.summary, points: ai?.glance?.insights ?? [], numbers: rv.cover.headlineKpis.map(num), actions: ai?.glance?.watch ?? [] },
+      ...rv.sections.map((x, i) => { const a = ai?.sections[x.id]; return { id: x.id, n: String(i + 2).padStart(2, '0'), title: a?.title ?? x.title, headline: a?.headline, summary: a?.summary, points: a?.insights?.length ? a.insights : x.ruleFindings.slice(0, 4), numbers: x.kpis.slice(0, 5).map(num), actions: recs(a?.recommendations) }; }),
+      { id: 'closing', n: String(rv.sections.length + 2).padStart(2, '0'), title: 'Summary & action plan', headline: ai?.glance?.tagline, points: rv.sections.map((x) => ai?.sections[x.id]?.headline ?? '').filter(Boolean), numbers: [], actions: rv.sections.flatMap((x) => recs(ai?.sections[x.id]?.recommendations?.filter((r) => r.priority === 'high'))) },
+    ];
+  }, [rv, ai, base]);
   const jump = (id: string) => document.getElementById(`epr-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // keyboard: j / k to move between sections
@@ -628,31 +642,41 @@ function ReviewDoc() {
     <div ref={rootRef} className={clsx('epr epr-standalone flex h-full flex-col', brief && 'brief', editApi.on && 'editing', present && 'presenting', tool !== 'none' && `tool-${tool}`)} style={{ ['--epr-scale' as string]: scale }}>
       <div className="epr-bar no-print">
         <div className="epr-bar-in">
-          <button className="epr-back" onClick={() => navigate('/review')} title="Back to the app"><ArrowLeft size={15} /><span>Back to app</span></button>
+          <button className="epr-ibtn" onClick={() => (publicView ? location.assign('/') : navigate('/review'))} title={publicView ? 'Sign in to the app' : 'Back to the app'}><ArrowLeft size={16} /></button>
           <div className="epr-bar-t"><b>Performance Review</b>{rv && P && <span>{P.label} · {rv.scope}</span>}</div>
           {rv && <div className="epr-tools">
-            <div className="epr-seg sm" title="Baseline used on every metric"><button className={clsx(base === 'prev' && 'on')} onClick={() => setBase('prev')}>vs prev</button><button className={clsx(base === 'ytd' && 'on')} onClick={() => setBase('ytd')}>vs YTD</button><button className={clsx(base === 'ly' && 'on')} onClick={() => setBase('ly')}>vs LY</button></div>
-            <div className="epr-seg sm" title="Full report or executive brief (headlines, numbers and actions only)"><button className={clsx(!brief && 'on')} onClick={() => setBrief(false)}>Full</button><button className={clsx(brief && 'on')} onClick={() => setBrief(true)}>Brief</button></div>
-            <div className="epr-seg sm" title="Text size"><button onClick={() => setScale((x) => Math.max(0.9, +(x - 0.05).toFixed(2)))}>A−</button><button onClick={() => setScale((x) => Math.min(1.2, +(x + 0.05).toFixed(2)))}>A+</button></div>
-            {isAdmin && <button className={clsx('epr-tbtn', editOn && 'on')} onClick={() => setEditOn((o) => !o)} title="Edit the report text in place — changes save automatically"><Pencil size={14} />{editOn ? 'Done' : 'Edit'}</button>}
-            {editOn && <span className={clsx('epr-save', saveState)}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Not saved' : 'Click any text to edit'}</span>}
-            <button className="epr-tbtn" onClick={() => window.print()} title="Print or save as PDF"><Printer size={14} /></button>
-            <button className="epr-tbtn" onClick={copyLink} title="Copy link">{copied ? <Check size={14} /> : <Link2 size={14} />}</button>
-            <button className="epr-tbtn" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={14} /></button>
-            <button className={clsx('epr-tbtn', pbar && 'on')} onClick={() => setPbar((x) => !x)} title="Presenter tools — laser, spotlight, pen, notes, timer"><PenLine size={14} /></button>
-            <button className={clsx('epr-ask', askOpen && 'on')} onClick={() => setAskOpen((x) => !x)} title="Ask the assistant about this report ( / )"><MessageSquare size={14} />Ask AI</button>
+            <div className="epr-seg sm" title="Baseline used on every comparison"><button className={clsx(base === 'prev' && 'on')} onClick={() => setBase('prev')}>Prev</button><button className={clsx(base === 'ytd' && 'on')} onClick={() => setBase('ytd')}>YTD</button><button className={clsx(base === 'ly' && 'on')} onClick={() => setBase('ly')}>LY</button></div>
+            <div className="relative">
+              <button className={clsx('epr-ibtn', viewOpen && 'on')} onClick={() => setViewOpen((o) => !o)} title="View — full or brief, text size"><SlidersHorizontal size={15} /></button>
+              {viewOpen && <div className="epr-pop" onMouseLeave={() => setViewOpen(false)}>
+                <div className="epr-pop-l">Content</div>
+                <div className="epr-seg sm"><button className={clsx(!brief && 'on')} onClick={() => setBrief(false)}>Full report</button><button className={clsx(brief && 'on')} onClick={() => setBrief(true)}>Brief</button></div>
+                <div className="epr-pop-l">Text size · {Math.round(scale * 100)}%</div>
+                <div className="epr-seg sm"><button onClick={() => setScale((x) => Math.max(0.9, +(x - 0.05).toFixed(2)))}>A−</button><button onClick={() => setScale(1)}>Reset</button><button onClick={() => setScale((x) => Math.min(1.25, +(x + 0.05).toFixed(2)))}>A+</button></div>
+              </div>}
+            </div>
+            <i className="epr-vsep" />
+            {isAdmin && !publicView && <button className={clsx('epr-ibtn', editOn && 'on')} onClick={() => setEditOn((o) => !o)} title={editOn ? 'Done editing' : 'Edit the report text in place — saves automatically'}><Pencil size={15} /></button>}
+            {editOn && <span className={clsx('epr-save', saveState)}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Not saved' : 'Editing'}</span>}
+            <button className="epr-ibtn" onClick={() => window.print()} title="Print or save as PDF"><Printer size={15} /></button>
+            <button className="epr-ibtn" onClick={copyLink} title="Copy the public link">{copied ? <Check size={15} /> : <Link2 size={15} />}</button>
+            {!publicView && <button className="epr-ibtn" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={15} /></button>}
+            <i className="epr-vsep" />
+            <button className={clsx('epr-ibtn', pbar && 'on')} onClick={() => setPbar((x) => !x)} title="Presenter tools — laser, spotlight, pen, notes, timer"><PenLine size={15} /></button>
+            <button className={clsx('epr-ibtn', spkOpen && 'on')} onClick={() => { setSpkOpen((x) => !x); setAskOpen(false); }} title="Speaker notes & teleprompter"><ScrollText size={15} /></button>
+            {!publicView && <button className={clsx('epr-ask', askOpen && 'on')} onClick={() => { setAskOpen((x) => !x); setSpkOpen(false); }} title="Ask the assistant about this report ( / )"><MessageSquare size={14} /><span>Ask AI</span></button>}
           </div>}
         </div>
-        {rv && <nav className="epr-nav" aria-label="Review sections"><div className="epr-nav-in">{nav.map((n, i) => {
-          const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
-          return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')}>
-            <span className="i">{busy.has(part) ? <Loader2 size={10} className="animate-spin" /> : i === 0 ? '·' : String(i).padStart(2, '0')}</span>{n.title.replace(/ Index$/, '')}</button>;
-        })}</div></nav>}
         <div className="epr-progress" style={{ transform: `scaleX(${progress})` }} />
         {err && <div className="epr-err"><AlertTriangle size={14} />{err}<button onClick={() => setErr(null)}><X size={13} /></button></div>}
       </div>
 
       <div className="flex min-h-0 flex-1">
+      {rv && <nav className="epr-rail2 no-print" aria-label="Chapters">{nav.map((n, i) => {
+        const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
+        return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')} aria-current={active === n.id ? 'true' : undefined}>
+          <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{n.title.replace(/ Index$/, '')}</span></button>;
+      })}<div className="epr-rail2-p"><i style={{ height: `${progress * 100}%` }} /></div></nav>}
       <div ref={scroller} className="epr-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
@@ -670,7 +694,9 @@ function ReviewDoc() {
           )}
         </div>
       </div>
-      {askOpen && rv && (
+      {spkOpen && rv && P && <SpeakerPanel chapters={speakerChapters} active={active === 'cover' ? 'glance' : active} onJump={jump} notes={spkNotes} canSave={!publicView}
+        onNote={(id, t) => { const nx = { ...spkNotes, [id]: t }; setSpkNotes(nx); if (!publicView) saveExtras({ ...extras, speaker: nx }); else try { localStorage.setItem(`epr-spk-${rv.id}`, JSON.stringify(nx)); } catch { /* */ } }} onClose={() => setSpkOpen(false)} />}
+      {askOpen && rv && !publicView && (
         <aside className="epr-askp no-print">
           <div className="epr-askp-h"><Sparkles size={14} /><b>Ask about this report</b><button onClick={() => setAskOpen(false)} title="Close"><X size={15} /></button></div>
           <div className="min-h-0 flex-1"><Analyst embedded onConversationsChange={() => {}} reviewId={rv.id}

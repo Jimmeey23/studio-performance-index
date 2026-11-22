@@ -19,6 +19,8 @@ const hydrate = (r: Row | null | undefined): SavedReview | null => (r ? { review
 
 export async function findByKey(uid: string, key: string) { return hydrate(await (await db()).one<Row>(`select ${cols} from exec_reviews where user_id = ? and req_key = ? order by created_at desc limit 1`, [uid, key])); }
 export async function latest(uid: string) { return hydrate(await (await db()).one<Row>(`select ${cols} from exec_reviews where user_id = ? order by updated_at desc limit 1`, [uid])); }
+/** Public read by link (no user check) — review links are shareable without sign-in. */
+export async function byIdPublic(id: string) { return hydrate(await (await db()).one<Row>(`select ${cols} from exec_reviews where id = ?`, [id])); }
 export async function byId(uid: string, id: string) { return hydrate(await (await db()).one<Row>(`select ${cols} from exec_reviews where user_id = ? and id = ?`, [uid, id])); }
 export async function list(uid: string) {
   return (await db()).all<{ id: string; label: string; scope: string; created_at: string; updated_at: string; ai_parts: number }>(`select id, label, scope, created_at::varchar created_at, updated_at::varchar updated_at,
