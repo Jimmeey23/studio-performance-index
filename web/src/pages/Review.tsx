@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
+import { IS_PDF } from '../lib/echarts';
 import { ClassExplorer } from '../components/ClassExplorer';
 import { fmt } from '../lib/format';
 import type { Format, Result } from '../lib/types';
@@ -301,7 +302,7 @@ function TableCard({ t, note, loading, part, rows = 10 }: { t: Table; note?: str
   return (
     <div className="epr-card epr-card-wide epr-rv">
       <div className="epr-card-h"><span className="epr-card-t">{t.title}</span><span className="epr-card-tag">{n} row{n === 1 ? '' : 's'} · click a value for its records</span></div>
-      <div className="epr-table"><AdvancedTable result={t.result} compact pageSize={rows} /></div>
+      <div className="epr-table"><AdvancedTable result={t.result} compact pageSize={IS_PDF ? 40 : rows} /></div>
       <Note text={note ?? t.note} loading={loading} part={part} id={t.id} />
     </div>
   );
@@ -771,6 +772,13 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     },
   };
 
+  const downloadPdf = async (id: string, msg: (m: string | null) => void) => {
+    msg('Preparing PDF… this takes 20–40 seconds');
+    const r = await fetch(`/api/review/${id}/pdf`, { credentials: 'include' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `PDF failed (${r.status})`);
+    const name = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? 'review.pdf';
+    const url = URL.createObjectURL(await r.blob()); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
   const runExport = async (label: string, fn: (r: HTMLElement, t: string) => unknown, isCopy = false) => {
     const r = mainRef.current; if (!r || !rv) return;
     const title = `${rv.scope} — Performance Review — ${rv.period.label}`;
@@ -817,7 +825,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
               {expOpen && <div className="epr-pop epr-exp" onMouseLeave={() => setExpOpen(false)}>
                 <div className="epr-pop-l">Download</div>
                 {([
-                  ['PDF', 'Designed A4 document', (r: HTMLElement, t: string) => EX.toPdf(r, t, setExpMsg), Printer],
+                  ['PDF', 'Text-searchable A4 document', () => downloadPdf(rv.id, setExpMsg), Printer],
                   ['Word', '.doc — editable document', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.doc`, EX.toWord(r, t), 'application/msword'), FileText],
                   ['Excel', '.xls — every table', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.xls`, EX.toExcel(r, t), 'application/vnd.ms-excel'), FileText],
                   ['CSV', 'Every table, one file', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.csv`, EX.toCsv(r), 'text/csv;charset=utf-8'), FileText],

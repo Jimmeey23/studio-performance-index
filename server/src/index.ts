@@ -13,6 +13,7 @@ import { appDb, usingPostgres, createUser, newId, parseJson, getResult, audit } 
 import { answer, hydrateMessage, type StreamEvent } from './ai/orchestrator.js';
 import { clearCoverageCache } from './ai/prompt.js';
 import { DOMAINS, domainById } from './ai/domains.js';
+import { reviewPdf } from './report/pdf.js';
 import { allowedEmail, tooManyAttempts, clearAttempts, ADMIN_NAMES } from './allowlist.js';
 import { loadAppConfig, saveAppConfig, appConfig, defaults as configDefaults, visibleDomains, type AppConfig } from './store/appConfig.js';
 import { MODELS as TIER_MODELS } from './ai/router.js';
@@ -278,6 +279,18 @@ app.post('/api/review', wrap(async (req, res) => {
 }));
 app.get('/api/review/latest', wrap(async (req, res) => res.json(await reviewStore.latest(req.user!.id))));
 app.get('/api/review/saved', wrap(async (req, res) => res.json(await reviewStore.list(req.user!.id))));
+/* Text-based PDF (headless Chromium prints the review's own page) */
+app.get('/api/review/:id/pdf', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Review not found' });
+  const s = await reviewStore.byIdPublic(id); if (!s) return res.status(404).json({ error: 'Review not found' });
+  const title = `Performance Review — ${(s.review as { scope?: string }).scope ?? ''} ${(s.review as { period?: { label?: string } }).period?.label ?? ''}`.trim();
+  try {
+    const pdf = await reviewPdf(`http://127.0.0.1:${config.port}/review/${id}?pdf=1`, title);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${title.replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 80) || 'review'}.pdf"`);
+    res.end(Buffer.from(pdf));
+  } catch (e) { res.status(503).json({ error: (e as Error).message }); }
+}));
 app.get('/api/review/:id', wrap(async (req, res) => {
   const s = await reviewStore.byId(req.user!.id, String(req.params.id));
   if (!s) return res.status(404).json({ error: 'Review not found' });

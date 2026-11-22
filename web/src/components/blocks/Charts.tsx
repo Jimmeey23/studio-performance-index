@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { SlidersHorizontal, BarChart3, LineChart as LineIcon, AreaChart, BarChartHorizontal, PieChart as PieIcon, Layers, Combine, MousePointerClick } from 'lucide-react';
 import type { Result, Format } from '../../lib/types';
 import { fmt, fmtPeriod } from '../../lib/format';
-import { echarts, useThemeColors, type ThemeColors } from '../../lib/echarts';
+import { echarts, chartOpts, useThemeColors, type ThemeColors } from '../../lib/echarts';
 import { drillFor, useDrill } from '../../lib/drill';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -194,7 +194,7 @@ export function ChartBlock({ result, chart = 'bar', x, y, seriesBy, height = 300
           <button key={i.name} onClick={() => toggle(i.name)} className={clsx(hidden.has(i.name) && 'off')} title="Show / hide"><i style={{ background: i.color }} />{i.name}</button>
         ))}</div>
       )}
-      <ReactEChartsCore echarts={echarts} option={o} notMerge lazyUpdate style={{ height: h, width: '100%', cursor: drill ? 'pointer' : undefined }} onEvents={{ click: onClick }} />
+      <ReactEChartsCore echarts={echarts} opts={chartOpts} option={o} notMerge lazyUpdate style={{ height: h, width: '100%', cursor: drill ? 'pointer' : undefined }} onEvents={{ click: onClick }} />
     </div>
   );
 }
@@ -234,7 +234,7 @@ export function ForecastChart({ result, height = 320 }: { result: Result; height
   return (
     <div>
       {split && <div className="mb-2 flex flex-wrap gap-1">{seriesNames.map((s) => <button key={s} onClick={() => setSel(s)} className={clsx('rounded-full px-2.5 py-1 text-xs transition', s === sel ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2 hover:text-ink')}>{s}</button>)}</div>}
-      <ReactEChartsCore echarts={echarts} option={o} notMerge lazyUpdate style={{ height, width: '100%' }} />
+      <ReactEChartsCore echarts={echarts} opts={chartOpts} option={o} notMerge lazyUpdate style={{ height, width: '100%' }} />
     </div>
   );
 }
@@ -251,7 +251,7 @@ export function MiniTrend({ points, format, height = 160, onClick }: { points: {
     yAxis: { ...ax, type: 'value', axisLabel: { ...ax.axisLabel, formatter: (v: number) => fmt(v, format, { compact: true }) }, axisLine: { show: false } },
     series: [{ type: 'bar', data: points.map((p) => p.value), color: t.series[0], barMaxWidth: 22, itemStyle: { borderRadius: [3, 3, 0, 0] } }],
   });
-  return <ReactEChartsCore echarts={echarts} option={o} notMerge style={{ height, width: '100%', cursor: onClick ? 'pointer' : undefined }} onEvents={{ click: (p: any) => onClick?.(points[p.dataIndex]?.period) }} />;
+  return <ReactEChartsCore echarts={echarts} opts={chartOpts} option={o} notMerge style={{ height, width: '100%', cursor: onClick ? 'pointer' : undefined }} onEvents={{ click: (p: any) => onClick?.(points[p.dataIndex]?.period) }} />;
 }
 
 export function Heatmap({ result }: { result: Result }) {
