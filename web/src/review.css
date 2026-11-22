@@ -628,3 +628,18 @@
   .epr-standalone .epr-signals > * + * { padding-left: 0; }
 }
 @media print { .epr-hero { break-before: page; } }
+
+/* analysis: stacked — summary across the page, insights as an even grid of tiles (no lopsided columns) */
+.epr-standalone .epr-analysis { grid-template-columns: minmax(0, 1fr); }
+.epr-standalone .epr-analysis-main { padding: 24px 0 8px; }
+.epr-standalone .epr-analysis-main .epr-analysis-h > span { display: none; }
+.epr-standalone .epr-analysis-main .epr-analysis-h { position: absolute; top: 4px; right: 0; margin: 0; }
+.epr-standalone .epr-analysis-main .epr-analysis-h > svg { display: none; }
+.epr-standalone .epr-analysis .epr-prose p.lead { max-width: 62ch; font-size: clamp(18px, 1.7vw, 21px); line-height: 1.5; margin-bottom: 20px; }
+.epr-standalone .epr-analysis .epr-prose { columns: 2 320px; column-gap: 48px; }
+.epr-standalone .epr-analysis .epr-prose p { max-width: none; break-inside: avoid-column; }
+.epr-standalone .epr-analysis .epr-prose p.lead { column-span: all; }
+.epr-standalone .epr-analysis .epr-insights { padding: 28px 0 0; border-left: 0; border-top: 1px solid var(--line); margin-top: 16px; }
+.epr-standalone .epr-insights ol { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.epr-standalone .epr-insights li, .epr-standalone .epr-insights li:first-child { padding: 18px 18px 18px 52px; border: 0; border-radius: 12px; background: var(--surface-2); font-size: var(--fs-small); line-height: 1.6; }
+.epr-standalone .epr-insights li::before, .epr-standalone .epr-insights li:first-child::before { left: 18px; top: 17px; font-family: var(--epr-serif); font-size: 18px; line-height: 1; color: var(--accent); }
