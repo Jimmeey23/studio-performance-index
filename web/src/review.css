@@ -812,7 +812,7 @@
 .epr-plan-kpi { display: block; margin-top: 4px; font-style: normal; font-size: 11.5px; color: var(--ink-3); white-space: normal; max-width: 26ch; }
 
 /* ═════════ presenter tools ═════════ */
-.epr-ink { position: absolute; left: 0; top: 0; z-index: 30; pointer-events: none; }
+.epr-ink { position: fixed; z-index: 30; pointer-events: none; }
 .epr-ink.on { pointer-events: auto; cursor: crosshair; }
 .epr.tool-note .epr-wrap { cursor: copy; }
 .epr.tool-laser, .epr.tool-laser * , .epr.tool-spot, .epr.tool-spot * { cursor: none !important; }
