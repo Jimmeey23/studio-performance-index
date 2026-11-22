@@ -20,7 +20,7 @@ import { buildDashboard } from './ai/dashboard.js';
 import { buildReport, getReport, ReportRequestSchema, TOPICS } from './report/build.js';
 import * as reportStore from './report/store.js';
 import { generateInsights, rulesInsights } from './report/insights.js';
-import { buildReview, writeGlance, writeSection, reviewContext, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
+import { buildReview, writeGlance, writeSection, reviewContext, reviewDefinitions, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
@@ -79,7 +79,7 @@ app.get('/api/public/review/:id', wrap(async (req, res) => {
   const s = await reviewStore.byIdPublic(id);
   if (!s) return res.status(404).json({ error: 'Review not found' });
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ ...s, public: true });
+  res.json({ ...s, public: true, definitions: reviewDefinitions(s.review) });
 }));
 app.use('/api', auth);
 
@@ -248,7 +248,7 @@ app.get('/api/review/:id', wrap(async (req, res) => {
   const s = await reviewStore.byId(req.user!.id, String(req.params.id));
   if (!s) return res.status(404).json({ error: 'Review not found' });
   await reviewStore.touch(req.user!.id, s.review.id);   // the last one opened is the one shown next time
-  res.json(s);
+  res.json({ ...s, definitions: reviewDefinitions(s.review) });
 }));
 app.delete('/api/review/:id', wrap(async (req, res) => { await reviewStore.remove(req.user!.id, String(req.params.id)); res.json({ ok: true }); }));
 /** AI commentary per part ('glance' or a section id): written once and reused; `fresh` rewrites that part only. */
