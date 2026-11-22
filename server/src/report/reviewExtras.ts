@@ -6,6 +6,7 @@
  */
 import crypto from 'node:crypto';
 import { runMetricsQuery, type QueryResult } from '../semantic/engine.js';
+import { backendFilters } from './backendAccounts.js';
 import { log } from '../util/log.js';
 import type { ReportChart, ReportTable } from './build.js';
 
@@ -20,7 +21,7 @@ const monthsBack = (end: string, n: number) => { const d = new Date(end + 'T00:0
 
 async function q(req: Req, metrics: string[], dims: string[], o: Opt = {}): Promise<QueryResult | null> {
   try {
-    const r = await runMetricsQuery({ metrics, dimensions: dims, start: o.start ?? req.start, end: req.end, grain: o.grain ?? 'all', filters: [...loc(req), ...dims.filter((d) => d !== 'location').map(noBlank), ...(o.filters ?? [])],
+    const r = await runMetricsQuery({ metrics, dimensions: dims, start: o.start ?? req.start, end: req.end, grain: o.grain ?? 'all', filters: [...loc(req), ...dims.filter((d) => d !== 'location').map(noBlank), ...backendFilters(dims), ...(o.filters ?? [])] as never,
       ...(o.sort ? { sort: { by: o.sort, dir: o.dir ?? 'desc' } } : {}), ...(o.limit && !o.keep ? { limit: o.limit } : {}) });
     if (o.keep) { r.rows = r.rows.filter(o.keep); if (o.limit) r.rows = r.rows.slice(0, o.limit); }
     return r.rows.length ? r : null;

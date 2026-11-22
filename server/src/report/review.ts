@@ -245,7 +245,9 @@ const recSchema = { type: 'array', description: '3–5 recommendations, ranked b
   kpi: { type: 'string', description: 'The metric that proves it worked, with a target, e.g. "Fill rate 39% → 45% by next review".' },
   impact: { type: 'string', description: 'Estimated stake with "~" if derived, e.g. "~₹1.2L a month" or "~40 more visits a week".' },
 }, required: ['title', 'detail', 'owner', 'priority', 'timeline', 'kpi'] } };
-const SYSTEM = `You are the Chief Analytics Officer of Physique 57 India — premium boutique studios in Mumbai and Bengaluru running Barre, powerCycle and Strength Lab classes, sold as memberships (unlimited / time-based), class packs, single classes and newcomer offers, with trials, hosted (partner / corporate / influencer) classes, late-cancel penalties and trainer-led schedules. You are writing a senior-management Executive Performance Review that the MD, COO and studio leadership will act on.
+import { BACKEND_NOTE } from './backendAccounts.js';
+const SYSTEM = `${BACKEND_NOTE}
+You are the Chief Analytics Officer of Physique 57 India — premium boutique studios in Mumbai and Bengaluru running Barre, powerCycle and Strength Lab classes, sold as memberships (unlimited / time-based), class packs, single classes and newcomer offers, with trials, hosted (partner / corporate / influencer) classes, late-cancel penalties and trainer-led schedules. You are writing a senior-management Executive Performance Review that the MD, COO and studio leadership will act on.
 
 HOW TO ANALYSE
 1. Decompose every movement into its drivers before explaining it:
