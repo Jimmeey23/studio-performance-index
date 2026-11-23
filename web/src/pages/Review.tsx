@@ -136,9 +136,13 @@ function guideTo(cue: NarrCue) {
   }
   clearGuide();
   if (best) best.classList.add('epr-guide');
-  const target = best ?? home.querySelector<HTMLElement>('.epr-hero h1, .epr-hero h2') ?? null;
+  const target = best;
   setTimeout(() => showAnn(target ? { el: target, cue, key: Date.now() } : null), 350);   // after the scroll starts
-  (best ?? home).scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' });
+  // move only when needed: a target already comfortably on screen stays put; a chapter cue only moves when
+  // the reader is in a different chapter
+  const vh = window.innerHeight;
+  if (best) { const r = best.getBoundingClientRect(); if (r.top < 70 || r.bottom > vh - 150) best.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  else { const r = home.getBoundingClientRect(); if (r.top > vh * 0.5 || r.bottom < vh * 0.3) home.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
 const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);

@@ -34,7 +34,7 @@ def classify(s,secnum):
     if secnum in MIXED and best[1]>0: sec=best[0]
     if secnum=='6' and best[0]=='classes' and best[1]>0: sec='classes'
     return sec
-def cues(words,secnum):
+def cues(words,secnum,dur):
     """words: [(word,start)] in script order. One cue per clause; exact start = first word's measured time."""
     clauses=[]; cur=[]
     for w,t in words:
@@ -55,8 +55,23 @@ def cues(words,secnum):
         if out and not ns and (not terms or terms==out[-1]['terms']) and sec==out[-1]['sec']: out[-1]['_end']=cue['_end']; continue
         out.append(cue)
     for c in out: c.pop('_end',None)
-    # a clause with nothing to point at keeps the previous highlight (except the clip's opening cue)
-    return [c for i,c in enumerate(out) if i==0 or c['terms'] or c['nums']]
+    return curate(out, dur)
+
+KEY=re.compile(r'revenue|A T V|average transaction value|conversion|trial-to-paid|fill|churn|lapse|renewal|leads|paying clients|discount|class size|empty|retention|yield',re.I)
+EMPH=re.compile(r'biggest|largest|strongest|weakest|highest|lowest|record|key|main|driv|risk|problem|worst|best|only|critical|most',re.I)
+def curate(out, dur, gap=16.0):
+    """Keep the story calm: the clip's opening chapter cue, then only the few most important data points,
+    at least `gap` seconds apart (about one per 20 s of audio, max 3 per clip)."""
+    def score(c):
+        t=c['text']; return 2*min(len(c['nums']),3) + 3*len(KEY.findall(t)) + 2*len(EMPH.findall(t)) + (1 if c['dir'] else 0)
+    budget=max(1,min(3,round(dur/20)))
+    picks=sorted((c for c in out[1:] if c['nums'] and score(c)>=6), key=score, reverse=True)
+    chosen=[]
+    for c in picks:
+        if len(chosen)>=budget: break
+        if all(abs(c['at']-x['at'])>=gap for x in chosen) and c['at']>=2: chosen.append(c)
+    head=dict(out[0]); head['nums']=[]; head['terms']=[]; head['text']=''   # opening cue: just bring the chapter into view
+    return [head]+sorted(chosen,key=lambda c:c['at'])
 WT={}
 for r in csv.DictReader(open(os.path.join(n,'timestamps','word-timestamps.csv'))): WT.setdefault(r['clip'],[]).append((r['word'],float(r['start'])))
 def parse(md,hdr):
@@ -69,7 +84,7 @@ def track(f,key,secf,txt,secnum):
     out=[]
     for r in csv.DictReader(open(os.path.join(n,f))):
         d=float(r['seconds']); s=secnum(r)
-        out.append({'id':r[key],'section':r[secf],'file':r['file'],'seconds':d,'home':SEC_DEFAULT[s],'cues':cues(WT[r[key]],s)})
+        out.append({'id':r[key],'section':r[secf],'file':r['file'],'seconds':d,'home':SEC_DEFAULT[s],'cues':cues(WT[r[key]],s,d)})
     return out
 tracks=[{'id':'report','title':'Full report narration','clips':track('clip-index.csv','paragraph','section',P,lambda r:r['section'].split('.')[0])},
         {'id':'recs','title':'Recommendations R1–R12','clips':track('rec-index.csv','item','tier',R,lambda r:'12')}]
