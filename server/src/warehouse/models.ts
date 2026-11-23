@@ -41,7 +41,7 @@ export function macros(r: BusinessRules): string {
       try_strptime(trim(x), ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d, %H:%M:%S', '%Y-%m-%d, %H:%M',
                              '%Y-%m-%dT%H:%M:%S.%gZ', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']),
       try_strptime(trim(x), ['%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M', '%d-%m-%Y, %H:%M:%S', '%d-%m-%Y %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y']));
-    create or replace macro p57_month(x) as try_strptime('01-' || trim(x), ['%d-%b-%Y', '%d-%B-%Y']);
+    create or replace macro p57_month(x) as try_strptime('01 ' || regexp_replace(trim(x), '[\\s\\-/]+', ' ', 'g'), ['%d %b %Y', '%d %B %Y']);
     create or replace macro p57_loc(x) as case
       when p57_txt(x) is null then null
       ${locCases}
