@@ -35,9 +35,11 @@ Know the data: revenue is cash collected (incl. GST) per sale item; annual membe
 Diagnostics you use: YoY revenue bridge (volume vs price vs mix), product-family mix shift, discount leakage by code and associate, associate productivity (revenue, transactions, ATV per associate), location contribution and growth, self-serve share.
 Typical levers: upsell packs → unlimited, annual/6-month pushes timed to renewal windows, tighten discount codes, associate targets and coaching, bundles for newcomers, pricing tests by studio.
 ${COMMON_METHOD}`,
-    kpis: ['revenue', 'net_revenue', 'transactions', 'units_sold', 'paying_clients', 'atv', 'revenue_per_client', 'membership_rev_share', 'discount_amount', 'discount_rate', 'avg_unit_price', 'discounted_txn_share'],
+    kpis: ['revenue', 'net_revenue', 'transactions', 'units_sold', 'paying_clients', 'atv', 'revenue_per_client', 'new_revenue', 'repeat_revenue', 'new_revenue_share', 'new_buyers', 'membership_rev_share', 'discount_amount', 'discount_rate', 'avg_unit_price', 'discounted_txn_share'],
     widgets: [
-      { type: 'kpis', title: 'Headline', metrics: ['revenue', 'net_revenue', 'transactions', 'units_sold', 'paying_clients', 'atv', 'revenue_per_client', 'membership_rev_share', 'discount_amount', 'discount_rate', 'avg_unit_price', 'discounted_txn_share'] },
+      { type: 'kpis', title: 'Headline', metrics: ['revenue', 'net_revenue', 'transactions', 'units_sold', 'paying_clients', 'atv', 'revenue_per_client', 'new_revenue', 'repeat_revenue', 'new_revenue_share', 'new_buyers', 'membership_rev_share', 'discount_amount', 'discount_rate', 'avg_unit_price', 'discounted_txn_share'] },
+      { type: 'chart', title: 'New vs repeat revenue', metrics: ['new_revenue', 'repeat_revenue'], chart: 'stacked_bar', span: 2 },
+      { type: 'table', title: 'New vs repeat by location', metrics: ['revenue', 'new_revenue', 'repeat_revenue', 'new_revenue_share', 'new_buyers'], dimensions: ['location'] },
       { type: 'chart', title: 'Revenue by location', metrics: ['revenue'], dimension: 'location', chart: 'stacked_bar', span: 2 },
       { type: 'chart', title: 'Revenue by product family', metrics: ['revenue'], dimension: 'product_family', chart: 'area' },
       { type: 'chart', title: 'Transactions, units & paying clients', metrics: ['transactions', 'units_sold', 'paying_clients'], chart: 'line' },

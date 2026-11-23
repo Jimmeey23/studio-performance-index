@@ -69,6 +69,11 @@ export const MODELS: ModelDef[] = [
     raw: { s: 'raw_sales' },
     key: 'sale_item_id',
     sql: (r) => `
+      select *,
+        -- first purchase of all time for this member (whole sale, earliest payment)
+        member_id is not null and coalesce(sale_id, sale_item_id) = first_value(coalesce(sale_id, sale_item_id))
+          over (partition by member_id order by payment_ts, coalesce(sale_id, sale_item_id)) as is_first_purchase
+      from (
       with base as (
         select
           p57_txt({{s:sale_item_id}}) as sale_item_id,
@@ -114,7 +119,8 @@ export const MODELS: ModelDef[] = [
       where sale_item_id is not null and payment_ts is not null and gross_amount is not null
         and payment_status in (${inList(r.revenue.valid_payment_statuses)})
         ${r.revenue.exclude_voided ? 'and not is_voided' : ''}
-      qualify row_number() over (partition by sale_item_id order by modified_ts desc nulls last, _row_num desc) = 1`,
+      qualify row_number() over (partition by sale_item_id order by modified_ts desc nulls last, _row_num desc) = 1
+      ) dedup`,
     deps: ['dim_location'],
   },
   {
