@@ -49,7 +49,9 @@ def cues(words,secnum):
         t=[lbl for k,lbl in TERMS if re.search(re.escape(k),text,re.I)]
         names=[x for x in re.findall(r'\b[A-Z][a-z]{2,}\b',text) if x not in STOP]
         terms=list(dict.fromkeys(names[:3]+t))[:5]; ns=nums(text)
-        cue={'at':round(c[0][1],2),'sec':sec,'terms':terms,'nums':ns,'_end':c[-1][0]}
+        cap=re.sub(r'^[—,;:\s]+|[—,;:\s]+$','',text); cap=cap if len(cap)<=150 else cap[:147].rsplit(' ',1)[0]+'…'
+        up=len(re.findall(r'\b(up|rose|grew|gain|higher|above|increase|improv|strong)',text,re.I)); dn=len(re.findall(r'\b(down|fell|drop|declin|lower|below|lost|weak|leak|lapse|churn)',text,re.I))
+        cue={'at':round(c[0][1],2),'sec':sec,'terms':terms,'nums':ns,'text':cap,'dir':'up' if up>dn else 'down' if dn>up else '','_end':c[-1][0]}
         if out and not ns and (not terms or terms==out[-1]['terms']) and sec==out[-1]['sec']: out[-1]['_end']=cue['_end']; continue
         out.append(cue)
     for c in out: c.pop('_end',None)
