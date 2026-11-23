@@ -5,6 +5,7 @@
  * as they were, and the most recently opened review is shown by default.
  */
 import { createPortal } from 'react-dom';
+import { describe, interactive, locate, sectionPoint, sectionToViewport, setValue, type ElDesc } from '../lib/live';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
@@ -92,13 +93,13 @@ function useChg() {
 /* ── chapter video explainers (NotebookLM): status per chapter, player when ready ── */
 type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?: string; progress: number; startedAt?: string; error?: string };
 const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null; upload: ((part: string, f: File) => Promise<void>) | null;
-  presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; t: number }) => void; remote: LiveSync | null } | null>(null);
-type LiveSync = { part: string; open: boolean; playing: boolean; t: number; at: number; seq: number };
+  presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; time: number }) => void; remote: LiveSync | null } | null>(null);
+type LiveSync = { part: string; open: boolean; playing: boolean; time: number; at: number; seq: number };
 function VideoExplainer({ part, title }: { part: string; title: string }) {
   const c = useContext(RVideo); const [open, setOpenRaw] = useState(false); const [up, setUp] = useState(false);
   const vref = useRef<HTMLVideoElement>(null); const [muted, setMuted] = useState(false);
   const presenter = !!c?.presenter;
-  const send = (o: boolean) => { const el = vref.current; if (presenter) c!.send({ part, open: o, playing: o && !!el && !el.paused, t: el?.currentTime ?? 0 }); };
+  const send = (o: boolean) => { const el = vref.current; if (presenter) c!.send({ part, open: o, playing: o && !!el && !el.paused, time: el?.currentTime ?? 0 }); };
   const setOpen = (o: boolean) => { setOpenRaw(o); if (!o) send(false); };
   // viewers: follow the presenter
   const r = c?.remote;
@@ -109,7 +110,7 @@ function VideoExplainer({ part, title }: { part: string; title: string }) {
   useEffect(() => {
     if (presenter || !r || r.part !== part || !r.open || !open) return;
     const el = vref.current; if (!el) return;
-    const target = r.t + (r.playing ? (Date.now() - r.at) / 1000 : 0);
+    const target = r.time + (r.playing ? (Date.now() - r.at) / 1000 : 0);
     if (Math.abs(el.currentTime - target) > 1) el.currentTime = target;
     if (r.playing && el.paused) el.play().catch(() => { el.muted = true; setMuted(true); el.play().catch(() => {}); });
     if (!r.playing && !el.paused) el.pause();
@@ -667,6 +668,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   /** Every annotation change is saved at once: functional updates (no lost concurrent edits) → autosave queue. */
   const saveExtras = (fn: (e: Extras) => Extras) => {
     const next = fn(extrasRef.current); extrasRef.current = next; setExtras(next);
+    if (liveRef.current) post(extrasEv(next));
     if (!saved) return; const id = saved.review.id;
     if (publicView) { try { localStorage.setItem(`epr-extras-${id}`, JSON.stringify({ notes: next.notes, ink: next.ink })); } catch { /* */ } return; }
     autosave().put(`extras:${id}`, `/api/review/${id}/extras`, { extras: next }, 250);
@@ -781,15 +783,107 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
 
+  /* ── live presenter: the owner's screen drives every viewer's copy of this report ── */
   const [remote, setRemote] = useState<LiveSync | null>(null);
   const presenter = !publicView && !!rv;
+  const [live, setLive] = useState(false);            // presenter: broadcasting
+  const [following, setFollowing] = useState(false);  // viewer: presenter is live
+  const [rPtr, setRPtr] = useState<{ tool: Tool; sec: string; fx: number; fy: number } | null>(null);
+  const [, bump] = useState(0);
+  const liveRef = useRef(false); liveRef.current = live && presenter;
+  const post = (ev: Record<string, unknown>) => { if (rv) api(`/api/review/${rv.id}/live`, { method: 'POST', json: ev }).catch(() => {}); };
+  const throttled = useRef<Record<string, { ev: Record<string, unknown>; timer: ReturnType<typeof setTimeout> | null }>>({});
+  const emit = (ev: Record<string, unknown>, every = 0) => {
+    if (!liveRef.current) return;
+    if (!every) return post(ev);
+    const k = String(ev.t); const slot = throttled.current[k] ?? (throttled.current[k] = { ev, timer: null });
+    slot.ev = ev; if (slot.timer) return;
+    slot.timer = setTimeout(() => { slot.timer = null; post(slot.ev); }, every);
+  };
+  const sendLive = (st: { part: string; open: boolean; playing: boolean; time: number }) => { if (rv && presenter) post({ t: 'video', ...st }); };
+  const scrollEv = () => {
+    const sc = scroller.current; if (!sc) return null;
+    const top = sc.getBoundingClientRect().top;
+    const secs = [...sc.querySelectorAll<HTMLElement>('[data-spy]')];
+    const s = secs.find((x) => x.getBoundingClientRect().bottom > top + 1) ?? secs[0];
+    if (!s) return { t: 'scroll', sec: null, off: sc.scrollTop };
+    const r = s.getBoundingClientRect();
+    return { t: 'scroll', sec: s.id, off: (top - r.top) / Math.max(1, r.height) };
+  };
+  const extrasEv = (ex: Extras) => ({ t: 'extras', extras: { notes: ex.notes, ink: ex.ink ?? [], pins: ex.pins } });
+  const toggleLive = (on = !live) => {
+    setLive(on); liveRef.current = on;
+    post({ t: 'live', on });
+    if (on) { post(extrasEv(extrasRef.current)); const se = scrollEv(); if (se) post(se); }
+  };
+  useEffect(() => { if (presenter && present && !live) toggleLive(true); }, [present]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (liveRef.current && rv) navigator.sendBeacon?.(`/api/review/${rv.id}/live`, new Blob([JSON.stringify({ t: 'live', on: false })], { type: 'application/json' })); }, [rv?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // presenter: capture scroll, clicks, inputs, keyboard chapter jumps, pointer
+  useEffect(() => {
+    if (!presenter || !live) return;
+    const sc = scroller.current;
+    const onScroll = () => { const se = scrollEv(); if (se) emit(se, 120); };
+    const skip = (el: Element) => !!el.closest('.epr-vid-player, .epr-askp, .epr-sticky, .epr-pbar2, .epr-pbar-fab, .epr-pbar-mini, .epr-exp, [data-live-skip]');
+    const onClick = (e: MouseEvent) => {
+      if (!e.isTrusted) return;
+      const el = interactive(e.target); if (!el || skip(el)) return;
+      if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'radio') return;
+      if (el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement || el.isContentEditable) return;
+      emit({ t: 'click', d: describe(el) });
+    };
+    const onInput = (e: Event) => {
+      if (!e.isTrusted) return;
+      const el = e.target as HTMLElement;
+      if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) || skip(el)) return;
+      if (el instanceof HTMLInputElement && (el.type === 'password' || el.type === 'file' || el.type === 'checkbox' || el.type === 'radio')) return;
+      emit({ t: 'input', d: describe(el), v: el.value }, 150);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (tool !== 'laser' && tool !== 'spot') return;
+      const p = sectionPoint(e.clientX, e.clientY); if (p) emit({ t: 'ptr', tool, ...p }, 50);
+    };
+    sc?.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('input', onInput, true); document.addEventListener('change', onInput, true);
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => {
+      sc?.removeEventListener('scroll', onScroll); document.removeEventListener('click', onClick, true);
+      document.removeEventListener('input', onInput, true); document.removeEventListener('change', onInput, true);
+      window.removeEventListener('pointermove', onMove);
+    };
+  }, [presenter, live, tool]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (presenter && live && tool !== 'laser' && tool !== 'spot') emit({ t: 'ptr', tool: 'none' }); }, [tool, live]); // eslint-disable-line react-hooks/exhaustive-deps
+  // viewers: follow
   useEffect(() => {
     if (!rv || presenter) return;
     const es = new EventSource(`/api/public/review/${rv.id}/live`);
-    es.onmessage = (e) => { try { setRemote(JSON.parse(e.data)); } catch { /* ignore */ } };
+    es.onmessage = (m) => {
+      let ev: Record<string, unknown>; try { ev = JSON.parse(m.data); } catch { return; }
+      switch (ev.t) {
+        case 'video': setRemote(ev as unknown as LiveSync); break;
+        case 'live': setFollowing(!!ev.on); if (!ev.on) setRPtr(null); break;
+        case 'scroll': {
+          const sc = scroller.current; if (!sc) break;
+          const s = ev.sec ? document.getElementById(String(ev.sec)) : null;
+          if (!s) { if (!ev.sec) sc.scrollTop = Number(ev.off) || 0; break; }
+          const r = s.getBoundingClientRect();
+          sc.scrollTop += r.top - sc.getBoundingClientRect().top + Number(ev.off) * r.height;
+          break;
+        }
+        case 'click': { const el = locate(ev.d as ElDesc); el?.click(); break; }
+        case 'input': { const el = locate(ev.d as ElDesc); if (el) setValue(el, ev.v as string); break; }
+        case 'ptr': setRPtr(ev.tool === 'laser' || ev.tool === 'spot' ? { tool: ev.tool as Tool, sec: String(ev.sec), fx: Number(ev.fx), fy: Number(ev.fy) } : null); break;
+        case 'extras': {
+          const x = ev.extras as Partial<Extras>;
+          const next = { ...extrasRef.current, notes: x.notes ?? [], ink: x.ink ?? [], pins: x.pins ?? extrasRef.current.pins };
+          extrasRef.current = next; setExtras(next); break;
+        }
+      }
+    };
     return () => es.close();
-  }, [rv?.id, presenter]);
-  const sendLive = (st: { part: string; open: boolean; playing: boolean; t: number }) => { if (rv && presenter) api(`/api/review/${rv.id}/live`, { method: 'POST', json: st }).catch(() => {}); };
+  }, [rv?.id, presenter]); // eslint-disable-line react-hooks/exhaustive-deps
+  // viewer laser position tracks their own scroll
+  useEffect(() => { const sc = scroller.current; if (!rPtr || !sc) return; const f = () => bump((x) => x + 1); sc.addEventListener('scroll', f, { passive: true }); return () => sc.removeEventListener('scroll', f); }, [rPtr]);
   const uploadVideo = publicView || !rv ? null : async (part: string, f: File) => {
     const fd = new FormData(); fd.append('file', f);
     try { const q = await api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/video?part=${part}`, { method: 'POST', body: fd }); setVids((o) => ({ ...o, videos: q.videos })); }
@@ -888,6 +982,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
             <button className="epr-ibtn" onClick={copyLink} title="Copy the public link">{copied ? <Check size={15} /> : <Link2 size={15} />}</button>
             {!publicView && <button className="epr-ibtn" onClick={refresh} title="Recompute from the latest data"><RefreshCw size={15} /></button>}
             <i className="epr-vsep" />
+            {presenter && <button data-live-skip className={clsx('epr-live', live && 'on')} onClick={() => toggleLive()} title={live ? 'Stop presenting live — viewers stop following your screen' : 'Present live — everyone viewing this report follows your screen, clicks and annotations'}><i />{live ? 'Live' : 'Go live'}</button>}
             <button className={clsx('epr-ibtn', pbar && 'on')} onClick={() => setPbar((x) => !x)} title="Presenter tools — laser, spotlight, pen, notes, timer"><PenLine size={15} /></button>
             <button className={clsx('epr-ibtn', spkOpen && 'on')} onClick={() => { setSpkOpen((x) => !x); setAskOpen(false); }} title="Speaker notes & teleprompter"><ScrollText size={15} /></button>
             {!publicView && <button className={clsx('epr-ask', askOpen && 'on')} onClick={() => { setAskOpen((x) => !x); setSpkOpen(false); }} title="Ask the assistant about this report ( / )"><MessageSquare size={14} /><span>Ask a question</span></button>}
@@ -935,6 +1030,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       <InkLayer scroller={scroller} tool={tool} color={ink} size={inkSize} strokes={extras.ink ?? []} onChange={(ink2) => saveExtras((ex) => ({ ...ex, ink: ink2 }))} />
       {notesOpen && rv && <NotesPanel chapters={nav.filter((n) => n.id !== 'cover')} onClose={() => setNotesOpen(false)} />}
       <PointerFx tool={tool} />
+      {!presenter && rPtr && <PointerFx tool={rPtr.tool} at={sectionToViewport(rPtr)} />}
+      {!presenter && following && <div className="epr-live-chip no-print"><i />Live — following the presenter</div>}
       <PresenterBar tool={tool} setTool={setTool} color={ink} setColor={setInk} size={inkSize} setSize={setInkSize} noteKind={noteKind} setNoteKind={setNoteKind}
         onClear={() => saveExtras((ex) => ({ ...ex, ink: [] }))} onUndo={() => saveExtras((ex) => ({ ...ex, ink: (ex.ink ?? []).slice(0, -1) }))}
         present={present} togglePresent={togglePresent} open={pbar} setOpen={setPbar} notesOpen={notesOpen} toggleNotes={() => setNotesOpen((x) => !x)} noteCount={extras.notes.length} save={saveState} canSave={!publicView} />
