@@ -9,7 +9,9 @@ import { createPortal } from 'react-dom';
 import { Quote, TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
 
 export type AnnCue = { text?: string; dir?: '' | 'up' | 'down'; nums: { v: number; u: '' | '%' | 'pp' }[] };
-export type Ann = { el: HTMLElement; cue: AnnCue; key: number } | null;
+/** One annotation event: the elements discussed by the current cue. `add` keeps earlier marks that are still on the same screen. */
+export type Ann = { els: HTMLElement[]; cue: AnnCue; key: number; add?: boolean } | null;
+type Item = { el: HTMLElement; key: number; current: boolean };
 
 const ANN_EVENT = 'narr:ann';
 export const showAnn = (a: Ann) => window.dispatchEvent(new CustomEvent<Ann>(ANN_EVENT, { detail: a }));
@@ -44,60 +46,81 @@ function firstLine(el: HTMLElement): DOMRect | null {
 }
 
 export function GuideOverlay() {
-  const [ann, setAnn] = useState<Ann>(null);
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [cue, setCue] = useState<AnnCue | null>(null);
+  const [rects, setRects] = useState<DOMRect[]>([]);
   const [vw, setVw] = useState(window.innerWidth);
   const raf = useRef(0);
   useEffect(() => {
-    const on = (e: Event) => setAnn((e as CustomEvent<Ann>).detail);
+    const on = (e: Event) => {
+      const a = (e as CustomEvent<Ann>).detail;
+      if (!a) { setItems([]); setCue(null); return; }
+      setCue(a.cue);
+      setItems((prev) => {
+        const keep = a.add ? prev.filter((p) => !a.els.includes(p.el)).map((p) => ({ ...p, current: false })) : [];
+        return [...keep, ...a.els.map((el, i) => ({ el, key: a.key + i, current: true }))].slice(-8);
+      });
+    };
     window.addEventListener(ANN_EVENT, on); return () => window.removeEventListener(ANN_EVENT, on);
   }, []);
   useLayoutEffect(() => {
     cancelAnimationFrame(raf.current);
-    if (!ann) { setRect(null); return; }
+    if (!items.length) { setRects([]); return; }
     let last = '';
     const tick = () => {
-      const r = ann.el.getBoundingClientRect(); const k = `${r.x|0},${r.y|0},${r.width|0},${r.height|0},${window.innerWidth}`;
-      if (k !== last) { last = k; setRect(r); setVw(window.innerWidth); }
+      const rs = items.map((it) => it.el.getBoundingClientRect());
+      const k = rs.map((r) => `${r.x | 0},${r.y | 0},${r.width | 0},${r.height | 0}`).join('|') + window.innerWidth;
+      if (k !== last) { last = k; setRects(rs); setVw(window.innerWidth); }
       raf.current = requestAnimationFrame(tick);
     };
     tick(); return () => cancelAnimationFrame(raf.current);
-  }, [ann]);
-  if (!ann || !rect || !ann.el.isConnected) return null;
-
-  const kind = kindOf(ann.el); const { cue } = ann;
-  const visible = rect.bottom > 0 && rect.top < window.innerHeight;
-  // callout: beside the target where there is room, else above/below
+  }, [items]);
+  if (!items.length || rects.length !== items.length || !cue) return null;
+  const vh = window.innerHeight;
+  const on = (r: DOMRect) => r.bottom > 0 && r.top < vh;
+  const cur = items.map((it, i) => ({ it, r: rects[i] })).filter((x) => x.it.current && x.it.el.isConnected && on(x.r));
+  // one sticky note for the current cue, placed beside the group of elements it discusses
   const W = Math.min(280, vw - 32);
-  const right = rect.right + 40 + W < vw; const left = rect.left - 40 - W > 0;
-  const side = right ? 'r' : left ? 'l' : rect.top > 220 ? 't' : 'b';
-  const cx = side === 'r' ? rect.right + 40 : side === 'l' ? rect.left - 40 - W : Math.max(16, Math.min(vw - W - 16, rect.left + rect.width / 2 - W / 2));
-  const cy = side === 't' ? rect.top - 150 : side === 'b' ? rect.bottom + 34 : Math.max(16, rect.top + rect.height / 2 - 50);
-  // arrow: from callout edge to target edge, curved
-  const ax = side === 'r' ? cx : side === 'l' ? cx + W : cx + W / 2; const ay = side === 't' ? cy + 120 : side === 'b' ? cy : cy + 40;
-  const tx = side === 'r' ? rect.right + 8 : side === 'l' ? rect.left - 8 : rect.left + rect.width / 2; const ty = side === 't' ? rect.top - 8 : side === 'b' ? rect.bottom + 8 : rect.top + rect.height / 2;
-  const mx = (ax + tx) / 2 + (side === 'r' || side === 'l' ? 0 : 40); const my = (ay + ty) / 2 - (side === 'r' || side === 'l' ? 36 : 0);
-  const ang = Math.atan2(ty - my, tx - mx); const ah = (d: number) => `${tx - 12 * Math.cos(ang + d)},${ty - 12 * Math.sin(ang + d)}`;
+  const g = cur.length ? cur.reduce((a, x) => ({ l: Math.min(a.l, x.r.left), t: Math.min(a.t, x.r.top), rr: Math.max(a.rr, x.r.right), b: Math.max(a.b, x.r.bottom) }), { l: 1e9, t: 1e9, rr: -1e9, b: -1e9 }) : null;
+  let note: { x: number; y: number; side: string } | null = null;
+  if (g) {
+    const side = g.rr + 40 + W < vw ? 'r' : g.l - 40 - W > 0 ? 'l' : g.t > 220 ? 't' : 'b';
+    note = { side,
+      x: side === 'r' ? g.rr + 40 : side === 'l' ? g.l - 40 - W : Math.max(16, Math.min(vw - W - 16, (g.l + g.rr) / 2 - W / 2)),
+      y: side === 't' ? g.t - 150 : side === 'b' ? Math.min(vh - 170, g.b + 34) : Math.max(16, Math.min(vh - 190, (g.t + g.b) / 2 - 50)) };
+  }
   const Dir = cue.dir === 'up' ? TrendingUp : cue.dir === 'down' ? TrendingDown : Sparkles;
-
-  return createPortal(<div className="gx-layer" aria-hidden key={ann.key}>
-    {kind === 'row' && <div className="gx-rowfill" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} />}
-    <svg className="gx-svg" width="100%" height="100%">
-      {kind === 'circle' && <path className="gx-draw gx-ink" d={scribble(rect.left, rect.top, rect.width, rect.height, true, ann.key)} pathLength={1} />}
-      {kind === 'box' && <path className="gx-draw gx-ink" d={scribble(rect.left, rect.top, rect.width, rect.height, false, ann.key)} pathLength={1} />}
-      {kind === 'row' && <>
-        <path className="gx-draw gx-ink" d={`M${rect.left - 6},${rect.top - 2} L${rect.left - 14},${rect.top - 2} L${rect.left - 14},${rect.bottom + 2} L${rect.left - 6},${rect.bottom + 2}`} pathLength={1} />
-        <path className="gx-draw gx-ink thin" d={`M${rect.left},${rect.bottom + 3} Q${rect.left + rect.width / 2},${rect.bottom + 7} ${rect.right},${rect.bottom + 2}`} pathLength={1} />
-      </>}
-      {kind === 'mark' && (() => { const ln = firstLine(ann.el) ?? rect; const y = ln.bottom + 4; const x2 = Math.min(ln.right, ln.left + 520);
-        return <path className="gx-draw gx-marker" d={`M${ln.left},${y} Q${(ln.left + x2) / 2},${y + 3} ${x2},${y - 1}`} pathLength={1} />; })()}
-      {visible && <g className="gx-arrow">
-        <path className="gx-draw gx-ink thin" d={`M${ax},${ay} Q${mx},${my} ${tx},${ty}`} pathLength={1} />
-        <path className="gx-head" d={`M${ah(0.45)} L${tx},${ty} L${ah(-0.45)}`} />
-      </g>}
-    </svg>
-    {kind === 'circle' && <span className={`gx-badge ${cue.dir || 'flat'}`} style={{ left: rect.right - 6, top: rect.top - 14 }}><Dir size={14} /></span>}
-    {visible && cue.text && <div className={`gx-note s-${side}`} style={{ left: cx, top: cy, width: W }}>
+  const arrow = (r: DOMRect, i: number) => {
+    if (!note) return null; const { side } = note;
+    const ax = side === 'r' ? note.x : side === 'l' ? note.x + W : note.x + W / 2; const ay = side === 't' ? note.y + 120 : side === 'b' ? note.y : note.y + 40;
+    // aim at the nearest edge of each target
+    const tx = side === 'r' ? r.right + 8 : side === 'l' ? r.left - 8 : r.left + r.width / 2;
+    const ty = side === 't' ? r.top - 8 : side === 'b' ? r.bottom + 8 : r.top + r.height / 2;
+    const mx = (ax + tx) / 2 + (side === 'r' || side === 'l' ? 0 : 40); const my = (ay + ty) / 2 - (side === 'r' || side === 'l' ? 36 : 0) - i * 8;
+    const ang = Math.atan2(ty - my, tx - mx); const ah = (d: number) => `${tx - 12 * Math.cos(ang + d)},${ty - 12 * Math.sin(ang + d)}`;
+    return <g className="gx-arrow" key={`a${i}`} style={{ ['--gx-d' as string]: `${0.45 + i * 0.18}s` }}>
+      <path className="gx-draw gx-ink thin" d={`M${ax},${ay} Q${mx},${my} ${tx},${ty}`} pathLength={1} />
+      <path className="gx-head" d={`M${ah(0.45)} L${tx},${ty} L${ah(-0.45)}`} />
+    </g>;
+  };
+  return createPortal(<div className="gx-layer" aria-hidden>
+    {items.map((it, i) => { const rect = rects[i]; if (!it.el.isConnected || !on(rect)) return null; const kind = kindOf(it.el); const delay = it.current ? `${cur.findIndex((c) => c.it === it) * 0.18}s` : '0s';
+      return <div key={it.key} className={it.current ? 'gx-item' : 'gx-item old'} style={{ ['--gx-i' as string]: delay }}>
+        {kind === 'row' && <div className="gx-rowfill" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} />}
+        <svg className="gx-svg" width="100%" height="100%">
+          {kind === 'circle' && <path className="gx-draw gx-ink" d={scribble(rect.left, rect.top, rect.width, rect.height, true, it.key)} pathLength={1} />}
+          {kind === 'box' && <path className="gx-draw gx-ink" d={scribble(rect.left, rect.top, rect.width, rect.height, false, it.key)} pathLength={1} />}
+          {kind === 'row' && <>
+            <path className="gx-draw gx-ink" d={`M${rect.left - 6},${rect.top - 2} L${rect.left - 14},${rect.top - 2} L${rect.left - 14},${rect.bottom + 2} L${rect.left - 6},${rect.bottom + 2}`} pathLength={1} />
+            <path className="gx-draw gx-ink thin" d={`M${rect.left},${rect.bottom + 3} Q${rect.left + rect.width / 2},${rect.bottom + 7} ${rect.right},${rect.bottom + 2}`} pathLength={1} />
+          </>}
+          {kind === 'mark' && (() => { const ln = firstLine(it.el) ?? rect; const y = ln.bottom + 4; const x2 = Math.min(ln.right, ln.left + 520);
+            return <path className="gx-draw gx-marker" d={`M${ln.left},${y} Q${(ln.left + x2) / 2},${y + 3} ${x2},${y - 1}`} pathLength={1} />; })()}
+        </svg>
+        {kind === 'circle' && it.current && <span className={`gx-badge ${cue.dir || 'flat'}`} style={{ left: rect.right - 6, top: rect.top - 14 }}><Dir size={14} /></span>}
+      </div>; })}
+    <svg className="gx-svg" width="100%" height="100%">{cur.map((x, i) => arrow(x.r, i))}</svg>
+    {note && cue.text && <div key={items[items.length - 1].key} className={`gx-note s-${note.side}`} style={{ left: note.x, top: note.y, width: W }}>
       <div className="gx-pin" />
       <div className="gx-note-h"><Quote size={12} /><span>Now discussing</span><Dir size={13} className={`gx-dir ${cue.dir || 'flat'}`} /></div>
       <p>{cue.text}</p>

@@ -1363,8 +1363,11 @@
 .gx-ink.thin { stroke-width: 2.2; }
 .gx-marker { fill: none; stroke: #e5484d; stroke-width: 2.5; stroke-linecap: round; }
 .gx-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: gx-draw .7s cubic-bezier(.6,.05,.3,1) forwards; }
-.gx-arrow .gx-draw { animation-delay: .45s; animation-duration: .5s; }
-.gx-head { fill: none; stroke: #e5484d; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; animation: gx-fade .2s .9s forwards; }
+.gx-item .gx-draw { animation-delay: var(--gx-i, 0s); }
+.gx-item.old { opacity: .45; transition: opacity .4s; }
+.gx-item.old .gx-draw, .gx-item.old .gx-rowfill { animation: none; stroke-dashoffset: 0; }
+.gx-arrow .gx-draw { animation-delay: var(--gx-d, .45s); animation-duration: .5s; }
+.gx-head { fill: none; stroke: #e5484d; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; animation: gx-fade .2s calc(var(--gx-d, .45s) + .45s) forwards; }
 @keyframes gx-draw { to { stroke-dashoffset: 0; } }
 @keyframes gx-fade { to { opacity: 1; } }
 .gx-rowfill { position: absolute; background: color-mix(in srgb, #ffd43b 16%, transparent); border-radius: 4px; transform-origin: left; animation: gx-sweep .5s ease-out both; }
