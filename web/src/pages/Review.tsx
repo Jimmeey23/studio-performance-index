@@ -90,12 +90,16 @@ function useChg() {
 
 /* ── chapter video explainers (NotebookLM): status per chapter, player when ready ── */
 type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?: string; progress: number; startedAt?: string; error?: string };
-const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null } | null>(null);
+const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null; upload: ((part: string, f: File) => Promise<void>) | null } | null>(null);
 function VideoExplainer({ part, title }: { part: string; title: string }) {
-  const c = useContext(RVideo); const [open, setOpen] = useState(false);
-  if (!c || !c.available) return null;
+  const c = useContext(RVideo); const [open, setOpen] = useState(false); const [up, setUp] = useState(false);
+  if (!c) return null;
   const v = c.videos[part];
-  if (!v) return null;
+  const uploader = c.upload && (v?.status !== 'ready') ? <label className="epr-vid ready no-print" title="Attach an MP4 as this report's video" style={{ cursor: 'pointer' }}>
+    <span className="ic">{up ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}</span>{up ? 'Uploading…' : 'Upload video'}
+    <input type="file" accept="video/mp4" hidden disabled={up} onChange={(e) => { const f = e.target.files?.[0]; if (f) { setUp(true); c.upload!(part, f).finally(() => setUp(false)); } }} />
+  </label> : null;
+  if (!v || (!c.available && v.status !== 'ready')) return uploader;
   if (v.status === 'ready') return <>
     <button className="epr-vid ready no-print" onClick={() => setOpen(true)} title="Play the video explainer for this chapter"><span className="ic"><Play size={12} /></span>Video explainer</button>
     {open && <div className="epr-modal no-print" onClick={() => setOpen(false)}><div className="epr-vid-player" onClick={(e) => e.stopPropagation()}>
@@ -104,6 +108,7 @@ function VideoExplainer({ part, title }: { part: string; title: string }) {
       <a className="epr-small" href={`/api/public/review/${c.rid}/video/${part}`} download={`${title}.mp4`}>Download MP4</a>
     </div></div>}
   </>;
+  if (v.status === 'failed' && uploader) return uploader;
   if (v.status === 'failed') return <span className="epr-vid failed no-print" title={v.error}>Video unavailable{c.retry && <button onClick={() => c.retry!(part)}>Retry</button>}</span>;
   const pct = Math.max(2, Math.min(99, v.progress));
   return (
@@ -740,7 +745,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         const r = await api<{ available: boolean; videos: Record<string, VideoState> }>(`/api/public/review/${rv.id}/explainers`);
         if (!live) return; setVids(r);
         if (r.available && !publicView && allWritten && vidAsked.current !== rv.id) {
-          const missing = ['glance', ...rv.sections.map((x) => x.id)].filter((p) => !r.videos[p]);
+          const missing = ['glance'].filter((p) => !r.videos[p]);
           vidAsked.current = rv.id;
           if (missing.length) { const q = await api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: missing } }).catch(() => null); if (q && live) setVids({ available: true, videos: q.videos }); }
         }
@@ -751,6 +756,12 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     load(); return () => { live = false; clearTimeout(t); };
   }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
+
+  const uploadVideo = publicView || !rv ? null : async (part: string, f: File) => {
+    const fd = new FormData(); fd.append('file', f);
+    try { const q = await api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/video?part=${part}`, { method: 'POST', body: fd }); setVids((o) => ({ ...o, videos: q.videos })); }
+    catch (e) { setErr((e as Error).message); }
+  };
 
   const openDrill = useDrill();
   const drillApi: DrillApi | null = rv && P && openDrill ? (() => {
@@ -863,7 +874,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
-            <RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
+            <RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
@@ -1057,7 +1068,7 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
         {speak && <AudioSummary text={`Chapter ${n}. ${title}. ${speak}`} />}
-        {vid && <VideoExplainer part={vid} title={title} />}
+        {vid === 'glance' && <VideoExplainer part="glance" title={title} />}
         {right}
       </div>
       <div className="epr-hero-body">
