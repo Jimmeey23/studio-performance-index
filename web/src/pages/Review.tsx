@@ -137,6 +137,9 @@ function guideTo(cue: NarrCue) {
   if (best) best.classList.add('epr-guide');
   (best ?? home).scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' });
 }
+type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
+const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 /** Small headphones icon that starts the narration at the first clip about this chapter. */
 function NarrIcon({ sec }: { sec: string }) {
   const c = useContext(RNarr);
