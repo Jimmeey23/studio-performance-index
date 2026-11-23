@@ -103,7 +103,7 @@ type NarrTrack = { id: string; title: string; clips: { id: string; section: stri
  * Spoken numbers are matched against the numbers shown on screen (₹33.9L, 18.8%, 11,076 …) — the strongest signal;
  * keywords break ties and cover sentences without numbers. */
 const GUIDE_SEL = '.epr-kpi, .epr-card, tr, .epr-spot, .epr-hero-lead, .epr-sum, li, p';
-const clearGuide = () => { document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide')); showAnn(null); };
+const clearGuide = () => { document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide')); showAnn(null); lastGuide = null; };
 const SCALE: Record<string, number> = { k: 1e3, l: 1e5, cr: 1e7, m: 1e6 };
 function shownNums(txt: string): { v: number; u: string }[] {
   const out: { v: number; u: string }[] = [];
@@ -115,34 +115,53 @@ function shownNums(txt: string): { v: number; u: string }[] {
 }
 const numHit = (a: { v: number; u: string }, b: { v: number; u: string }) =>
   (a.u === '' ? b.u === '' : b.u === '%' || b.u === 'pp') && (a.u ? Math.abs(Math.abs(a.v) - Math.abs(b.v)) < 0.051 : Math.abs(a.v - b.v) <= Math.max(0.5, Math.abs(a.v) * 0.006));
+/* score one element against a cue (or a single spoken number of it) */
+function scoreEl(el: HTMLElement, cue: NarrCue, nums: NarrCue['nums'], home: HTMLElement) {
+  const raw = el.textContent ?? ''; if (!raw || raw.length > 1500 || el.closest('.epr-narr, .epr-cover')) return 0;
+  const txt = raw.toLowerCase();
+  const head = (el.querySelector('.epr-kpi-l, .epr-card-t, .epr-card-h, th, td')?.textContent ?? '').toLowerCase();
+  let sc = 0;
+  if (nums.length) { const shown = shownNums(raw); sc += 10 * nums.filter((n) => shown.some((s) => numHit(n, s))).length; if (!sc && cue.nums.length) return 0; }
+  cue.terms.forEach((t, i) => { const w = cue.terms.length - i; const lt = t.toLowerCase(); if (head.includes(lt)) sc += 3 * w; else if (txt.includes(lt)) sc += w; });
+  if (sc <= 0) return 0;
+  if (home.contains(el)) sc += 2;
+  if (el.matches('.epr-kpi, tr')) sc *= 1.6; else if (nums.length && el.matches('p, li')) sc *= 0.6;   // numbers belong on metrics and rows, not prose
+  return sc - raw.length / 2000;                     // prefer the tightest element (a KPI or one row over a whole card)
+}
+let lastGuide: { sec: string; at: number } | null = null;
 function guideTo(cue: NarrCue) {
   const home = document.getElementById(`epr-${cue.sec}`); if (!home) return;
-  let best: HTMLElement | null = null; let score = 0;
-  if (cue.terms.length || cue.nums.length) {
-    const scope = cue.nums.length ? document : home;   // a spoken number can live in any chapter
-    for (const el of scope.querySelectorAll<HTMLElement>(GUIDE_SEL)) {
-      const raw = el.textContent ?? ''; if (!raw || raw.length > 1500 || el.closest('.epr-narr, .epr-cover')) continue;
-      const txt = raw.toLowerCase();
-      const head = (el.querySelector('.epr-kpi-l, .epr-card-t, .epr-card-h, th, td')?.textContent ?? '').toLowerCase();
-      let sc = 0;
-      if (cue.nums.length) { const shown = shownNums(raw); sc += 10 * cue.nums.filter((n) => shown.some((s) => numHit(n, s))).length; }
-      cue.terms.forEach((t, i) => { const w = cue.terms.length - i; const lt = t.toLowerCase(); if (head.includes(lt)) sc += 3 * w; else if (txt.includes(lt)) sc += w; });
-      if (sc <= 0) continue;
-      if (home.contains(el)) sc += 2;
-      if (el.matches('.epr-kpi, tr')) sc *= 1.3;
-      sc -= raw.length / 2000;                       // prefer the tightest element (a KPI or one row over a whole card)
-      if (sc > score) { score = sc; best = el; }
-    }
+  const scope = cue.nums.length ? document : home;   // a spoken number can live in any chapter
+  const cands = cue.terms.length || cue.nums.length ? [...scope.querySelectorAll<HTMLElement>(GUIDE_SEL)] : [];
+  const pick = (nums: NarrCue['nums']) => { let best: HTMLElement | null = null, score = 0; for (const el of cands) { const sc = scoreEl(el, cue, nums, home); if (sc > score) { score = sc; best = el; } } return best; };
+  // each spoken number gets its own target (a metric card or table row); prose only when nothing else shows it
+  const targets: HTMLElement[] = [];
+  for (const n of cue.nums) {
+    const el = pick([n]); if (!el || targets.some((t) => t === el || t.contains(el) || el.contains(t))) continue;
+    targets.push(el);
   }
-  clearGuide();
-  if (best) best.classList.add('epr-guide');
-  const target = best;
-  setTimeout(() => showAnn(target ? { el: target, cue, key: Date.now() } : null), 350);   // after the scroll starts
-  // move only when needed: a target already comfortably on screen stays put; a chapter cue only moves when
-  // the reader is in a different chapter
-  const vh = window.innerHeight;
-  if (best) { const r = best.getBoundingClientRect(); if (r.top < 70 || r.bottom > vh - 150) best.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  else { const r = home.getBoundingClientRect(); if (r.top > vh * 0.5 || r.bottom < vh * 0.3) home.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  const best = targets[0] ?? pick(cue.nums);
+  if (best && !targets.length) targets.push(best);
+  // keep only what fits on one screen together with the main target (no vertical scrolling between them)
+  const vh = window.innerHeight; const room = vh - 230;
+  const group: HTMLElement[] = [];
+  if (best) { let top = best.getBoundingClientRect().top, bot = best.getBoundingClientRect().bottom;
+    for (const t of targets) { const r = t.getBoundingClientRect(); const nt = Math.min(top, r.top), nb = Math.max(bot, r.bottom); if (nb - nt <= room) { group.push(t); top = nt; bot = nb; } } }
+  document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide'));
+  group.forEach((t) => t.classList.add('epr-guide'));
+  // scroll only when the group is not already comfortably on screen; then centre the whole group
+  let moved = false;
+  if (group.length) {
+    const rs = group.map((t) => t.getBoundingClientRect()); const top = Math.min(...rs.map((r) => r.top)), bot = Math.max(...rs.map((r) => r.bottom));
+    if (top < 70 || bot > vh - 150) { moved = true; const sc = document.querySelector<HTMLElement>('.epr-scroll') ?? document.scrollingElement as HTMLElement;
+      const mid = (top + bot) / 2; sc.scrollBy({ top: mid - (vh - 80) / 2, behavior: 'smooth' }); }
+  } else { const r = home.getBoundingClientRect(); if (r.top > vh * 0.5 || r.bottom < vh * 0.3) { moved = true; home.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
+  // marks from earlier cues stay while the reader is still on the same screen of the same chapter
+  const add = !moved && !!lastGuide && lastGuide.sec === cue.sec;
+  lastGuide = { sec: cue.sec, at: Date.now() };
+  const key = Date.now();
+  if (!group.length) { if (moved) showAnn(null); return; }
+  setTimeout(() => showAnn({ els: group, cue, key, add }), moved ? 450 : 50);
 }
 type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
 const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);
@@ -1600,3 +1619,4 @@ function Definitions({ defs }: { defs: Def[] }) {
     </details>
   );
 }
+
