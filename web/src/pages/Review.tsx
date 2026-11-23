@@ -96,30 +96,47 @@ const RVideo = createContext<{ rid: string; available: boolean; videos: Record<s
   presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; time: number }) => void; remote: LiveSync | null } | null>(null);
 type LiveSync = { part: string; open: boolean; playing: boolean; time: number; at: number; seq: number };
 /* ── pre-recorded narration (Blomp): one Listen button at the top, a docked player with a section playlist ── */
-type NarrCue = { at: number; sec: string; terms: string[] };
+type NarrCue = { at: number; sec: string; terms: string[]; nums: { v: number; u: '' | '%' | 'pp' }[] };
 type NarrTrack = { id: string; title: string; clips: { id: string; section: string; seconds: number; home: string; cues: NarrCue[] }[] };
-/* guided focus: bring the chapter / metric / table being discussed into view and highlight it */
-const GUIDE_SEL = '.epr-kpi, .epr-card, table, .epr-spot, .epr-hero-lead, .epr-sum, li, p';
+/* guided focus: bring the metric / table row being discussed into view and highlight it.
+ * Spoken numbers are matched against the numbers shown on screen (₹33.9L, 18.8%, 11,076 …) — the strongest signal;
+ * keywords break ties and cover sentences without numbers. */
+const GUIDE_SEL = '.epr-kpi, .epr-card, tr, .epr-spot, .epr-hero-lead, .epr-sum, li, p';
 const clearGuide = () => document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide'));
+const SCALE: Record<string, number> = { k: 1e3, l: 1e5, cr: 1e7, m: 1e6 };
+function shownNums(txt: string): { v: number; u: string }[] {
+  const out: { v: number; u: string }[] = [];
+  for (const m of txt.matchAll(/(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(%|pp|cr|k|l|m)?(?![a-z])/gi)) {
+    const v = parseFloat(m[1].replace(/,/g, '')); const s = (m[2] ?? '').toLowerCase();
+    out.push(s === '%' || s === 'pp' ? { v, u: s } : { v: v * (SCALE[s] ?? 1), u: '' });
+  }
+  return out;
+}
+const numHit = (a: { v: number; u: string }, b: { v: number; u: string }) =>
+  (a.u === '' ? b.u === '' : b.u === '%' || b.u === 'pp') && (a.u ? Math.abs(Math.abs(a.v) - Math.abs(b.v)) < 0.051 : Math.abs(a.v - b.v) <= Math.max(0.5, Math.abs(a.v) * 0.006));
 function guideTo(cue: NarrCue) {
-  const sec = document.getElementById(`epr-${cue.sec}`); if (!sec) return;
+  const home = document.getElementById(`epr-${cue.sec}`); if (!home) return;
   let best: HTMLElement | null = null; let score = 0;
-  if (cue.terms.length) for (const el of sec.querySelectorAll<HTMLElement>(GUIDE_SEL)) {
-    const txt = (el.textContent ?? '').toLowerCase(); if (!txt || txt.length > 1500) continue;
-    const head = (el.querySelector('.epr-kpi-l, .epr-card-t, .epr-card-h, th')?.textContent ?? '').toLowerCase();
-    let sc = 0; cue.terms.forEach((t, i) => { const w = cue.terms.length - i; const lt = t.toLowerCase(); if (head.includes(lt)) sc += 3 * w; else if (txt.includes(lt)) sc += w; });
-    if (el.matches('.epr-kpi, .epr-card, table')) sc *= 1.5;
-    sc -= txt.length / 3000;
-    if (sc > score) { score = sc; best = el; }
+  if (cue.terms.length || cue.nums.length) {
+    const scope = cue.nums.length ? document : home;   // a spoken number can live in any chapter
+    for (const el of scope.querySelectorAll<HTMLElement>(GUIDE_SEL)) {
+      const raw = el.textContent ?? ''; if (!raw || raw.length > 1500 || el.closest('.epr-narr, .epr-cover')) continue;
+      const txt = raw.toLowerCase();
+      const head = (el.querySelector('.epr-kpi-l, .epr-card-t, .epr-card-h, th, td')?.textContent ?? '').toLowerCase();
+      let sc = 0;
+      if (cue.nums.length) { const shown = shownNums(raw); sc += 10 * cue.nums.filter((n) => shown.some((s) => numHit(n, s))).length; }
+      cue.terms.forEach((t, i) => { const w = cue.terms.length - i; const lt = t.toLowerCase(); if (head.includes(lt)) sc += 3 * w; else if (txt.includes(lt)) sc += w; });
+      if (sc <= 0) continue;
+      if (home.contains(el)) sc += 2;
+      if (el.matches('.epr-kpi, tr')) sc *= 1.3;
+      sc -= raw.length / 2000;                       // prefer the tightest element (a KPI or one row over a whole card)
+      if (sc > score) { score = sc; best = el; }
+    }
   }
   clearGuide();
-  const target = best ?? sec;
   if (best) best.classList.add('epr-guide');
-  target.scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' });
+  (best ?? home).scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' });
 }
-type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
-const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 /** Small headphones icon that starts the narration at the first clip about this chapter. */
 function NarrIcon({ sec }: { sec: string }) {
   const c = useContext(RNarr);
