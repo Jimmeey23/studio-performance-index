@@ -116,6 +116,20 @@ app.get('/api/public/review/:id', wrap(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ ...s, public: true, definitions: reviewDefinitions(s.review) });
 }));
+/* Live video sync: when the review's owner plays/pauses/seeks/closes the explainer, every open copy of the report follows. */
+type VidSync = { part: string; open: boolean; playing: boolean; t: number; at: number; seq: number };
+const vidSync = new Map<string, VidSync>();
+const vidSubs = new Map<string, Set<Response>>();
+const pushSync = (id: string, st: VidSync) => { for (const r of vidSubs.get(id) ?? []) r.write(`data: ${JSON.stringify(st)}\n\n`); };
+app.get('/api/public/review/:id/live', (req, res) => {
+  const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).end();
+  res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no'); res.flushHeaders();
+  const set = vidSubs.get(id) ?? new Set<Response>(); set.add(res); vidSubs.set(id, set);
+  const cur = vidSync.get(id); if (cur) res.write(`data: ${JSON.stringify(cur)}\n\n`);
+  const ping = setInterval(() => res.write(': ping\n\n'), 20000);
+  req.on('close', () => { clearInterval(ping); set.delete(res); if (!set.size) vidSubs.delete(id); });
+});
 app.use('/api', auth);
 
 /* ── chat ─────────────────────────────────────────────────────────────── */
@@ -307,6 +321,14 @@ app.post('/api/review/:id/explainers', wrap(async (req, res) => {
   const parts = (Array.isArray(req.body?.parts) ? req.body.parts : ['glance']).filter((p: unknown): p is string => typeof p === 'string' && /^[a-z0-9_-]+$/i.test(p));
   await enqueue(s.review.id, parts, !!req.body?.force);
   res.json({ ok: true, videos: await videoStates(s.review.id) });
+}));
+app.post('/api/review/:id/live', wrap(async (req, res) => {
+  const s = await reviewStore.byId(req.user!.id, String(req.params.id));
+  if (!s) return res.status(403).json({ error: 'Only the report owner can control playback' });
+  const b = req.body ?? {}; const prev = vidSync.get(s.review.id);
+  const st: VidSync = { part: /^[a-z0-9_-]+$/i.test(String(b.part)) ? String(b.part) : 'glance', open: !!b.open, playing: !!b.playing,
+    t: Math.max(0, Number(b.t) || 0), at: Date.now(), seq: (prev?.seq ?? 0) + 1 };
+  vidSync.set(s.review.id, st); pushSync(s.review.id, st); res.json({ ok: true });
 }));
 /** Upload a ready-made video as the review's single top-of-report video (part 'glance' by default). */
 app.post('/api/review/:id/video', upload.single('file'), wrap(async (req, res) => {
