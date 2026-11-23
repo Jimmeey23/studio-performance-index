@@ -24,7 +24,7 @@ import * as reportStore from './report/store.js';
 import { generateInsights, rulesInsights } from './report/insights.js';
 import { buildReview, writeGlance, writeSection, reviewContext, reviewDefinitions, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
-import { enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
+import { attachVideo, enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
 import { streamTo } from './report/blobStore.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
@@ -304,8 +304,18 @@ app.post('/api/review/:id/explainers', wrap(async (req, res) => {
   const s = await reviewStore.byId(req.user!.id, String(req.params.id));
   if (!s) return res.status(404).json({ error: 'Review not found' });
   if (!(await explainersAvailable())) return res.status(503).json({ error: 'Video explainers are not set up on this server (install notebooklm-py and set NOTEBOOKLM_AUTH_JSON).' });
-  const parts = (Array.isArray(req.body?.parts) ? req.body.parts : ['glance', ...s.review.sections.map((x) => x.id)]).filter((p: unknown): p is string => typeof p === 'string' && /^[a-z0-9_-]+$/i.test(p));
+  const parts = (Array.isArray(req.body?.parts) ? req.body.parts : ['glance']).filter((p: unknown): p is string => typeof p === 'string' && /^[a-z0-9_-]+$/i.test(p));
   await enqueue(s.review.id, parts, !!req.body?.force);
+  res.json({ ok: true, videos: await videoStates(s.review.id) });
+}));
+/** Upload a ready-made video as the review's single top-of-report video (part 'glance' by default). */
+app.post('/api/review/:id/video', upload.single('file'), wrap(async (req, res) => {
+  const s = await reviewStore.byId(req.user!.id, String(req.params.id));
+  if (!s) return res.status(404).json({ error: 'Review not found' });
+  const part = String(req.query.part ?? 'glance');
+  if (!/^[a-z0-9_-]+$/i.test(part)) return res.status(400).json({ error: 'Bad part' });
+  if (!req.file || !/^video\/mp4$|\.mp4$/i.test(req.file.mimetype + ' ' + req.file.originalname)) return res.status(400).json({ error: 'Upload an MP4 file' });
+  await attachVideo(s.review.id, part, req.file.buffer);
   res.json({ ok: true, videos: await videoStates(s.review.id) });
 }));
 /** Pins (assistant results added to chapters) and annotations — owned by the review's user. */

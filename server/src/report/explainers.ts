@@ -175,3 +175,20 @@ function compress(file: string): Promise<string> {
     });
   });
 }
+
+/** Attaches a video the user uploaded (e.g. a hand-made deep-dive) as the review's `part` video — same storage path as generated ones. */
+export async function attachVideo(rid: string, part: string, data: Buffer) {
+  const out = videoFile(rid, part);
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, data);
+  const final = await compress(out);
+  let storage: VideoState['storage'] = 'local'; let key: string | undefined;
+  if (blobConfigured()) {
+    key = blobKey(`explainers/${rid}/${part}.mp4`);
+    await putFile(key, final, 'video/mp4');
+    storage = 'blomp';
+    fs.rmSync(final, { force: true });
+  }
+  const bytes = storage === 'local' ? fs.statSync(final).size : undefined;
+  await setState(rid, part, { status: 'ready', progress: 100, step: 'Uploaded', file: path.basename(out), storage, key, bytes, error: undefined });
+}
