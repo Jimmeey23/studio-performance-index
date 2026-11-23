@@ -1007,8 +1007,9 @@
 .epr-vid.busy::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: epr-breathe 1.6s ease-in-out infinite; }
 .epr-vid.failed { color: var(--ink-3); border-style: dashed; }
 .epr-vid.failed button { margin-left: 4px; color: var(--accent); font-weight: 600; }
-.epr-vid-player { width: min(960px, 100%); display: grid; gap: 10px; padding: 16px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-lg); }
-.epr-vid-player video { width: 100%; max-height: 70vh; border-radius: 10px; background: #000; }
+.epr-vid-modal { z-index: 200; background: rgb(0 0 0 / .7); }
+.epr-vid-player { width: min(1200px, 100%); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: 16px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden; }
+.epr-vid-player video { display: block; width: 100%; height: auto; max-height: calc(100dvh - 140px); aspect-ratio: auto; object-fit: contain; border-radius: 10px; background: #000; }
 .epr-vid-player a { justify-self: end; }
 @media (max-width: 640px) { .epr-vid.busy em { display: none; } }
 

@@ -4,6 +4,7 @@
  * writes each part (at a glance + every section) once. Saved reviews reopen
  * as they were, and the most recently opened review is shown by default.
  */
+import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
@@ -102,11 +103,11 @@ function VideoExplainer({ part, title }: { part: string; title: string }) {
   if (!v || (!c.available && v.status !== 'ready')) return uploader;
   if (v.status === 'ready') return <>
     <button className="epr-vid ready no-print" onClick={() => setOpen(true)} title="Play the video explainer for this chapter"><span className="ic"><Play size={12} /></span>Video explainer</button>
-    {open && <div className="epr-modal no-print" onClick={() => setOpen(false)}><div className="epr-vid-player" onClick={(e) => e.stopPropagation()}>
+    {open && createPortal(<div className="epr-modal epr-vid-modal no-print" onClick={() => setOpen(false)}><div className="epr-vid-player" onClick={(e) => e.stopPropagation()}>
       <div className="epr-modal-h"><Play size={15} /><b>{title}</b><button onClick={() => setOpen(false)}><X size={15} /></button></div>
       <video src={`/api/public/review/${c.rid}/video/${part}`} controls autoPlay playsInline preload="metadata" />
       <a className="epr-small" href={`/api/public/review/${c.rid}/video/${part}`} download={`${title}.mp4`}>Download MP4</a>
-    </div></div>}
+    </div></div>, document.body)}
   </>;
   if (v.status === 'failed' && uploader) return uploader;
   if (v.status === 'failed') return <span className="epr-vid failed no-print" title={v.error}>Video unavailable{c.retry && <button onClick={() => c.retry!(part)}>Retry</button>}</span>;
