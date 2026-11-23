@@ -1384,3 +1384,51 @@
 .gx-chips b { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #3b3200; color: #fff7c2; animation: gx-pop .35s cubic-bezier(.3,1.6,.5,1) both; }
 @media (prefers-reduced-motion: reduce) { .gx-draw, .gx-head, .gx-note, .gx-badge, .gx-chips b, .gx-rowfill { animation-duration: .01s !important; animation-delay: 0s !important; } }
 @media print { .gx-layer { display: none; } }
+
+/* ── Executive brief (Brief view): two A4 pages for senior management ── */
+.xb { display: flex; flex-direction: column; gap: 28px; padding: 24px 16px 48px; align-items: center; }
+.xb-page { --ink: #14161a; --ink-2: #3a3f47; --ink-3: #6b7280; --line: #e3e5e8; --card: #fff; width: min(100%, 880px); background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 18px 50px rgba(0,0,0,.18); padding: 44px 52px 30px; display: flex; flex-direction: column; gap: 14px; }
+.xb-mast { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; padding-bottom: 14px; border-bottom: 2px solid var(--ink); }
+.xb-kick { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.xb-mast h1 { font-family: var(--serif, Georgia, serif); font-size: 30px; line-height: 1.1; margin: 4px 0 4px; font-weight: 600; letter-spacing: -.01em; }
+.xb-sub { font-size: 12.5px; color: var(--ink-3); }
+.xb-meta { font-size: 11.5px; color: var(--ink-3); text-align: right; line-height: 1.6; white-space: nowrap; }
+.xb-meta b { color: var(--ink); font-size: 13px; }
+.xb-label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin-top: 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+.xb-bl { border-left: 4px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); padding: 12px 16px; border-radius: 0 6px 6px 0; }
+.xb-bl .xb-label { border: 0; padding: 0; margin: 0 0 4px; color: var(--accent); }
+.xb-head { font-family: var(--serif, Georgia, serif); font-size: 18px; line-height: 1.35; font-weight: 600; margin: 0; }
+.xb-sum { font-size: 13px; line-height: 1.55; color: var(--ink-2); margin: 6px 0 0; }
+.xb-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.xb-kpi { padding: 10px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.xb-kpi:nth-child(4n) { border-right: 0; } .xb-kpi:nth-last-child(-n+4) { border-bottom: 0; }
+.xb-kl { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xb-kv { font-size: 21px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.xb-kc { display: flex; justify-content: space-between; gap: 6px; font-size: 10.5px; color: var(--ink-3); }
+.xb-d { display: inline-flex; align-items: center; gap: 1px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xb-d.good { color: #12a150; } .xb-d.bad { color: #d93036; } .xb-d.flat { color: var(--ink-3); }
+.xb-tbl { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.45; }
+.xb-tbl th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--ink-3); }
+.xb-tbl td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.xb-area { font-weight: 600; width: 22%; }
+.xb-nums { width: 30%; } .xb-nums div { display: flex; gap: 6px; align-items: baseline; white-space: nowrap; } .xb-nums span { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; } .xb-nums b { font-variant-numeric: tabular-nums; }
+.xb-st { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.xb-st.on { background: #12a15022; color: #0d8a43; } .xb-st.watch { background: #f5a52422; color: #b26b00; } .xb-st.off { background: #d9303622; color: #c0262b; }
+.xb-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; }
+.xb-ins { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.xb-ins li { display: flex; gap: 10px; } .xb-ins li > span { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--card, #fff); font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
+.xb-ins p, .xb-risk p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.xb-risk { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.xb-risk li { display: flex; gap: 8px; } .xb-risk svg { flex: none; color: #d97706; margin-top: 3px; }
+.xb-dec td b { display: block; font-weight: 600; } .xb-dec td em { font-style: normal; font-size: 10.5px; color: var(--ink-3); }
+.xb-pr { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 4px; }
+.xb-pr.high { background: #d93036; color: #fff; } .xb-pr.medium { background: #f5a524; color: #3b2600; } .xb-pr.low { background: var(--line); color: var(--ink-2); }
+.xb-none { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.xb-note { font-size: 10.5px; color: var(--ink-3); line-height: 1.5; margin: auto 0 0; padding-top: 10px; }
+.xb-foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 8px; margin-top: 6px; }
+@media (max-width: 720px) { .xb-page { padding: 24px 18px; } .xb-kpis { grid-template-columns: repeat(2, 1fr); } .xb-kpi:nth-child(4n) { border-right: 1px solid var(--line); } .xb-kpi:nth-child(2n) { border-right: 0; } .xb-cols { grid-template-columns: 1fr; } .xb-mast { flex-direction: column; align-items: flex-start; } .xb-meta { text-align: left; } .xb-nums, .xb-tbl th:nth-child(4) { display: none; } }
+@media print {
+  .xb { padding: 0; gap: 0; }
+  .xb-page { width: 100%; min-height: 0; height: 272mm; box-shadow: none; border: 0; border-radius: 0; padding: 12mm 13mm 8mm; break-after: page; page-break-after: always; overflow: hidden; background: #fff; color: #111; }
+  .xb-page:last-child { break-after: auto; page-break-after: auto; }
+}

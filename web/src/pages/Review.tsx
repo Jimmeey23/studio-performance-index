@@ -764,7 +764,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [editOn, setEditOn] = useState(false);
   const saveState = useSaveState();
   const [inkSize, setInkSize] = useState(4); const [noteKind, setNoteKind] = useState<NoteKind>('note'); const [notesOpen, setNotesOpen] = useState(false);
-  const [brief, setBrief] = useState(false);
+  const [brief, setBrief] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).has('brief'));
   const [scale, setScale] = useState(() => { try { return Number(localStorage.getItem('epr-scale')) || 1; } catch { return 1; } });
   const [progress, setProgress] = useState(0);
   const [startedAt] = useState(Date.now());
@@ -1058,7 +1058,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
 
   const downloadPdf = async (id: string, msg: (m: string | null) => void) => {
     msg('Preparing PDF… this takes 20–40 seconds');
-    const r = await fetch(`/api/review/${id}/pdf`, { credentials: 'include' });
+    const r = await fetch(`/api/review/${id}/pdf${brief ? '?brief=1' : ''}`, { credentials: 'include' });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `PDF failed (${r.status})`);
     const name = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ?? 'review.pdf';
     const url = URL.createObjectURL(await r.blob()); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -1139,7 +1139,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       </div>
 
       <div className="flex min-h-0 flex-1">
-      {rv && <nav className="epr-rail2 no-print" aria-label="Chapters">{nav.map((n, i) => {
+      {rv && !brief && <nav className="epr-rail2 no-print" aria-label="Chapters">{nav.map((n, i) => {
         const part = n.id === 'cover' ? 'glance' : n.id; const ready = n.id === 'closing' ? !building : visible.has(part);
         return <button key={n.id} disabled={!ready} onClick={() => jump(n.id)} className={clsx(active === n.id && 'on', !ready && 'wait')} aria-current={active === n.id ? 'true' : undefined}>
           <span className="i">{busy.has(part) ? <Loader2 size={11} className="animate-spin" /> : i === 0 ? '◆' : String(i).padStart(2, '0')}</span><span className="t">{RAIL_SHORT[n.id] ?? n.title}</span></button>;
@@ -1150,12 +1150,14 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
           {rv && P && (
             <RNarr.Provider value={{ rid: rv.id, tracks: narr, presenter, send: (st) => { if (rv && presenter) post({ t: 'narr', ...st }); }, remote: narrRemote }}><RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               <div className="epr-main">
+                {brief && !building ? <ExecBrief rv={rv} ai={ai} P={P} /> : <>
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
                 {rv.sections.map((s, i) => visible.has(s.id) && <ReviewSectionView key={s.id} req={publicView ? undefined : rv.request} n={i + 2} total={rv.sections.length + 2} s={s} ai={ai?.sections[s.id]} live={fresh.has(s.id)} busy={busy.has(s.id)} base={base} P={P} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, s.id, true)} />)}
                 {building && <BuildConsole steps={steps} hints={hints} started={startedAt} />}
                 {!building && <Closing rv={rv} ai={ai} P={P} jump={jump} />}
                 {!building && !!saved?.definitions?.length && <Definitions defs={saved.definitions} />}
+                </>}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
             </RDrill.Provider></RBase.Provider></RVideo.Provider></RNarr.Provider>
@@ -1437,6 +1439,84 @@ function ActionCard({ r, n, jump, compact }: { r: PlanRec; n: number; jump: (id:
       {(r.kpi || r.impact) && <dl>{r.kpi && <div><dt>Measure</dt><dd>{r.kpi}</dd></div>}{r.impact && <div><dt>Impact</dt><dd>{r.impact}</dd></div>}</dl>}
       <button className="epr-ac-ch" onClick={() => jump(r.sid)}>{r.chapter}<ArrowRight size={11} /></button>
     </article>
+  );
+}
+
+/* ── Executive brief: the whole review as a two-page senior-management read ── */
+const clip = (t: string | undefined, n: number) => { const x = (t ?? '').replace(/\s+/g, ' ').trim(); return x.length <= n ? x : `${x.slice(0, n).replace(/[\s,;:—-]+\S*$/, '')}…`; };
+const firstSentences = (t: string | undefined, n: number) => (t ?? '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z₹0-9])/).slice(0, n).join(' ');
+function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
+  const gl = ai?.glance;
+  // headline scorecard: cover KPIs first, then the glance cards, de-duplicated — eight tiles
+  const seen = new Set<string>();
+  const kpis = [...rv.cover.headlineKpis, ...rv.glance.cards, ...rv.scorecard].filter((k) => k.value !== null && !seen.has(k.id) && seen.add(k.id)).slice(0, 8);
+  const delta = (k: Kpi, c: number | null) => <span className={clsx('xb-d', tone(k, c) > 0 ? 'good' : tone(k, c) < 0 ? 'bad' : 'flat')}>{c === null ? '—' : <>{c > 0 ? <ArrowUpRight size={11} /> : c < 0 ? <ArrowDownRight size={11} /> : null}{fmtDelta(c, k.format)}</>}</span>;
+  // chapter status: share of chapter KPIs moving the right way vs the previous period
+  const rows = rv.sections.map((s) => {
+    const ks = s.kpis.filter((k) => k.chg !== null && k.higherIsBetter !== undefined);
+    const good = ks.filter((k) => tone(k, k.chg) > 0).length; const r = ks.length ? good / ks.length : 0.5;
+    const status = r >= 0.6 ? 'on' : r >= 0.4 ? 'watch' : 'off';
+    const a = ai?.sections[s.id];
+    return { s, status, headline: clip(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0], 150), key: s.kpis.filter((k) => k.value !== null).slice(0, 2) };
+  });
+  const STATUS = { on: 'On track', watch: 'Watch', off: 'Needs action' } as const;
+  const insights = (gl?.insights?.length ? gl.insights : rows.map((r) => r.headline)).slice(0, 5).map((x) => clip(x, 220));
+  const risks = (gl?.watch ?? []).slice(0, 4).map((x) => clip(x, 180));
+  const order = { high: 0, medium: 1, low: 2 } as const;
+  const decisions = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), chapter: chTitle(s) })))
+    .sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 6);
+  const counts = { on: rows.filter((r) => r.status === 'on').length, watch: rows.filter((r) => r.status === 'watch').length, off: rows.filter((r) => r.status === 'off').length };
+  return (
+    <div className="xb">
+      <section className="xb-page" id="epr-brief">
+        <header className="xb-mast">
+          <div><span className="xb-kick">Executive brief · Confidential</span><h1>{rv.scope}</h1><span className="xb-sub">{P.label} performance review · compared with {P.prevLabel} and {P.lyLabel}</span></div>
+          <div className="xb-meta"><b>{counts.on}</b> on track<br /><b>{counts.watch}</b> to watch<br /><b>{counts.off}</b> need action</div>
+        </header>
+        <div className="xb-bl">
+          <span className="xb-label">Bottom line</span>
+          <p className="xb-head">{gl?.headline ?? `${rv.scope}: ${P.label} review`}</p>
+          {(gl?.tagline || gl?.summary) && <p className="xb-sum">{firstSentences(gl?.summary || gl?.tagline, 3)}</p>}
+        </div>
+        <span className="xb-label">Key business metrics</span>
+        <div className="xb-kpis">{kpis.map((k) => (
+          <div key={k.id} className="xb-kpi">
+            <span className="xb-kl">{k.label}</span>
+            <b className="xb-kv">{fmtK(k.value, k.format)}</b>
+            <div className="xb-kc"><span>vs {P.prevLabel}</span>{delta(k, k.chg)}</div>
+            <div className="xb-kc"><span>vs {P.lyLabel}</span>{delta(k, k.chgLy)}</div>
+          </div>))}
+        </div>
+        <span className="xb-label">Performance by area</span>
+        <table className="xb-tbl">
+          <thead><tr><th>Area</th><th>Status</th><th>Assessment</th><th>Key numbers</th></tr></thead>
+          <tbody>{rows.map(({ s, status, headline, key }) => (
+            <tr key={s.id}><td className="xb-area">{chTitle(s)}</td><td><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></td><td>{headline}</td>
+              <td className="xb-nums">{key.map((k) => <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}</div>)}</td></tr>))}
+          </tbody>
+        </table>
+        <footer className="xb-foot"><span>Page 1 of 2</span><span>{rv.scope} · {P.label}</span></footer>
+      </section>
+      <section className="xb-page">
+        <div className="xb-cols">
+          <div>
+            <span className="xb-label">What leadership needs to know</span>
+            <ol className="xb-ins">{insights.map((t, i) => <li key={i}><span>{i + 1}</span><p>{t}</p></li>)}</ol>
+          </div>
+          <div>
+            <span className="xb-label">Risks to watch</span>
+            {risks.length ? <ul className="xb-risk">{risks.map((t, i) => <li key={i}><AlertTriangle size={13} /><p>{t}</p></li>)}</ul> : <p className="xb-none">No material risks flagged this period.</p>}
+          </div>
+        </div>
+        <span className="xb-label">Decisions and actions</span>
+        {decisions.length ? <table className="xb-tbl xb-dec">
+          <thead><tr><th>Priority</th><th>Action</th><th>Owner</th><th>By</th><th>Expected impact</th></tr></thead>
+          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><b>{clip(d.title, 90)}</b><em>{d.chapter}</em></td><td>{d.owner}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{clip(d.impact ?? d.kpi, 110) || '—'}</td></tr>)}</tbody>
+        </table> : <p className="xb-none">Action plan not yet written for this review.</p>}
+        <p className="xb-note">Figures are computed from synced studio data for {P.label}. Deltas compare with {P.prevLabel} and {P.lyLabel}. Area status reflects the share of that area's metrics moving in the right direction. Switch to <b>Full report</b> for the analysis, charts and record-level detail behind every number.</p>
+        <footer className="xb-foot"><span>Page 2 of 2</span><span>Prepared {new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span></footer>
+      </section>
+    </div>
   );
 }
 
