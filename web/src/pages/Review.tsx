@@ -91,9 +91,29 @@ function useChg() {
 
 /* ── chapter video explainers (NotebookLM): status per chapter, player when ready ── */
 type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?: string; progress: number; startedAt?: string; error?: string };
-const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null; upload: ((part: string, f: File) => Promise<void>) | null } | null>(null);
+const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null; upload: ((part: string, f: File) => Promise<void>) | null;
+  presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; t: number }) => void; remote: LiveSync | null } | null>(null);
+type LiveSync = { part: string; open: boolean; playing: boolean; t: number; at: number; seq: number };
 function VideoExplainer({ part, title }: { part: string; title: string }) {
-  const c = useContext(RVideo); const [open, setOpen] = useState(false); const [up, setUp] = useState(false);
+  const c = useContext(RVideo); const [open, setOpenRaw] = useState(false); const [up, setUp] = useState(false);
+  const vref = useRef<HTMLVideoElement>(null); const [muted, setMuted] = useState(false);
+  const presenter = !!c?.presenter;
+  const send = (o: boolean) => { const el = vref.current; if (presenter) c!.send({ part, open: o, playing: o && !!el && !el.paused, t: el?.currentTime ?? 0 }); };
+  const setOpen = (o: boolean) => { setOpenRaw(o); if (!o) send(false); };
+  // viewers: follow the presenter
+  const r = c?.remote;
+  useEffect(() => {
+    if (presenter || !r || r.part !== part) return;
+    setOpenRaw(r.open);
+  }, [r?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (presenter || !r || r.part !== part || !r.open || !open) return;
+    const el = vref.current; if (!el) return;
+    const target = r.t + (r.playing ? (Date.now() - r.at) / 1000 : 0);
+    if (Math.abs(el.currentTime - target) > 1) el.currentTime = target;
+    if (r.playing && el.paused) el.play().catch(() => { el.muted = true; setMuted(true); el.play().catch(() => {}); });
+    if (!r.playing && !el.paused) el.pause();
+  }, [r?.seq, open]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!c) return null;
   const v = c.videos[part];
   const uploader = c.upload && (v?.status !== 'ready') ? <label className="epr-vid ready no-print" title="Attach an MP4 as this report's video" style={{ cursor: 'pointer' }}>
@@ -105,7 +125,10 @@ function VideoExplainer({ part, title }: { part: string; title: string }) {
     <button className="epr-vid ready no-print" onClick={() => setOpen(true)} title="Play the video explainer for this chapter"><span className="ic"><Play size={12} /></span>Video explainer</button>
     {open && createPortal(<div className="epr-modal epr-vid-modal no-print" onClick={() => setOpen(false)}><div className="epr-vid-player" onClick={(e) => e.stopPropagation()}>
       <div className="epr-modal-h"><Play size={15} /><b>{title}</b><button onClick={() => setOpen(false)}><X size={15} /></button></div>
-      <video src={`/api/public/review/${c.rid}/video/${part}`} controls autoPlay playsInline preload="metadata" />
+      <video ref={vref} src={`/api/public/review/${c.rid}/video/${part}`} controls autoPlay={presenter} playsInline preload="metadata"
+        onPlay={() => send(true)} onPause={() => send(true)} onSeeked={() => send(true)} />
+      {muted && <button className="epr-small" onClick={() => { const el = vref.current; if (el) el.muted = false; setMuted(false); }}>🔇 Tap to unmute</button>}
+      {!presenter && c.remote?.open && <span className="epr-small">Following the presenter</span>}
       <a className="epr-small" href={`/api/public/review/${c.rid}/video/${part}`} download={`${title}.mp4`}>Download MP4</a>
     </div></div>, document.body)}
   </>;
@@ -758,6 +781,15 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
 
+  const [remote, setRemote] = useState<LiveSync | null>(null);
+  const presenter = !publicView && !!rv;
+  useEffect(() => {
+    if (!rv || presenter) return;
+    const es = new EventSource(`/api/public/review/${rv.id}/live`);
+    es.onmessage = (e) => { try { setRemote(JSON.parse(e.data)); } catch { /* ignore */ } };
+    return () => es.close();
+  }, [rv?.id, presenter]);
+  const sendLive = (st: { part: string; open: boolean; playing: boolean; t: number }) => { if (rv && presenter) api(`/api/review/${rv.id}/live`, { method: 'POST', json: st }).catch(() => {}); };
   const uploadVideo = publicView || !rv ? null : async (part: string, f: File) => {
     const fd = new FormData(); fd.append('file', f);
     try { const q = await api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/video?part=${part}`, { method: 'POST', body: fd }); setVids((o) => ({ ...o, videos: q.videos })); }
@@ -875,7 +907,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
-            <RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
+            <RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
