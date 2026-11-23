@@ -116,17 +116,22 @@ app.get('/api/public/review/:id', wrap(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ ...s, public: true, definitions: reviewDefinitions(s.review) });
 }));
-/* Live video sync: when the review's owner plays/pauses/seeks/closes the explainer, every open copy of the report follows. */
-type VidSync = { part: string; open: boolean; playing: boolean; t: number; at: number; seq: number };
-const vidSync = new Map<string, VidSync>();
+/* Live presenter channel: the review's owner broadcasts what they do (video, scroll, clicks, inputs, pointer,
+ * annotations) and every open copy of the report follows over SSE. In-memory, single instance. */
+type LiveEv = { t: string; at: number; seq: number; [k: string]: unknown };
+const LIVE_TYPES = new Set(['video', 'live', 'scroll', 'click', 'input', 'ptr', 'extras', 'key']);
+const SNAPSHOT = new Set(['video', 'live', 'scroll', 'extras', 'ptr']);   // replayed to late joiners
+const liveSnap = new Map<string, Map<string, LiveEv>>();
+const liveSeq = new Map<string, number>();
 const vidSubs = new Map<string, Set<Response>>();
-const pushSync = (id: string, st: VidSync) => { for (const r of vidSubs.get(id) ?? []) r.write(`data: ${JSON.stringify(st)}\n\n`); };
+const pushLive = (id: string, ev: LiveEv) => { const d = `data: ${JSON.stringify(ev)}\n\n`; for (const r of vidSubs.get(id) ?? []) r.write(d); };
 app.get('/api/public/review/:id/live', (req, res) => {
   const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).end();
   res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no'); res.flushHeaders();
   const set = vidSubs.get(id) ?? new Set<Response>(); set.add(res); vidSubs.set(id, set);
-  const cur = vidSync.get(id); if (cur) res.write(`data: ${JSON.stringify(cur)}\n\n`);
+  const snap = liveSnap.get(id);
+  if (snap) for (const t of ['live', 'extras', 'scroll', 'ptr', 'video']) { const ev = snap.get(t); if (ev) res.write(`data: ${JSON.stringify(ev)}\n\n`); }
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   req.on('close', () => { clearInterval(ping); set.delete(res); if (!set.size) vidSubs.delete(id); });
 });
@@ -324,11 +329,18 @@ app.post('/api/review/:id/explainers', wrap(async (req, res) => {
 }));
 app.post('/api/review/:id/live', wrap(async (req, res) => {
   const s = await reviewStore.byId(req.user!.id, String(req.params.id));
-  if (!s) return res.status(403).json({ error: 'Only the report owner can control playback' });
-  const b = req.body ?? {}; const prev = vidSync.get(s.review.id);
-  const st: VidSync = { part: /^[a-z0-9_-]+$/i.test(String(b.part)) ? String(b.part) : 'glance', open: !!b.open, playing: !!b.playing,
-    t: Math.max(0, Number(b.t) || 0), at: Date.now(), seq: (prev?.seq ?? 0) + 1 };
-  vidSync.set(s.review.id, st); pushSync(s.review.id, st); res.json({ ok: true });
+  if (!s) return res.status(403).json({ error: 'Only the report owner can present' });
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  // legacy video payload had no type
+  const t = typeof b.t === 'string' ? b.t : 'video';
+  if (!LIVE_TYPES.has(t)) return res.status(400).json({ error: 'Unknown event' });
+  const id = s.review.id; const seq = (liveSeq.get(id) ?? 0) + 1; liveSeq.set(id, seq);
+  const ev: LiveEv = { ...b, t, at: Date.now(), seq };
+  if (t === 'video') Object.assign(ev, { part: /^[a-z0-9_-]+$/i.test(String(b.part)) ? String(b.part) : 'glance', open: !!b.open, playing: !!b.playing, t: 'video', time: Math.max(0, Number(b.time ?? 0) || 0) });
+  const snap = liveSnap.get(id) ?? new Map<string, LiveEv>(); liveSnap.set(id, snap);
+  if (t === 'live' && !b.on) { snap.clear(); }   // presenter stopped: late joiners start fresh
+  if (SNAPSHOT.has(t)) snap.set(t, ev);
+  pushLive(id, ev); res.json({ ok: true });
 }));
 /** Upload a ready-made video as the review's single top-of-report video (part 'glance' by default). */
 app.post('/api/review/:id/video', upload.single('file'), wrap(async (req, res) => {

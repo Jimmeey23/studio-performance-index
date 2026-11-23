@@ -46,6 +46,9 @@ function Sticky({ n, api }: { n: ReviewNote; api: NotesApi }) {
   const [kindOpen, setKindOpen] = useState(false);
   const typing = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => setPos({ x: n.x, y: n.y }), [n.x, n.y]);
+  // text can change from elsewhere (live presenter) — show it unless this box is being typed in
+  const ta = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { const t = ta.current; if (t && document.activeElement !== t && t.value !== n.text) t.value = n.text; }, [n.text]);
   const drag = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
     const sec = box.current?.closest('[data-spy]') as HTMLElement | null; if (!sec) return;
@@ -75,7 +78,7 @@ function Sticky({ n, api }: { n: ReviewNote; api: NotesApi }) {
         <button onClick={() => api.update(n.id, { min: true })} title="Minimise"><Minimize2 size={13} /></button>
         <button onClick={() => { if (!n.text || confirm('Delete this note?')) api.remove(n.id); }} title="Delete"><Trash2 size={13} /></button>
       </div>
-      <textarea defaultValue={n.text} autoFocus={!n.text} placeholder={kindOf(n) === 'question' ? 'Ask a question…' : kindOf(n) === 'action' ? 'What needs to happen, by whom…' : 'Write a note…'}
+      <textarea ref={ta} defaultValue={n.text} autoFocus={!n.text} placeholder={kindOf(n) === 'question' ? 'Ask a question…' : kindOf(n) === 'action' ? 'What needs to happen, by whom…' : 'Write a note…'}
         onChange={(e) => { const v = e.target.value; if (typing.current) clearTimeout(typing.current); typing.current = setTimeout(() => api.update(n.id, { text: v, edited: new Date().toISOString() }), 350); }}
         onBlur={(e) => { if (typing.current) clearTimeout(typing.current); if (e.target.value !== n.text) api.update(n.id, { text: e.target.value, edited: new Date().toISOString() }); }} />
       <div className="epr-sticky2-f"><span>{n.by ?? 'Viewer'}</span><span>{n.done ? 'Resolved · ' : ''}{ago(n.edited ?? n.at)}</span></div>
@@ -193,13 +196,14 @@ export function InkLayer({ scroller, tool, color, size, strokes, onChange }: {
 }
 
 /** Laser dot and spotlight follow the cursor. */
-export function PointerFx({ tool }: { tool: Tool }) {
-  const [p, setP] = useState<{ x: number; y: number } | null>(null);
+export function PointerFx({ tool, at }: { tool: Tool; at?: { x: number; y: number } | null }) {
+  const [own, setP] = useState<{ x: number; y: number } | null>(null);
+  const p = at !== undefined ? at : own;
   useEffect(() => {
-    if (tool !== 'laser' && tool !== 'spot') return;
+    if (at !== undefined || (tool !== 'laser' && tool !== 'spot')) return;
     const m = (e: PointerEvent) => setP({ x: e.clientX, y: e.clientY });
     window.addEventListener('pointermove', m); return () => window.removeEventListener('pointermove', m);
-  }, [tool]);
+  }, [tool, at]);
   if (!p) return null;
   if (tool === 'laser') return <div className="epr-laser" style={{ left: p.x, top: p.y }} />;
   if (tool === 'spot') return <div className="epr-spot-fx" style={{ background: `radial-gradient(circle 170px at ${p.x}px ${p.y}px, transparent 0 160px, rgb(0 0 0 / .62) 172px)` }} />;
