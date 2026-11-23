@@ -5,7 +5,7 @@
  */
 /** A cue: from `at` seconds into the clip (measured word timestamp), the report guides the reader to the element showing the spoken
  *  numbers `nums` (preferring chapter `sec`), falling back to the element best matching `terms`. */
-export interface NarrCue { at: number; sec: string; terms: string[]; nums: { v: number; u: '' | '%' | 'pp' }[] }
+export interface NarrCue { at: number; sec: string; terms: string[]; nums: { v: number; u: '' | '%' | 'pp' }[]; text: string; dir: '' | 'up' | 'down' }
 export interface NarrClip { id: string; section: string; file: string; seconds: number; home: string; cues: NarrCue[] }
 export interface NarrTrack { id: string; title: string; clips: NarrClip[] }
 export interface Narration { scope: RegExp; month: string; root: string; tracks: NarrTrack[] }
@@ -35,7 +35,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3390000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "October 2026 was 33.9 lakh rupees of gross revenue for Kwality House",
+      "dir": ""
      },
      {
       "at": 7.2,
@@ -50,7 +52,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3210000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "up 5.7 percent on September (32.1 lakh rupees)",
+      "dir": "up"
      },
      {
       "at": 12.36,
@@ -73,7 +77,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2790000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "up 28.7 percent on October 2025 (26.3 lakh rupees) and 21.6 percent above the January to September 2026 average of 27.9 lakh rupees.",
+      "dir": "up"
      },
      {
       "at": 28.94,
@@ -84,7 +90,9 @@ export const NARRATIONS: Narration[] = [
         "v": 14.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "It is the fourth consecutive monthly rise and the strongest month of the 14-month series outside April's one-off spike.",
+      "dir": "up"
      },
      {
       "at": 37.0,
@@ -95,7 +103,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3230000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Net of G S T the month closed at 32.3 lakh rupees.",
+      "dir": ""
      },
      {
       "at": 41.7,
@@ -110,7 +120,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2510000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Strip out April and October runs roughly 35 percent above the 2026 trend line of about 25.1 lakh rupees a month.",
+      "dir": "up"
      }
     ]
    },
@@ -125,7 +137,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "glance",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The quality of that growth",
+      "dir": ""
      },
      {
       "at": 7.38,
@@ -151,7 +165,9 @@ export const NARRATIONS: Narration[] = [
         "v": 201.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "transactions rose 30.2 percent to 306 and paying clients 12.3 percent to 201",
+      "dir": "up"
      },
      {
       "at": 15.12,
@@ -178,7 +194,9 @@ export const NARRATIONS: Narration[] = [
         "v": 44.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "while average transaction value fell 18.8 percent to 11,076 rupees as 141 single-class sales and 44 retail items diluted the mix.",
+      "dir": "down"
      },
      {
       "at": 27.82,
@@ -196,7 +214,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Discount depth was cut from 28.3 percent to 11.0 percent with no visible revenue cost",
+      "dir": ""
      },
      {
       "at": 37.78,
@@ -204,7 +224,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "ATV"
       ],
-      "nums": []
+      "nums": [],
+      "text": "At September's A T V",
+      "dir": ""
      },
      {
       "at": 39.3,
@@ -221,7 +243,9 @@ export const NARRATIONS: Narration[] = [
         "v": 4180000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "306 transactions would have produced roughly 41.8 lakh rupees",
+      "dir": ""
      },
      {
       "at": 44.58,
@@ -232,7 +256,9 @@ export const NARRATIONS: Narration[] = [
         "v": 790000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the mix shift alone is worth about 7.9 lakh rupees of forgone ticket size",
+      "dir": ""
      },
      {
       "at": 49.68,
@@ -240,7 +266,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Member"
       ],
-      "nums": []
+      "nums": [],
+      "text": "most of it by design (packs replacing memberships) but part of it by under-selling at the front desk.",
+      "dir": ""
      }
     ]
    },
@@ -255,7 +283,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "funnel",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The front door is the structural weakness.",
+      "dir": "down"
      },
      {
       "at": 2.64,
@@ -272,7 +302,9 @@ export const NARRATIONS: Narration[] = [
         "v": 99.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "New clients fell 16.1 percent to 99",
+      "dir": "down"
      },
      {
       "at": 6.44,
@@ -285,7 +317,9 @@ export const NARRATIONS: Narration[] = [
         "v": 35.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "lead-to-trial fell to 35.1 percent",
+      "dir": "down"
      },
      {
       "at": 9.62,
@@ -296,7 +330,9 @@ export const NARRATIONS: Narration[] = [
         "v": 14.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the lowest in 14 months",
+      "dir": ""
      },
      {
       "at": 11.96,
@@ -309,7 +345,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "trial-to-paid halved year-on-year to 11.1 percent (October 2025",
+      "dir": ""
      },
      {
       "at": 17.74,
@@ -320,7 +358,9 @@ export const NARRATIONS: Narration[] = [
         "v": 28.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "28.4 percent)",
+      "dir": ""
      },
      {
       "at": 21.0,
@@ -337,7 +377,9 @@ export const NARRATIONS: Narration[] = [
         "v": 34.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the second-visit rate is 19.2 percent against 34.3 percent last October",
+      "dir": ""
      },
      {
       "at": 27.52,
@@ -358,7 +400,9 @@ export const NARRATIONS: Narration[] = [
         "v": 74.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and the new-client cohort's average L T V has collapsed to 1,439 rupees from 5,632 rupees (down 74 percent).",
+      "dir": "down"
      },
      {
       "at": 37.43,
@@ -376,7 +420,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Ninety of 168 leads came from the website and converted at 3.3 percent",
+      "dir": ""
      },
      {
       "at": 46.36,
@@ -387,7 +433,9 @@ export const NARRATIONS: Narration[] = [
         "v": 16.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "16 percent of lead volume",
+      "dir": ""
      },
      {
       "at": 48.12,
@@ -404,7 +452,9 @@ export const NARRATIONS: Narration[] = [
         "v": 19.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "delivered 13 of the 19 conversions.",
+      "dir": ""
      },
      {
       "at": 50.52,
@@ -414,7 +464,9 @@ export const NARRATIONS: Narration[] = [
        "Revenue",
        "Visits"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Nineteen newcomers from two hosted classes produced zero second visits and zero revenue.",
+      "dir": ""
      }
     ]
    },
@@ -431,7 +483,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Attendance"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Attendance is a frequency story",
+      "dir": ""
      },
      {
       "at": 4.9,
@@ -456,7 +510,9 @@ export const NARRATIONS: Narration[] = [
         "v": 7.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "2,336 visits (up 11.5 percent) from only 440 visiting clients (down 7.3 percent) at a record 5.31 visits per client",
+      "dir": ""
      },
      {
       "at": 20.54,
@@ -469,7 +525,9 @@ export const NARRATIONS: Narration[] = [
         "v": 93.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "93 percent of all visits are repeat visits.",
+      "dir": ""
      },
      {
       "at": 23.8,
@@ -477,7 +535,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Capacity"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Capacity is misallocated around that base",
+      "dir": ""
      },
      {
       "at": 26.64,
@@ -494,7 +554,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "fill is flat at 45.3 percent despite 10.1 percent more classes",
+      "dir": ""
      },
      {
       "at": 33.84,
@@ -523,7 +585,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2300.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Strength Lab runs capacity-bound at 82.2 percent fill with 72.5 percent of classes sold out while Barre idles at 38.0 percent with about 2,300…",
+      "dir": ""
      },
      {
       "at": 48.4,
@@ -538,7 +602,9 @@ export const NARRATIONS: Narration[] = [
         "v": 5.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "two PowerCycle slots ran near-empty at roughly 5 percent fill",
+      "dir": ""
      },
      {
       "at": 53.76,
@@ -549,7 +615,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2122.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "which earn 2,122 rupees more per class than weekdays",
+      "dir": ""
      },
      {
       "at": 59.8,
@@ -560,7 +628,9 @@ export const NARRATIONS: Narration[] = [
         "v": 24.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "hold only 24 percent of the schedule.",
+      "dir": ""
      },
      {
       "at": 63.24,
@@ -578,7 +648,9 @@ export const NARRATIONS: Narration[] = [
         "v": 64.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Retention recovered to 73.1 percent renewal from September's 64.8 percent",
+      "dir": ""
      },
      {
       "at": 69.54,
@@ -595,7 +667,9 @@ export const NARRATIONS: Narration[] = [
         "v": 14.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "but 119 memberships ended (a 14-month high)",
+      "dir": ""
      },
      {
       "at": 75.1,
@@ -616,7 +690,9 @@ export const NARRATIONS: Narration[] = [
         "v": 220000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "29 lapsed worth 6.0 lakh rupees against 2.2 lakh rupees last October",
+      "dir": "down"
      }
     ]
    },
@@ -631,7 +707,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "glance",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The five moves that matter most for November",
+      "dir": ""
      },
      {
       "at": 2.98,
@@ -645,7 +723,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "(1) work the 30 leads stuck at Trial Completed and impose a same-day callback rule on website leads",
+      "dir": ""
      },
      {
       "at": 9.58,
@@ -656,7 +736,9 @@ export const NARRATIONS: Narration[] = [
         "v": 48.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "(2) attach a 48-hour second-visit offer to every hosted-class attendee",
+      "dir": ""
      },
      {
       "at": 17.5,
@@ -664,7 +746,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "powerCycle"
       ],
-      "nums": []
+      "nums": [],
+      "text": "cut the dead PowerCycle and Thursday and Friday slots",
+      "dir": ""
      },
      {
       "at": 21.2,
@@ -677,7 +761,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "add capacity at Monday 6:30 a.m.",
+      "dir": ""
      },
      {
       "at": 29.38,
@@ -686,7 +772,9 @@ export const NARRATIONS: Narration[] = [
        "Strength",
        "Lab"
       ],
-      "nums": []
+      "nums": [],
+      "text": "and expand Strength Lab",
+      "dir": ""
      },
      {
       "at": 31.08,
@@ -699,7 +787,9 @@ export const NARRATIONS: Narration[] = [
         "v": 21.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "(4) protect renewals with T plus 21 save calls on annual",
+      "dir": ""
      },
      {
       "at": 36.64,
@@ -707,7 +797,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Unlimited"
       ],
-      "nums": []
+      "nums": [],
+      "text": "six-month and three-month expiries and an eight-class or four-class pack upgrade path to Unlimited",
+      "dir": "up"
      },
      {
       "at": 44.52,
@@ -731,7 +823,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "coach Vaishali Fitter's A T V of 6,915 rupees toward 9,000 rupees and cap private-class discounts above 15 percent.",
+      "dir": "up"
      },
      {
       "at": 53.52,
@@ -740,7 +834,9 @@ export const NARRATIONS: Narration[] = [
        "Each",
        "Section"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Each is quantified in Section 12.",
+      "dir": ""
      }
     ]
    },
@@ -757,7 +853,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Bottom"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Bottom line",
+      "dir": ""
      },
      {
       "at": 10.0,
@@ -765,7 +863,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Fix"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Fix the front door and the schedule before the frequency engine mean-reverts",
+      "dir": ""
      },
      {
       "at": 14.58,
@@ -773,7 +873,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Visits"
       ],
-      "nums": []
+      "nums": [],
+      "text": "if visits per client simply returned to September's 4.40",
+      "dir": ""
      },
      {
       "at": 19.36,
@@ -784,7 +886,9 @@ export const NARRATIONS: Narration[] = [
         "v": 17.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "attendance would fall about 17 percent at today's client count.",
+      "dir": ""
      }
     ]
    },
@@ -812,7 +916,9 @@ export const NARRATIONS: Narration[] = [
         "v": 57.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "This report is a deep-dive analysis of the 51-page confidential performance review for Physique 57 India's Kwality House studio at Kemps Corner",
+      "dir": ""
      },
      {
       "at": 19.78,
@@ -820,7 +926,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "All"
       ],
-      "nums": []
+      "nums": [],
+      "text": "All headline figures quoted here were cross-validated arithmetically where possible",
+      "dir": ""
      },
      {
       "at": 25.86,
@@ -843,7 +951,9 @@ export const NARRATIONS: Narration[] = [
         "v": 175000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "product-family revenue was reconciled against transaction counts times listed A T V (40 times 43,789 rupees equals 1.75 lakh rupees for Unlimited",
+      "dir": ""
      },
      {
       "at": 38.84,
@@ -862,7 +972,9 @@ export const NARRATIONS: Narration[] = [
         "v": 270000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "141 times 1,917 rupees equals 2.7 lakh rupees for singles",
+      "dir": ""
      },
      {
       "at": 46.32,
@@ -881,7 +993,9 @@ export const NARRATIONS: Narration[] = [
         "v": 1060000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "53 times 20,076 rupees equals 10.6 lakh rupees for packs)",
+      "dir": ""
      },
      {
       "at": 54.06,
@@ -907,7 +1021,9 @@ export const NARRATIONS: Narration[] = [
         "v": 73.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and the renewal rate against 79 divided by (79 plus 29) equals 73.1 percent.",
+      "dir": ""
      }
     ]
    },
@@ -924,7 +1040,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Two"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Two reading rules were applied throughout.",
+      "dir": ""
      },
      {
       "at": 2.4,
@@ -932,7 +1050,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "First"
       ],
-      "nums": []
+      "nums": [],
+      "text": "First",
+      "dir": ""
      },
      {
       "at": 14.28,
@@ -940,7 +1060,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Second"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Second",
+      "dir": ""
      },
      {
       "at": 18.08,
@@ -948,7 +1070,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Revenue"
       ],
-      "nums": []
+      "nums": [],
+      "text": "figures that recur identically across three or four pages (revenue",
+      "dir": ""
      },
      {
       "at": 22.06,
@@ -956,7 +1080,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Transactions"
       ],
-      "nums": []
+      "nums": [],
+      "text": "transactions",
+      "dir": ""
      },
      {
       "at": 24.1,
@@ -965,7 +1091,9 @@ export const NARRATIONS: Narration[] = [
        "Fill",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "fill rates) are treated as solid",
+      "dir": ""
      },
      {
       "at": 31.16,
@@ -974,7 +1102,9 @@ export const NARRATIONS: Narration[] = [
        "Amounts",
        "Indian"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Amounts are in Indian notation",
+      "dir": ""
      },
      {
       "at": 32.18,
@@ -985,7 +1115,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3390000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "33.9 lakh rupees",
+      "dir": ""
      },
      {
       "at": 37.78,
@@ -993,7 +1125,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Section"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Section 11 lists every internal inconsistency found in the source so that management can correct the underlying reports rather than inherit their…",
+      "dir": ""
      }
     ]
    },
@@ -1013,7 +1147,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "The scorecard below condenses the deck's 30-metric executive scorecard into the indicators that drive the diagnosis.",
+      "dir": "down"
      },
      {
       "at": 6.74,
@@ -1021,7 +1157,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Deltas"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Deltas are against September 2026",
+      "dir": ""
      }
     ]
    },
@@ -1038,7 +1176,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Revenue"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The revenue mix explains the month.",
+      "dir": ""
      },
      {
       "at": 2.58,
@@ -1052,7 +1192,9 @@ export const NARRATIONS: Narration[] = [
         "v": 1750000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Unlimited and time-based products supplied roughly half of all revenue (about 17.5 lakh rupees",
+      "dir": ""
      },
      {
       "at": 9.18,
@@ -1063,7 +1205,9 @@ export const NARRATIONS: Narration[] = [
         "v": 51.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "51.7 percent share",
+      "dir": ""
      },
      {
       "at": 10.9,
@@ -1081,7 +1225,9 @@ export const NARRATIONS: Narration[] = [
         "v": 43789.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "on 40 transactions at an A T V of 43,789 rupees)",
+      "dir": ""
      },
      {
       "at": 16.88,
@@ -1096,7 +1242,9 @@ export const NARRATIONS: Narration[] = [
         "v": 31.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "class packs about 10.6 lakh rupees (31.4 percent",
+      "dir": ""
      },
      {
       "at": 21.16,
@@ -1107,7 +1255,9 @@ export const NARRATIONS: Narration[] = [
         "v": 64.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "up 64.5 percent on the month)",
+      "dir": "up"
      },
      {
       "at": 24.18,
@@ -1133,7 +1283,9 @@ export const NARRATIONS: Narration[] = [
         "v": 8.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "single classes about 2.7 lakh rupees from 141 transactions (46 percent of all transactions for 8 percent of revenue)",
+      "dir": ""
      },
      {
       "at": 32.86,
@@ -1146,7 +1298,9 @@ export const NARRATIONS: Narration[] = [
         "v": 225000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "privates 2.25 lakh rupees from just two transactions",
+      "dir": ""
      },
      {
       "at": 37.26,
@@ -1161,7 +1315,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and newcomer offers a negligible 29,138 rupees from 15 sales",
+      "dir": ""
      },
      {
       "at": 43.02,
@@ -1174,7 +1330,9 @@ export const NARRATIONS: Narration[] = [
         "v": 0.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the acquisition product contributes under 0.1 percent of revenue while the acquisition problem is the month's biggest story.",
+      "dir": ""
      },
      {
       "at": 50.4,
@@ -1189,7 +1347,9 @@ export const NARRATIONS: Narration[] = [
         "v": 713000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Four Studio Annual Unlimited sales alone were worth 7.13 lakh rupees",
+      "dir": ""
      },
      {
       "at": 55.46,
@@ -1202,7 +1362,9 @@ export const NARRATIONS: Narration[] = [
         "v": 21.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "about 21 percent of gross revenue",
+      "dir": ""
      },
      {
       "at": 57.28,
@@ -1213,7 +1375,9 @@ export const NARRATIONS: Narration[] = [
         "v": 180000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "one missed annual sale moves the month by roughly 1.8 lakh rupees.",
+      "dir": ""
      }
     ]
    },
@@ -1230,7 +1394,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Transactions"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Transactions per paying client rose from 1.31 to 1.52",
+      "dir": "up"
      },
      {
       "at": 7.28,
@@ -1260,7 +1426,9 @@ export const NARRATIONS: Narration[] = [
         "v": 790000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and the deck's own arithmetic (306 transactions at September's A T V of 13,664 rupees would have been about 41.8 lakh rupees against 33.9 lakh…",
+      "dir": ""
      },
      {
       "at": 27.92,
@@ -1268,7 +1436,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "That is partly deliberate",
+      "dir": ""
      },
      {
       "at": 29.48,
@@ -1295,7 +1465,9 @@ export const NARRATIONS: Narration[] = [
         "v": 446.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "141 single-class sales at 1,917 rupees and 44 retail items at 446 rupees inflate the transaction count without moving revenue",
+      "dir": ""
      },
      {
       "at": 42.4,
@@ -1308,7 +1480,9 @@ export const NARRATIONS: Narration[] = [
         "v": 53.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "while class packs (53 transactions",
+      "dir": ""
      },
      {
       "at": 45.46,
@@ -1325,7 +1499,9 @@ export const NARRATIONS: Narration[] = [
         "v": 20076.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "up 29.3 percent) carry an A T V of 20,076 rupees.",
+      "dir": "up"
      },
      {
       "at": 54.36,
@@ -1338,7 +1514,9 @@ export const NARRATIONS: Narration[] = [
         "v": 88.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "one associate handled 88 transactions",
+      "dir": ""
      },
      {
       "at": 59.74,
@@ -1359,7 +1537,9 @@ export const NARRATIONS: Narration[] = [
         "v": 18414.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "at an A T V of 6,915 rupees against the studio's 11,076 rupees and the team leader's 18,414 rupees.",
+      "dir": ""
      },
      {
       "at": 73.18,
@@ -1376,7 +1556,9 @@ export const NARRATIONS: Narration[] = [
         "v": 88000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Each 1,000 rupees added to her average ticket is worth about 88,000 rupees a month.",
+      "dir": ""
      }
     ]
    },
@@ -1393,7 +1575,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Discount"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The discount cut is the month's cleanest win",
+      "dir": ""
      },
      {
       "at": 3.24,
@@ -1424,7 +1608,9 @@ export const NARRATIONS: Narration[] = [
         "v": 5.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "average discount fell from 28.3 percent to 11.0 percent (down 17.3 percentage points) while transactions rose 30.2 percent and revenue 5.7 percent.",
+      "dir": "down"
      },
      {
       "at": 16.08,
@@ -1432,7 +1618,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Volume"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Volume in this studio is not bought with price.",
+      "dir": ""
      },
      {
       "at": 19.56,
@@ -1448,7 +1636,9 @@ export const NARRATIONS: Narration[] = [
         "v": 51.3,
         "u": "pp"
        }
-      ]
+      ],
+      "text": "The September rate appears to have been inflated by one heavy discounted sale (Vaishali Fitter's desk discount rate fell 51.3 percentage points)",
+      "dir": "down"
      },
      {
       "at": 35.76,
@@ -1457,7 +1647,9 @@ export const NARRATIONS: Narration[] = [
        "Discount",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The remaining discount problem is concentrated",
+      "dir": ""
      },
      {
       "at": 38.8,
@@ -1471,7 +1663,9 @@ export const NARRATIONS: Narration[] = [
         "v": 45.9,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the privates desk ran a 45.9 percent discount on two transactions",
+      "dir": ""
      }
     ]
    },
@@ -1488,7 +1682,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Within"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Within the families",
+      "dir": ""
      },
      {
       "at": 3.86,
@@ -1507,7 +1703,9 @@ export const NARRATIONS: Narration[] = [
         "v": 70.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Studio 1-Month Unlimited sold 17 units (up 70 percent) while Annual (4 units) and 3-Month (6 units) were flat",
+      "dir": "up"
      },
      {
       "at": 15.82,
@@ -1521,7 +1719,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "dragging the Unlimited family's A T V down 11.4 percent.",
+      "dir": "down"
      },
      {
       "at": 20.38,
@@ -1540,7 +1740,9 @@ export const NARRATIONS: Narration[] = [
         "v": 58275.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "A new 30-Single-Class Package sold 5 units at 58,275 rupees each",
+      "dir": ""
      },
      {
       "at": 32.18,
@@ -1550,7 +1752,9 @@ export const NARRATIONS: Narration[] = [
        "Transactions",
        "Lapse"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Privates collapsed from a strong September (2 transactions",
+      "dir": "up"
      },
      {
       "at": 35.78,
@@ -1561,7 +1765,9 @@ export const NARRATIONS: Narration[] = [
         "v": 56.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "down 56.6 percent) and",
+      "dir": "down"
      },
      {
       "at": 38.76,
@@ -1570,7 +1776,9 @@ export const NARRATIONS: Narration[] = [
        "Discount",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "at the September pre-discount run-rate",
+      "dir": ""
      },
      {
       "at": 41.32,
@@ -1583,7 +1791,9 @@ export const NARRATIONS: Narration[] = [
         "v": 290000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "roughly 2.9 lakh rupees of that is recoverable if the discount is capped.",
+      "dir": ""
      },
      {
       "at": 46.16,
@@ -1591,7 +1801,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Payment"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Payment behaviour continued its digital shift",
+      "dir": ""
      },
      {
       "at": 49.9,
@@ -1608,7 +1820,9 @@ export const NARRATIONS: Narration[] = [
         "v": 457000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Stripe volume rose 133.3 percent to 4.57 lakh rupees (matching the online channel)",
+      "dir": "up"
      },
      {
       "at": 57.98,
@@ -1629,7 +1843,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "split payments rose 161.6 percent to 4.09 lakh rupees on just 13 large-ticket transactions",
+      "dir": "up"
      },
      {
       "at": 66.42,
@@ -1644,7 +1860,9 @@ export const NARRATIONS: Narration[] = [
         "v": 260000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and cash fell 74.0 percent to 2.6 lakh rupees.",
+      "dir": "down"
      },
      {
       "at": 69.82,
@@ -1652,7 +1870,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Associate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Associate economics diverged sharply",
+      "dir": ""
      },
      {
       "at": 73.24,
@@ -1682,7 +1902,9 @@ export const NARRATIONS: Narration[] = [
         "v": 28.2,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the leader made 9.76 lakh rupees (up 84.9 percent) at an A T V of 18,414 rupees while two desks lost 34.2 percent and 28.2 percent of their revenue",
+      "dir": ""
      },
      {
       "at": 89.44,
@@ -1693,7 +1915,9 @@ export const NARRATIONS: Narration[] = [
         "v": 457000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and online self-serve (4.57 lakh rupees",
+      "dir": ""
      },
      {
       "at": 94.36,
@@ -1704,7 +1928,9 @@ export const NARRATIONS: Narration[] = [
         "v": 112.2,
         "u": "%"
        }
-      ]
+      ],
+      "text": "up 112.2 percent",
+      "dir": "up"
      },
      {
       "at": 96.56,
@@ -1717,7 +1943,9 @@ export const NARRATIONS: Narration[] = [
         "v": 4.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "4.8 percent discount) is now larger than one associate's entire desk.",
+      "dir": ""
      }
     ]
    },
@@ -1734,7 +1962,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Every"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Every stage of the funnel weakened even though lead volume roughly held.",
+      "dir": "down"
      },
      {
       "at": 4.54,
@@ -1742,7 +1972,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Trial"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The leak moved to the trial door",
+      "dir": "down"
      },
      {
       "at": 6.66,
@@ -1764,7 +1996,9 @@ export const NARRATIONS: Narration[] = [
         "v": 35.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "168 leads produced 59 completed trials (35.1 percent",
+      "dir": ""
      },
      {
       "at": 13.94,
@@ -1785,7 +2019,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the lowest of the last 14 months) and 19 member conversions (11.3 percent).",
+      "dir": ""
      },
      {
       "at": 20.74,
@@ -1793,7 +2029,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "For"
       ],
-      "nums": []
+      "nums": [],
+      "text": "For newcomers",
+      "dir": ""
      },
      {
       "at": 21.76,
@@ -1819,7 +2057,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "99 first visits produced 19 second visits (19.2 percent) and 11 paid conversions (11.1 percent).",
+      "dir": ""
      }
     ]
    },
@@ -1846,7 +2086,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "The website supplied 53.6 percent of all leads for 3 conversions at 3.3 percent",
+      "dir": ""
      },
      {
       "at": 5.82,
@@ -1859,7 +2101,9 @@ export const NARRATIONS: Narration[] = [
         "v": 32.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "with 32 leads unresponsive",
+      "dir": ""
      },
      {
       "at": 8.0,
@@ -1870,7 +2114,9 @@ export const NARRATIONS: Narration[] = [
         "v": 32.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "32 still open and the rest lost",
+      "dir": "down"
      },
      {
       "at": 13.98,
@@ -1878,7 +2124,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Referral"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Referral and walk-in",
+      "dir": ""
      },
      {
       "at": 15.92,
@@ -1889,7 +2137,9 @@ export const NARRATIONS: Narration[] = [
         "v": 16.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "16.1 percent of lead volume",
+      "dir": ""
      },
      {
       "at": 18.92,
@@ -1910,7 +2160,9 @@ export const NARRATIONS: Narration[] = [
         "v": 48.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "delivered 13 of the 19 conversions (48.1 percent)",
+      "dir": ""
      },
      {
       "at": 24.72,
@@ -1927,7 +2179,9 @@ export const NARRATIONS: Narration[] = [
         "v": 66.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "at 42.9 percent and 66.7 percent conversion respectively.",
+      "dir": ""
      },
      {
       "at": 30.5,
@@ -1942,7 +2196,9 @@ export const NARRATIONS: Narration[] = [
         "v": 14532.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Referral leads are worth about 14,532 rupees per conversion and walk-ins materially more",
+      "dir": ""
      },
      {
       "at": 38.92,
@@ -1950,7 +2206,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Leads"
       ],
-      "nums": []
+      "nums": [],
+      "text": "website leads convert at roughly one-eighth of that.",
+      "dir": ""
      },
      {
       "at": 42.2,
@@ -1958,7 +2216,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Effort"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Effort and budget are currently allocated in inverse proportion to value.",
+      "dir": ""
      },
      {
       "at": 46.48,
@@ -1980,7 +2240,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Meta ad spend was cut 75.5 percent to 18,386 rupees and leads dipped only 10.6 percent",
+      "dir": ""
      },
      {
       "at": 62.74,
@@ -1993,7 +2255,9 @@ export const NARRATIONS: Narration[] = [
         "v": 593.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "although the deck's 593 rupees cost-per-lead does not reconcile with that spend level (Section 11).",
+      "dir": ""
      }
     ]
    },
@@ -2017,7 +2281,9 @@ export const NARRATIONS: Narration[] = [
         "v": 19.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Two hosted classes (with partners Dipali Ved and Runbay) delivered 19 newcomers",
+      "dir": ""
      },
      {
       "at": 5.2,
@@ -2034,7 +2300,9 @@ export const NARRATIONS: Narration[] = [
         "v": 99.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "19.2 percent of all 99 first visits",
+      "dir": ""
      },
      {
       "at": 9.8,
@@ -2043,7 +2311,9 @@ export const NARRATIONS: Narration[] = [
        "Revenue",
        "Conversion"
       ],
-      "nums": []
+      "nums": [],
+      "text": "zero conversions and zero revenue.",
+      "dir": ""
      },
      {
       "at": 12.36,
@@ -2054,7 +2324,9 @@ export const NARRATIONS: Narration[] = [
         "v": 63.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "The hosted lead pool was warm (63.6 percent qualified",
+      "dir": ""
      },
      {
       "at": 16.42,
@@ -2067,7 +2339,9 @@ export const NARRATIONS: Narration[] = [
         "v": 59.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "59.1 percent trialled) yet produced no follow-through.",
+      "dir": ""
      },
      {
       "at": 20.46,
@@ -2082,7 +2356,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "At the trial-class conversion rate of 15.7 percent",
+      "dir": ""
      },
      {
       "at": 23.52,
@@ -2095,7 +2371,9 @@ export const NARRATIONS: Narration[] = [
         "v": 19.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "those 19 attendees should have produced about 3 conversions",
+      "dir": ""
      },
      {
       "at": 28.0,
@@ -2103,7 +2381,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Capacity"
       ],
-      "nums": []
+      "nums": [],
+      "text": "partner cost and studio capacity were spent for nothing.",
+      "dir": ""
      },
      {
       "at": 31.48,
@@ -2119,7 +2399,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Meanwhile 30 leads sit at the Trial Completed pipeline stage with exactly 1 conversion",
+      "dir": ""
      },
      {
       "at": 37.08,
@@ -2134,7 +2416,9 @@ export const NARRATIONS: Narration[] = [
         "v": 25.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and 58 more are unreachable or deferred (25 unresponsive",
+      "dir": ""
      },
      {
       "at": 41.54,
@@ -2145,7 +2429,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "15 no-answer",
+      "dir": ""
      },
      {
       "at": 42.94,
@@ -2156,7 +2442,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "13 will-get-back-later",
+      "dir": ""
      },
      {
       "at": 45.96,
@@ -2171,7 +2459,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Recovering 10 percent of the trial-completed pool is roughly 3 members",
+      "dir": ""
      },
      {
       "at": 49.88,
@@ -2188,7 +2478,9 @@ export const NARRATIONS: Narration[] = [
         "v": 17600.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "about 53,000 rupees at the 17,600 rupees per-converted-lead run rate.",
+      "dir": ""
      }
     ]
    },
@@ -2214,7 +2506,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11633.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Average first purchase fell to about 5,009 rupees against 11,633 rupees last October",
+      "dir": "down"
      },
      {
       "at": 8.64,
@@ -2233,7 +2527,9 @@ export const NARRATIONS: Narration[] = [
         "v": 74.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and new-client L T V to 1,439 rupees against 5,632 rupees (down 74 percent).",
+      "dir": "down"
      },
      {
       "at": 18.22,
@@ -2256,7 +2552,9 @@ export const NARRATIONS: Narration[] = [
         "v": 102.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "The 99-strong cohort is worth roughly 1.4 lakh rupees against about 7.3 lakh rupees for the 102 newcomers of October 2025.",
+      "dir": "up"
      },
      {
       "at": 29.76,
@@ -2264,7 +2562,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Recent"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Recent cohorts are still returning",
+      "dir": ""
      },
      {
       "at": 43.64,
@@ -2277,7 +2577,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "paid first visits convert best (30 percent second-visit",
+      "dir": ""
      },
      {
       "at": 48.08,
@@ -2288,7 +2590,9 @@ export const NARRATIONS: Narration[] = [
         "v": 43355.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "43,355 rupees L T V on a small base)",
+      "dir": ""
      },
      {
       "at": 54.08,
@@ -2307,7 +2611,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "trial classes run 27.5 percent second-visits and 15.7 percent conversion",
+      "dir": ""
      },
      {
       "at": 60.96,
@@ -2318,7 +2624,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and referral-class entrants return at only 11.1 percent.",
+      "dir": ""
      },
      {
       "at": 65.96,
@@ -2339,7 +2647,9 @@ export const NARRATIONS: Narration[] = [
         "v": 7.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "powerCycle brings people back (38.5 percent second-visit on 13 newcomers) but fails to convert them (7.7 percent)",
+      "dir": ""
      }
     ]
    },
@@ -2367,7 +2677,9 @@ export const NARRATIONS: Narration[] = [
         "v": 90.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "The attendance health index reads 78.4 of 100 (show-up 90.4 percent",
+      "dir": "up"
      },
      {
       "at": 6.66,
@@ -2380,7 +2692,9 @@ export const NARRATIONS: Narration[] = [
         "v": 56.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "booking fill 56.1 percent",
+      "dir": ""
      },
      {
       "at": 9.1,
@@ -2393,7 +2707,9 @@ export const NARRATIONS: Narration[] = [
         "v": 90.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "bookings kept 90.6 percent).",
+      "dir": ""
      },
      {
       "at": 11.94,
@@ -2418,7 +2734,9 @@ export const NARRATIONS: Narration[] = [
         "v": 440.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Visits of 2,336 rose 11.5 percent on September while the visiting base shrank 7.3 percent to 440 (August",
+      "dir": "up"
      },
      {
       "at": 21.84,
@@ -2429,7 +2747,9 @@ export const NARRATIONS: Narration[] = [
         "v": 551.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "551)",
+      "dir": ""
      },
      {
       "at": 23.2,
@@ -2437,7 +2757,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Visits"
       ],
-      "nums": []
+      "nums": [],
+      "text": "so visits per client hit a record 5.31 against a 12-month range of 4.28 to 5.11.",
+      "dir": ""
      },
      {
       "at": 30.84,
@@ -2459,7 +2781,9 @@ export const NARRATIONS: Narration[] = [
         "v": 333.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Repeat visits are 2,175 of the total (93 percent) from 333 clients",
+      "dir": ""
      },
      {
       "at": 38.06,
@@ -2477,7 +2801,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "only 56 trial visits and 13 paid first visits came through the door.",
+      "dir": ""
      },
      {
       "at": 42.18,
@@ -2485,7 +2811,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Growth"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Growth is intensity on a shrinking base",
+      "dir": ""
      },
      {
       "at": 52.32,
@@ -2496,7 +2824,9 @@ export const NARRATIONS: Narration[] = [
         "v": 17.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "attendance would fall about 17 percent at today's client count.",
+      "dir": ""
      }
     ]
    },
@@ -2514,7 +2844,9 @@ export const NARRATIONS: Narration[] = [
        "Cancellations",
        "Cancel"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Cancellations are a genuine bright spot",
+      "dir": ""
      },
      {
       "at": 2.9,
@@ -2545,7 +2877,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2582.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the late-cancel rate of 9.4 percent is the lowest of the 14 months (September 2025 ran 27.0 percent) and each point of rate is worth about 26…",
+      "dir": ""
      },
      {
       "at": 21.34,
@@ -2575,7 +2909,9 @@ export const NARRATIONS: Narration[] = [
         "v": 12.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "bookings rose 73.3 percent to 390 but late cancels rose 117.4 percent to 50 (12.8 percent",
+      "dir": "up"
      },
      {
       "at": 32.84,
@@ -2586,7 +2922,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2.8,
         "u": "pp"
        }
-      ]
+      ],
+      "text": "up 2.8 percentage points)",
+      "dir": "up"
      },
      {
       "at": 37.3,
@@ -2597,7 +2935,9 @@ export const NARRATIONS: Narration[] = [
         "v": 6.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "while Sunday runs at 6.6 percent.",
+      "dir": ""
      },
      {
       "at": 40.6,
@@ -2605,7 +2945,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Fill"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Friday is also the weakest fill day",
+      "dir": "down"
      }
     ]
    },
@@ -2625,7 +2967,9 @@ export const NARRATIONS: Narration[] = [
         "v": 124.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Thursday and Friday hold 124 classes",
+      "dir": ""
      },
      {
       "at": 3.56,
@@ -2636,7 +2980,9 @@ export const NARRATIONS: Narration[] = [
         "v": 34.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "34 percent of the schedule",
+      "dir": ""
      },
      {
       "at": 5.06,
@@ -2653,7 +2999,9 @@ export const NARRATIONS: Narration[] = [
         "v": 39.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "at the lowest class averages (5.81 and 5.65) and fills (42.6 percent and 39.6 percent)",
+      "dir": ""
      },
      {
       "at": 15.36,
@@ -2673,7 +3021,9 @@ export const NARRATIONS: Narration[] = [
         "v": 7154.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "while Saturday leads at 7.84 average and 50 percent fill with zero empty classes and Sunday earns the highest revenue per class (7,154 rupees).",
+      "dir": ""
      },
      {
       "at": 30.38,
@@ -2698,7 +3048,9 @@ export const NARRATIONS: Narration[] = [
         "v": 24.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Weekend classes earn 2,122 rupees more per class (7,565 rupees vs 5,443 rupees) yet hold only 24 percent of the schedule.",
+      "dir": ""
      },
      {
       "at": 53.0,
@@ -2711,7 +3063,9 @@ export const NARRATIONS: Narration[] = [
         "v": 61.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "61.1 percent fill) and 9 a.m.",
+      "dir": ""
      },
      {
       "at": 56.43,
@@ -2722,7 +3076,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "to 10:15 a.m.",
+      "dir": ""
      },
      {
       "at": 101.3,
@@ -2739,7 +3095,9 @@ export const NARRATIONS: Narration[] = [
         "v": 31.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "40 classes at about 5.22 average and 31.1 percent fill",
+      "dir": ""
      },
      {
       "at": 113.12,
@@ -2747,7 +3105,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Capacity"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The top recurring slots are near capacity",
+      "dir": ""
      },
      {
       "at": 116.24,
@@ -2758,7 +3118,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Monday 6:30 a.m.",
+      "dir": ""
      },
      {
       "at": 118.1,
@@ -2775,7 +3137,9 @@ export const NARRATIONS: Narration[] = [
         "v": 87.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "averages 17.50 attendees at 87.5 percent fill",
+      "dir": ""
      },
      {
       "at": 126.87,
@@ -2790,7 +3154,9 @@ export const NARRATIONS: Narration[] = [
         "v": 81.2,
         "u": "%"
        }
-      ]
+      ],
+      "text": "13.60 at 81.2 percent",
+      "dir": ""
      },
      {
       "at": 130.68,
@@ -2807,7 +3173,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Mat 57 Monday 8:30 a.m.",
+      "dir": ""
      },
      {
       "at": 134.57,
@@ -2832,7 +3200,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "17.50 (18,848 rupees per class in the best class-trainer pairing) and Mat 57 Saturday 10:15 a.m.",
+      "dir": ""
      },
      {
       "at": 148.58,
@@ -2847,7 +3217,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15765.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "16.60 at 15,765 rupees per class.",
+      "dir": ""
      },
      {
       "at": 157.9,
@@ -2855,7 +3227,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "powerCycle"
       ],
-      "nums": []
+      "nums": [],
+      "text": "PowerCycle Monday 6 p.m.",
+      "dir": ""
      },
      {
       "at": 161.38,
@@ -2866,7 +3240,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and Tuesday 7:30 a.m.",
+      "dir": ""
      },
      {
       "at": 163.98,
@@ -2879,7 +3255,9 @@ export const NARRATIONS: Narration[] = [
         "v": 5.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "each averaged about one attendee (roughly 5 percent fill",
+      "dir": ""
      },
      {
       "at": 168.76,
@@ -2890,7 +3268,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "with 3 of 4 Tuesday 7:30 a.m.",
+      "dir": ""
      },
      {
       "at": 172.38,
@@ -2898,7 +3278,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Empty"
       ],
-      "nums": []
+      "nums": [],
+      "text": "classes empty)",
+      "dir": ""
      },
      {
       "at": 173.82,
@@ -2909,7 +3291,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Friday 7:15 a.m.",
+      "dir": ""
      },
      {
       "at": 176.18,
@@ -2922,7 +3306,9 @@ export const NARRATIONS: Narration[] = [
         "v": 18.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Barre at 2.20 (18.3 percent)",
+      "dir": ""
      },
      {
       "at": 182.26,
@@ -2933,7 +3319,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and a Thursday cluster (6:30 a.m.",
+      "dir": ""
      },
      {
       "at": 186.13,
@@ -2944,7 +3332,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "10:15 a.m.",
+      "dir": ""
      },
      {
       "at": 188.38,
@@ -2955,7 +3345,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "10:30 a.m.) at 2.2 to 2.6 average.",
+      "dir": ""
      },
      {
       "at": 192.9,
@@ -2977,7 +3369,9 @@ export const NARRATIONS: Narration[] = [
         "v": 24.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "The empty-class rate doubled to 2.5 percent while the sold-out rate rose 6.1 percentage points to 24.4 percent",
+      "dir": "up"
      }
     ]
    },
@@ -3003,7 +3397,9 @@ export const NARRATIONS: Narration[] = [
         "v": 25.79,
         "u": ""
        }
-      ]
+      ],
+      "text": "Fourteen trainers delivered 361 classes (25.79 per teacher",
+      "dir": ""
      },
      {
       "at": 6.52,
@@ -3014,7 +3410,9 @@ export const NARRATIONS: Narration[] = [
         "v": 14.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the highest in 14 months) at a 6.64 studio average.",
+      "dir": ""
      }
     ]
    },
@@ -3031,7 +3429,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Three"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Three facts matter here.",
+      "dir": ""
      },
      {
       "at": 1.98,
@@ -3040,7 +3440,9 @@ export const NARRATIONS: Narration[] = [
        "Rohan",
        "Dahima"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Rohan Dahima is the schedule's anchor",
+      "dir": ""
      },
      {
       "at": 5.1,
@@ -3051,7 +3453,9 @@ export const NARRATIONS: Narration[] = [
         "v": 40.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "40 classes",
+      "dir": ""
      },
      {
       "at": 6.66,
@@ -3066,7 +3470,9 @@ export const NARRATIONS: Narration[] = [
         "v": 16.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "373 check-ins (about 16 percent of studio check-ins",
+      "dir": ""
      },
      {
       "at": 12.18,
@@ -3077,7 +3483,9 @@ export const NARRATIONS: Narration[] = [
         "v": 24.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the deck's '24 percent' claim does not divide out",
+      "dir": ""
      },
      {
       "at": 15.9,
@@ -3085,7 +3493,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Section"
       ],
-      "nums": []
+      "nums": [],
+      "text": "see Section 11)",
+      "dir": ""
      },
      {
       "at": 18.26,
@@ -3096,7 +3506,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10278.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "9.33 average and roughly 10,278 rupees per class",
+      "dir": ""
      },
      {
       "at": 25.14,
@@ -3111,7 +3523,9 @@ export const NARRATIONS: Narration[] = [
         "v": 78.9,
         "u": "%"
        }
-      ]
+      ],
+      "text": "strong across both Barre (10.62 average) and powerCycle (7.89 at 78.9 percent fill).",
+      "dir": "up"
      },
      {
       "at": 35.28,
@@ -3119,7 +3533,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Any"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Any cover plan for his slots is a business-continuity issue.",
+      "dir": ""
      },
      {
       "at": 39.4,
@@ -3128,7 +3544,9 @@ export const NARRATIONS: Narration[] = [
        "Anisha",
        "Shah"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Anisha Shah is the most under-used asset",
+      "dir": ""
      },
      {
       "at": 45.52,
@@ -3149,7 +3567,9 @@ export const NARRATIONS: Narration[] = [
         "v": 75.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "best fill (73.2 percent) and 66 percent of her classes at least 75 percent full",
+      "dir": ""
      },
      {
       "at": 52.72,
@@ -3160,7 +3580,9 @@ export const NARRATIONS: Narration[] = [
         "v": 20.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "on only 20 classes",
+      "dir": ""
      },
      {
       "at": 54.72,
@@ -3180,7 +3602,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Atulan Purohit's Strength Lab runs 94.5 percent fill over 13 classes",
+      "dir": ""
      },
      {
       "at": 62.2,
@@ -3189,7 +3613,9 @@ export const NARRATIONS: Narration[] = [
        "Strength",
        "Lab"
       ],
-      "nums": []
+      "nums": [],
+      "text": "evidence that Strength Lab demand is supply-capped.",
+      "dir": ""
      },
      {
       "at": 66.12,
@@ -3197,7 +3623,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Added"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Added supply drifted to the weak end",
+      "dir": "down"
      },
      {
       "at": 68.24,
@@ -3221,7 +3649,9 @@ export const NARRATIONS: Narration[] = [
         "v": 26.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Cauveri Vikrant's classes rose 73.9 percent to 40 while averaging 5.15 (her Barre specifically runs 4.17 at 26.3 percent fill)",
+      "dir": "up"
      },
      {
       "at": 80.6,
@@ -3240,7 +3670,9 @@ export const NARRATIONS: Narration[] = [
         "v": 29.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and Richard D'Costa's load rose 237.5 percent at roughly 29 percent fill",
+      "dir": "up"
      },
      {
       "at": 87.56,
@@ -3256,7 +3688,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Bret Saldanha carries a 10 percent empty-class rate (3 empty classes).",
+      "dir": ""
      },
      {
       "at": 93.84,
@@ -3271,7 +3705,9 @@ export const NARRATIONS: Narration[] = [
         "v": 35.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Yet Cauveri Vikrant also posts the best newcomer outcomes on the roster (35.3 percent second-visit",
+      "dir": ""
      },
      {
       "at": 103.12,
@@ -3286,7 +3722,9 @@ export const NARRATIONS: Narration[] = [
         "v": 17.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "29.4 percent retention on 17 newcomers)",
+      "dir": ""
      },
      {
       "at": 110.5,
@@ -3294,7 +3732,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Conversion"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The newcomer-conversion tail is equally instructive",
+      "dir": ""
      },
      {
       "at": 114.56,
@@ -3314,7 +3754,9 @@ export const NARRATIONS: Narration[] = [
         "v": 0.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Reshma Sharma (18 newcomers) and Anisha Shah (9) both show 0 percent second-visit rates",
+      "dir": ""
      },
      {
       "at": 122.88,
@@ -3322,7 +3764,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Section"
       ],
-      "nums": []
+      "nums": [],
+      "text": "though much of that is hosted-class mix rather than instruction (Section 5.2).",
+      "dir": ""
      },
      {
       "at": 129.36,
@@ -3330,7 +3774,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Reliability"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Reliability splits the roster too",
+      "dir": ""
      },
      {
       "at": 131.62,
@@ -3359,7 +3805,9 @@ export const NARRATIONS: Narration[] = [
         "v": 6.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "late-cancel rates of 19.0 percent (Vivaran) and 12.3 percent (Mrigakshi) against 9.0 percent for Rohan and 6.1 percent for Pranjal Jain.",
+      "dir": ""
      }
     ]
    },
@@ -3374,7 +3822,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "formats",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The three formats have three different diseases",
+      "dir": ""
      },
      {
       "at": 4.66,
@@ -3384,7 +3834,9 @@ export const NARRATIONS: Narration[] = [
        "Lab",
        "Capacity"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Strength Lab is capacity-bound",
+      "dir": ""
      },
      {
       "at": 7.04,
@@ -3397,7 +3849,9 @@ export const NARRATIONS: Narration[] = [
         "v": 82.2,
         "u": "%"
        }
-      ]
+      ],
+      "text": "82.2 percent fill",
+      "dir": ""
      },
      {
       "at": 9.4,
@@ -3408,7 +3862,9 @@ export const NARRATIONS: Narration[] = [
         "v": 72.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "72.5 percent of classes sold out",
+      "dir": ""
      },
      {
       "at": 12.64,
@@ -3419,7 +3875,9 @@ export const NARRATIONS: Narration[] = [
         "v": 86.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "only 86 unsold seats",
+      "dir": ""
      },
      {
       "at": 15.32,
@@ -3427,7 +3885,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "New"
       ],
-      "nums": []
+      "nums": [],
+      "text": "and it attracted just 2 new clients because there is no room to sell.",
+      "dir": ""
      },
      {
       "at": 18.62,
@@ -3435,7 +3895,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Barre"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Barre is oversupplied",
+      "dir": ""
      },
      {
       "at": 20.38,
@@ -3452,7 +3914,9 @@ export const NARRATIONS: Narration[] = [
         "v": 1.5,
         "u": "pp"
        }
-      ]
+      ],
+      "text": "38.0 percent fill (down 1.5 percentage points)",
+      "dir": "down"
      },
      {
       "at": 24.94,
@@ -3467,7 +3931,9 @@ export const NARRATIONS: Narration[] = [
         "v": 35.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "59.5 percent of classes under 35 percent full",
+      "dir": ""
      },
      {
       "at": 28.96,
@@ -3478,7 +3944,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2300.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "about 2,300 unsold seats",
+      "dir": ""
      },
      {
       "at": 35.56,
@@ -3486,7 +3954,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "powerCycle"
       ],
-      "nums": []
+      "nums": [],
+      "text": "powerCycle is improving but leaks",
+      "dir": ""
      },
      {
       "at": 38.58,
@@ -3511,7 +3981,9 @@ export const NARRATIONS: Narration[] = [
         "v": 29.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "fill rose 5.6 percentage points to 53.8 percent and sold-out classes jumped 11.8 percentage points to 29.0 percent",
+      "dir": "up"
      },
      {
       "at": 47.38,
@@ -3535,7 +4007,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "but it carries the highest late-cancel rate (12.5 percent) and its trial-to-paid conversion fell 20.7 percentage points to 10.5 percent.",
+      "dir": "down"
      }
     ]
    },
@@ -3552,7 +4026,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Revenue"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Revenue per seat inverts the volume league table",
+      "dir": ""
      },
      {
       "at": 3.1,
@@ -3566,7 +4042,9 @@ export const NARRATIONS: Narration[] = [
         "v": 644.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Strength Lab earns about 644 rupees per seat",
+      "dir": ""
      },
      {
       "at": 6.24,
@@ -3584,7 +4062,9 @@ export const NARRATIONS: Narration[] = [
         "v": 256.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "powerCycle about 268 rupees and Barre about 256 rupees",
+      "dir": ""
      },
      {
       "at": 12.64,
@@ -3595,7 +4075,9 @@ export const NARRATIONS: Narration[] = [
        "Barre",
        "Fill"
       ],
-      "nums": []
+      "nums": [],
+      "text": "a filled Strength Lab seat is worth roughly 2.5 times a filled Barre seat.",
+      "dir": ""
      },
      {
       "at": 16.98,
@@ -3610,7 +4092,9 @@ export const NARRATIONS: Narration[] = [
         "v": 6708.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Barre leads revenue per class (about 6,708 rupees) only because its rooms are larger.",
+      "dir": ""
      },
      {
       "at": 24.32,
@@ -3619,7 +4103,9 @@ export const NARRATIONS: Narration[] = [
        "Strength",
        "Lab"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Strength Lab is also the cheapest format per visit despite being the scarcest",
+      "dir": ""
      },
      {
       "at": 28.0,
@@ -3632,7 +4118,9 @@ export const NARRATIONS: Narration[] = [
         "v": 94.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "94.3 percent of its attendance is on memberships",
+      "dir": ""
      },
      {
       "at": 38.14,
@@ -3648,7 +4136,9 @@ export const NARRATIONS: Narration[] = [
         "v": 85.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "About 85.7 percent of Strength Lab clients also attend Barre",
+      "dir": ""
      },
      {
       "at": 42.52,
@@ -3656,7 +4146,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Barre"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Barre is the funnel that feeds every other format",
+      "dir": ""
      },
      {
       "at": 45.92,
@@ -3673,7 +4165,9 @@ export const NARRATIONS: Narration[] = [
         "v": 22.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "which is why Barre's 22.4 percent fall in new clients is a leading indicator for Strength Lab and powerCycle demand one to two months out.",
+      "dir": ""
      }
     ]
    },
@@ -3690,7 +4184,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Client"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Client-mix data makes the retention mechanics explicit.",
+      "dir": ""
      },
      {
       "at": 4.06,
@@ -3712,7 +4208,9 @@ export const NARRATIONS: Narration[] = [
         "v": 560000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "183 Barre-only clients (44.6 percent of the base) average 2.66 visits a month and carry about 5.6 lakh rupees",
+      "dir": ""
      },
      {
       "at": 16.7,
@@ -3733,7 +4231,9 @@ export const NARRATIONS: Narration[] = [
         "v": 905.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the 61 clients who use all three formats average 14.84 visits (905 visits",
+      "dir": ""
      },
      {
       "at": 24.2,
@@ -3742,7 +4242,9 @@ export const NARRATIONS: Narration[] = [
        "Barre",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "roughly 5.6 times the Barre-only rate)",
+      "dir": ""
      },
      {
       "at": 27.06,
@@ -3754,7 +4256,9 @@ export const NARRATIONS: Narration[] = [
        "Visits",
        "powerCycle"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Barre plus Strength Lab clients average 8.95 visits and Barre plus powerCycle 6.79.",
+      "dir": ""
      },
      {
       "at": 34.96,
@@ -3769,7 +4273,9 @@ export const NARRATIONS: Narration[] = [
         "v": 52.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Single-format powerCycle clients (52) are the weakest group at 1.87 visits.",
+      "dir": "down"
      },
      {
       "at": 40.94,
@@ -3777,7 +4283,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Every"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Every additional format a client adopts multiplies visit frequency",
+      "dir": ""
      },
      {
       "at": 47.42,
@@ -3809,7 +4317,9 @@ export const NARRATIONS: Narration[] = [
         "v": 72000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Pushing even 20 of the 183 Barre-only clients into a second format at current per-visit economics is worth roughly 80 extra visits a month (about…",
+      "dir": ""
      },
      {
       "at": 62.86,
@@ -3817,7 +4327,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Renew"
       ],
-      "nums": []
+      "nums": [],
+      "text": "and considerably more in renewal behaviour).",
+      "dir": ""
      }
     ]
    },
@@ -3832,7 +4344,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "churn",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "October is a partial recovery",
+      "dir": ""
      },
      {
       "at": 3.78,
@@ -3854,7 +4368,9 @@ export const NARRATIONS: Narration[] = [
         "v": 64.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "The sheet renewal rate rose 8.4 percentage points to 73.1 percent from September's 64.8 percent",
+      "dir": "up"
      },
      {
       "at": 11.76,
@@ -3877,7 +4393,9 @@ export const NARRATIONS: Narration[] = [
         "v": 81.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "but remains 3.6 percentage points below the 2026 average (76.7 percent) and 8.3 percentage points below October 2025 (81.4 percent).",
+      "dir": "down"
      },
      {
       "at": 24.24,
@@ -3891,7 +4409,9 @@ export const NARRATIONS: Narration[] = [
         "v": 119.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Memberships ending hit 119",
+      "dir": ""
      },
      {
       "at": 27.3,
@@ -3902,7 +4422,9 @@ export const NARRATIONS: Narration[] = [
         "v": 14.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "a 14-month high",
+      "dir": ""
      },
      {
       "at": 28.94,
@@ -3917,7 +4439,9 @@ export const NARRATIONS: Narration[] = [
         "v": 32.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "up 12.3 percent on September and up 32.8 percent on last October",
+      "dir": "up"
      },
      {
       "at": 34.56,
@@ -3928,7 +4452,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3130000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "worth 31.3 lakh rupees of expiring value.",
+      "dir": ""
      },
      {
       "at": 37.94,
@@ -3958,7 +4484,9 @@ export const NARRATIONS: Narration[] = [
         "v": 220000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "29 memberships lapsed for 6.0 lakh rupees (average 20,690 rupees per lapse) against 16 lapses and 2.2 lakh rupees last October.",
+      "dir": "down"
      },
      {
       "at": 49.56,
@@ -3971,7 +4499,9 @@ export const NARRATIONS: Narration[] = [
         "v": 37.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Lapse count is down from September's 37",
+      "dir": "down"
      }
     ]
    },
@@ -3988,7 +4518,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "The rate arithmetic itself carries a warning",
+      "dir": ""
      },
      {
       "at": 2.94,
@@ -4015,7 +4547,9 @@ export const NARRATIONS: Narration[] = [
         "v": 73.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "the sheet rate is 79 renewed over 79 plus 29 lapsed equals 73.1 percent",
+      "dir": "down"
      },
      {
       "at": 8.84,
@@ -4026,7 +4560,9 @@ export const NARRATIONS: Narration[] = [
         "v": 119.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "but 11 of the 119 endings are unresolved",
+      "dir": ""
      },
      {
       "at": 14.12,
@@ -4045,7 +4581,9 @@ export const NARRATIONS: Narration[] = [
         "v": 66.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and 79 divided by 119 is only 66.4 percent.",
+      "dir": ""
      },
      {
       "at": 20.14,
@@ -4053,7 +4591,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "October's headline rate is provisional and could worsen as the 11 resolve",
+      "dir": ""
      },
      {
       "at": 24.6,
@@ -4068,7 +4608,9 @@ export const NARRATIONS: Narration[] = [
         "v": 290000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "at the 26,303 rupees average ending value they represent about 2.9 lakh rupees.",
+      "dir": ""
      },
      {
       "at": 32.28,
@@ -4076,7 +4618,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Structurally"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Structurally",
+      "dir": ""
      },
      {
       "at": 33.14,
@@ -4099,7 +4643,9 @@ export const NARRATIONS: Narration[] = [
         "v": 22.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "churn has been elevated since June (four of five months at 26 percent or more against a 19.8 to 22.5 percent band in January to May)",
+      "dir": "down"
      },
      {
       "at": 43.96,
@@ -4107,7 +4653,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "and the damage is driven by volume as much as rate",
+      "dir": ""
      },
      {
       "at": 47.46,
@@ -4124,7 +4672,9 @@ export const NARRATIONS: Narration[] = [
         "v": 6.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "endings are up 21.7 percent on the 2026 average while renewals are only up 6.3 percent",
+      "dir": "up"
      },
      {
       "at": 55.62,
@@ -4133,7 +4683,9 @@ export const NARRATIONS: Narration[] = [
        "Lapse",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "so even a stable rate would add lapses as the expiring cohort grows.",
+      "dir": "down"
      }
     ]
    },
@@ -4148,7 +4700,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "churn",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "By product",
+      "dir": ""
      },
      {
       "at": 3.92,
@@ -4179,7 +4733,9 @@ export const NARRATIONS: Narration[] = [
         "v": 78.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Studio 8-Class and 4-Class packages renewed at only 55.6 percent each (28 endings between them) while Studio 1-Month Unlimited renewed 78.3…",
+      "dir": "up"
      },
      {
       "at": 29.36,
@@ -4200,7 +4756,9 @@ export const NARRATIONS: Narration[] = [
         "v": 50.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "three Studio Annual Unlimited endings produced 1.5 lakh rupees of lapse at a 50 percent renewal rate",
+      "dir": "down"
      },
      {
       "at": 37.62,
@@ -4219,7 +4777,9 @@ export const NARRATIONS: Narration[] = [
         "v": 19.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and Studio 3-Month Unlimited lost 1.3 lakh rupees on 19 endings.",
+      "dir": "down"
      },
      {
       "at": 44.7,
@@ -4230,7 +4790,9 @@ export const NARRATIONS: Narration[] = [
         "v": 35.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the largest expiry book (35 endings",
+      "dir": ""
      },
      {
       "at": 47.62,
@@ -4252,7 +4814,9 @@ export const NARRATIONS: Narration[] = [
         "v": 160000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "29 percent of the studio's total) renews at 71.0 percent with 1.6 lakh rupees lapsed",
+      "dir": "down"
      },
      {
       "at": 54.94,
@@ -4265,7 +4829,9 @@ export const NARRATIONS: Narration[] = [
         "v": 81.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "against an 81.5 percent rate on the second-largest book",
+      "dir": ""
      },
      {
       "at": 63.04,
@@ -4283,7 +4849,9 @@ export const NARRATIONS: Narration[] = [
         "v": 34.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "New-client retention of 16.2 percent (against 34.3 percent last October) means the churn and acquisition problems compound",
+      "dir": "down"
      }
     ]
    },
@@ -4307,7 +4875,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3390000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Strip the 51 pages down and October's 33.9 lakh rupees rests on three engines.",
+      "dir": "down"
      },
      {
       "at": 9.22,
@@ -4315,7 +4885,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Visits"
       ],
-      "nums": []
+      "nums": [],
+      "text": "5.31 visits per client",
+      "dir": ""
      },
      {
       "at": 11.94,
@@ -4323,7 +4895,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Transactions"
       ],
-      "nums": []
+      "nums": [],
+      "text": "1.52 transactions per paying client",
+      "dir": ""
      },
      {
       "at": 15.14,
@@ -4334,7 +4908,9 @@ export const NARRATIONS: Narration[] = [
         "v": 93.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "93 percent repeat share",
+      "dir": ""
      },
      {
       "at": 19.36,
@@ -4349,7 +4925,9 @@ export const NARRATIONS: Narration[] = [
         "v": 7.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "440 visiting clients (down 7.3 percent)",
+      "dir": "down"
      },
      {
       "at": 24.28,
@@ -4364,7 +4942,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "331 paying visitors (down 3.8 percent)",
+      "dir": "down"
      },
      {
       "at": 28.16,
@@ -4375,7 +4955,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "a base still 2.5 percent below the 2026 average.",
+      "dir": "down"
      },
      {
       "at": 36.46,
@@ -4393,7 +4975,9 @@ export const NARRATIONS: Narration[] = [
         "v": 2.9,
         "u": "%"
        }
-      ]
+      ],
+      "text": "leads are up 150.7 percent year-on-year while new clients are down 2.9 percent",
+      "dir": ""
      },
      {
       "at": 44.2,
@@ -4411,7 +4995,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "because 54 percent of leads now arrive through a source that converts at 3.3 percent and the trial-to-paid step has halved.",
+      "dir": ""
      },
      {
       "at": 53.96,
@@ -4419,7 +5005,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Renew"
       ],
-      "nums": []
+      "nums": [],
+      "text": "renewal recovered off a trough and repeat behaviour is excellent",
+      "dir": ""
      },
      {
       "at": 57.2,
@@ -4433,7 +5021,9 @@ export const NARRATIONS: Narration[] = [
         "v": 55.6,
         "u": "%"
        }
-      ]
+      ],
+      "text": "but the expiring cohort is growing faster than renewals and pack-product churn sits at 55.6 percent.",
+      "dir": "down"
      }
     ]
    },
@@ -4448,7 +5038,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The risks chain forward.",
+      "dir": ""
      },
      {
       "at": 1.96,
@@ -4462,7 +5054,9 @@ export const NARRATIONS: Narration[] = [
         "v": 22.4,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Barre new clients fell 22.4 percent",
+      "dir": "down"
      },
      {
       "at": 5.02,
@@ -4477,7 +5071,9 @@ export const NARRATIONS: Narration[] = [
         "v": 85.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "85.7 percent of Strength Lab demand is Barre-fed",
+      "dir": ""
      },
      {
       "at": 9.88,
@@ -4488,7 +5084,9 @@ export const NARRATIONS: Narration[] = [
        "Capacity",
        "powerCycle"
       ],
-      "nums": []
+      "nums": [],
+      "text": "so Strength Lab utilisation (already capacity-bound) and powerCycle demand inherit the shortfall with a one-to-two month lag.",
+      "dir": ""
      },
      {
       "at": 19.94,
@@ -4501,7 +5099,9 @@ export const NARRATIONS: Narration[] = [
         "v": 16.2,
         "u": "%"
        }
-      ]
+      ],
+      "text": "A 16.2 percent new-client retention rate means the lapsing base is not replenished from below.",
+      "dir": "down"
      },
      {
       "at": 27.22,
@@ -4509,7 +5109,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "And"
       ],
-      "nums": []
+      "nums": [],
+      "text": "And the frequency engine itself is mean-reverting by construction",
+      "dir": ""
      },
      {
       "at": 30.76,
@@ -4517,7 +5119,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Visits"
       ],
-      "nums": []
+      "nums": [],
+      "text": "visits per client of 5.31 is far outside the 12-month range (4.28 to 5.11)",
+      "dir": ""
      },
      {
       "at": 43.14,
@@ -4538,7 +5142,9 @@ export const NARRATIONS: Narration[] = [
         "v": 1940.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "visits fall roughly 17 percent at today's client count (2,336 to about 1,940)",
+      "dir": ""
      },
      {
       "at": 52.68,
@@ -4555,7 +5161,9 @@ export const NARRATIONS: Narration[] = [
         "v": 240000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "which at the deck's per-attendee revenue of roughly 592 rupees is in the order of 2.4 lakh rupees of monthly revenue.",
+      "dir": ""
      },
      {
       "at": 63.3,
@@ -4563,7 +5171,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Nothing"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Nothing in the front-door data suggests new-client volume will offset it",
+      "dir": ""
      },
      {
       "at": 68.0,
@@ -4577,7 +5187,9 @@ export const NARRATIONS: Narration[] = [
         "v": 11.1,
         "u": "%"
        }
-      ]
+      ],
+      "text": "at the current 11.1 percent trial-to-paid rate",
+      "dir": ""
      },
      {
       "at": 71.6,
@@ -4596,7 +5208,9 @@ export const NARRATIONS: Narration[] = [
         "v": 260.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "replacing the lapse of 29 members requires about 260 completed trials",
+      "dir": "down"
      },
      {
       "at": 78.42,
@@ -4607,7 +5221,9 @@ export const NARRATIONS: Narration[] = [
         "v": 59.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "versus 59 delivered in October.",
+      "dir": ""
      }
     ]
    },
@@ -4624,7 +5240,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "October's strength is concentrated in ways that cut both ways.",
+      "dir": ""
      },
      {
       "at": 4.04,
@@ -4638,7 +5256,9 @@ export const NARRATIONS: Narration[] = [
         "v": 21.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Four annual sales are 21 percent of revenue",
+      "dir": ""
      },
      {
       "at": 7.56,
@@ -4655,7 +5275,9 @@ export const NARRATIONS: Narration[] = [
         "v": 29.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "one associate desk drives 29 percent of revenue and 29 percent of expiries",
+      "dir": ""
      },
      {
       "at": 13.68,
@@ -4666,7 +5288,9 @@ export const NARRATIONS: Narration[] = [
         "v": 16.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "one trainer delivers about 16 percent of all check-ins",
+      "dir": ""
      },
      {
       "at": 17.5,
@@ -4679,7 +5303,9 @@ export const NARRATIONS: Narration[] = [
         "v": 51.7,
         "u": "%"
        }
-      ]
+      ],
+      "text": "one product family is 51.7 percent of revenue",
+      "dir": ""
      },
      {
       "at": 21.72,
@@ -4692,7 +5318,9 @@ export const NARRATIONS: Narration[] = [
         "v": 61.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "61 cross-format clients generate a disproportionate share of visit value.",
+      "dir": ""
      },
      {
       "at": 27.14,
@@ -4700,7 +5328,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Concentration"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Concentration makes the month efficient",
+      "dir": ""
      },
      {
       "at": 31.16,
@@ -4713,7 +5343,9 @@ export const NARRATIONS: Narration[] = [
         "v": 180000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "one missed annual renewal (1.8 lakh rupees)",
+      "dir": ""
      },
      {
       "at": 35.02,
@@ -4721,7 +5353,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Discount"
       ],
-      "nums": []
+      "nums": [],
+      "text": "one trainer absence or one desk's discount slippage moves the whole studio's monthly result by several percent.",
+      "dir": ""
      },
      {
       "at": 45.78,
@@ -4738,7 +5372,9 @@ export const NARRATIONS: Narration[] = [
         "v": 1950000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "last year revenue fell from 26.3 lakh rupees (October) to about 19.5 lakh rupees (November)",
+      "dir": "down"
      },
      {
       "at": 53.88,
@@ -4749,7 +5385,9 @@ export const NARRATIONS: Narration[] = [
         "v": 26.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "roughly 26 percent lower",
+      "dir": "down"
      },
      {
       "at": 55.58,
@@ -4760,7 +5398,9 @@ export const NARRATIONS: Narration[] = [
         "v": 3000000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "this year's deck targets holding at least 30.0 lakh rupees",
+      "dir": ""
      },
      {
       "at": 59.7,
@@ -4771,7 +5411,9 @@ export const NARRATIONS: Narration[] = [
         "v": 54.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "which would already be a 54 percent improvement on last November.",
+      "dir": "up"
      }
     ]
    },
@@ -4786,7 +5428,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The deck itself contains internal inconsistencies that management should fix before the numbers harden into narrative.",
+      "dir": ""
      },
      {
       "at": 6.46,
@@ -4794,7 +5438,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "None"
       ],
-      "nums": []
+      "nums": [],
+      "text": "None of them change the diagnosis",
+      "dir": ""
      },
      {
       "at": 8.32,
@@ -4809,7 +5455,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "but several change the size of a number by 20 to 30 percent",
+      "dir": ""
      },
      {
       "at": 14.34,
@@ -4817,7 +5465,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Detail"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Detail tables were treated as authoritative throughout this report.",
+      "dir": ""
      }
     ]
    },
@@ -4834,7 +5484,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Recommended"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Recommended hygiene fixes",
+      "dir": ""
      },
      {
       "at": 1.88,
@@ -4843,7 +5495,9 @@ export const NARRATIONS: Narration[] = [
        "Renew",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "adopt a single renewal-rate definition (state the denominator)",
+      "dir": ""
      },
      {
       "at": 10.84,
@@ -4851,7 +5505,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Meta"
       ],
-      "nums": []
+      "nums": [],
+      "text": "reconcile Meta spend to paid-lead counts",
+      "dir": ""
      },
      {
       "at": 17.9,
@@ -4864,7 +5520,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "These are 30-minute fixes that remove most of the above permanently.",
+      "dir": "up"
      }
     ]
    },
@@ -4884,7 +5542,9 @@ export const NARRATIONS: Narration[] = [
         "v": 33.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "The source deck lists 33 actions across 9 owners.",
+      "dir": ""
      },
      {
       "at": 4.54,
@@ -4892,7 +5552,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "They"
       ],
-      "nums": []
+      "nums": [],
+      "text": "They are real",
+      "dir": ""
      },
      {
       "at": 5.44,
@@ -4903,7 +5565,9 @@ export const NARRATIONS: Narration[] = [
         "v": 33.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "but 33 priorities are no priorities",
+      "dir": ""
      },
      {
       "at": 20.44,
@@ -4911,7 +5575,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Estimated"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Estimated impacts are indicative monthly figures at October economics.",
+      "dir": ""
      }
     ]
    },
@@ -4926,7 +5592,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "The deck sets sensible thresholds for November",
+      "dir": ""
      },
      {
       "at": 7.3,
@@ -4934,7 +5602,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Track"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Track weekly",
+      "dir": ""
      }
     ]
    }
@@ -4955,7 +5625,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 1.",
+      "dir": ""
      },
      {
       "at": 1.8,
@@ -4970,7 +5642,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Call all 30 Trial Completed leads within 7 days with a time-limited newcomer offer",
+      "dir": ""
      },
      {
       "at": 12.8,
@@ -4983,7 +5657,9 @@ export const NARRATIONS: Narration[] = [
         "v": 10.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "A 10 percent win is 3 members",
+      "dir": ""
      },
      {
       "at": 15.04,
@@ -4994,7 +5670,9 @@ export const NARRATIONS: Narration[] = [
         "v": 53000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "about 53,000 rupees.",
+      "dir": ""
      },
      {
       "at": 20.8,
@@ -5005,7 +5683,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "backlog 30 to under 10",
+      "dir": ""
      },
      {
       "at": 23.14,
@@ -5022,7 +5702,9 @@ export const NARRATIONS: Narration[] = [
         "v": 18.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "trial-to-paid 11.1 percent to 18 percent.",
+      "dir": ""
      }
     ]
    },
@@ -5037,7 +5719,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 2.",
+      "dir": ""
      },
      {
       "at": 1.76,
@@ -5046,7 +5730,9 @@ export const NARRATIONS: Narration[] = [
        "Impose",
        "Leads"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Impose a same-day callback rule on website leads",
+      "dir": ""
      },
      {
       "at": 7.58,
@@ -5057,7 +5743,9 @@ export const NARRATIONS: Narration[] = [
         "v": 5.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and paid spend capped on sources converting below 5 percent.",
+      "dir": "down"
      },
      {
       "at": 10.86,
@@ -5082,7 +5770,9 @@ export const NARRATIONS: Narration[] = [
         "v": 7.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Website qualification needs to move from 20 percent to 35 percent and lead-to-member from 3.3 percent to 7 percent.",
+      "dir": ""
      },
      {
       "at": 21.24,
@@ -5091,7 +5781,9 @@ export const NARRATIONS: Narration[] = [
        "Marketing",
        "Lead"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Marketing Lead",
+      "dir": ""
      }
     ]
    },
@@ -5106,7 +5798,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 3.",
+      "dir": ""
      },
      {
       "at": 1.88,
@@ -5119,7 +5813,9 @@ export const NARRATIONS: Narration[] = [
         "v": 48.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Attach a 48-hour second-visit offer to every hosted-class attendee",
+      "dir": ""
      },
      {
       "at": 14.98,
@@ -5138,7 +5834,9 @@ export const NARRATIONS: Narration[] = [
         "v": 19.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Matching the 15.7 percent trial-class rate converts about 3 of 19 attendees per event.",
+      "dir": ""
      },
      {
       "at": 22.52,
@@ -5147,7 +5845,9 @@ export const NARRATIONS: Narration[] = [
        "Marketing",
        "Executive"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Marketing Executive",
+      "dir": ""
      }
     ]
    },
@@ -5162,7 +5862,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 4.",
+      "dir": ""
      },
      {
       "at": 1.98,
@@ -5170,7 +5872,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Build"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Build the referral and walk-in engine",
+      "dir": ""
      },
      {
       "at": 4.36,
@@ -5179,7 +5883,9 @@ export const NARRATIONS: Narration[] = [
        "Conversion",
        "Member"
       ],
-      "nums": []
+      "nums": [],
+      "text": "guest passes with a reward on conversion for members",
+      "dir": ""
      },
      {
       "at": 9.8,
@@ -5198,7 +5904,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Referral plus walk-in went 27 leads to 13 conversions",
+      "dir": ""
      },
      {
       "at": 14.0,
@@ -5213,7 +5921,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "15 more referral leads at current rates add about 6 conversions",
+      "dir": ""
      },
      {
       "at": 21.22,
@@ -5222,7 +5932,9 @@ export const NARRATIONS: Narration[] = [
        "Marketing",
        "Lead"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Marketing Lead",
+      "dir": ""
      }
     ]
    },
@@ -5237,7 +5949,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 5.",
+      "dir": ""
      },
      {
       "at": 1.66,
@@ -5245,7 +5959,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Cut"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Cut the dead slots",
+      "dir": ""
      },
      {
       "at": 3.44,
@@ -5258,7 +5974,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "suspend PowerCycle Tuesday 7:30 a.m.",
+      "dir": ""
      },
      {
       "at": 8.82,
@@ -5271,7 +5989,9 @@ export const NARRATIONS: Narration[] = [
         "v": 5.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "(about 5 percent fill",
+      "dir": ""
      },
      {
       "at": 10.28,
@@ -5279,7 +5999,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Revenue"
       ],
-      "nums": []
+      "nums": [],
+      "text": "near-zero revenue",
+      "dir": ""
      },
      {
       "at": 11.36,
@@ -5292,7 +6014,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "3 of 4 Tuesday classes empty) and merge the Thursday and Friday morning cluster (Friday 7:15 a.m.",
+      "dir": ""
      },
      {
       "at": 21.12,
@@ -5303,7 +6027,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Thursday 6:30 a.m.",
+      "dir": ""
      },
      {
       "at": 23.16,
@@ -5314,7 +6040,9 @@ export const NARRATIONS: Narration[] = [
         "v": 15.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "10:15 a.m.",
+      "dir": ""
      },
      {
       "at": 24.08,
@@ -5325,7 +6053,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and 10:30 a.m.",
+      "dir": ""
      },
      {
       "at": 31.44,
@@ -5333,7 +6063,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Target"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Target",
+      "dir": ""
      },
      {
       "at": 32.36,
@@ -5351,7 +6083,9 @@ export const NARRATIONS: Narration[] = [
         "v": 1.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "empty-class rate 2.5 percent to under 1.5 percent.",
+      "dir": ""
      },
      {
       "at": 39.04,
@@ -5361,7 +6095,9 @@ export const NARRATIONS: Narration[] = [
        "Ops",
        "Manager"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Assistant Ops Manager.",
+      "dir": ""
      }
     ]
    },
@@ -5376,7 +6112,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 6.",
+      "dir": ""
      },
      {
       "at": 2.12,
@@ -5385,7 +6123,9 @@ export const NARRATIONS: Narration[] = [
        "Add",
        "Capacity"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Add capacity where demand is proven",
+      "dir": ""
      },
      {
       "at": 4.28,
@@ -5396,7 +6136,9 @@ export const NARRATIONS: Narration[] = [
         "v": 30.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "a second class beside Monday 6:30 a.m.",
+      "dir": ""
      },
      {
       "at": 7.48,
@@ -5407,7 +6149,9 @@ export const NARRATIONS: Narration[] = [
         "v": 17.5,
         "u": ""
        }
-      ]
+      ],
+      "text": "(17.5 average) and Friday 9 a.m.",
+      "dir": ""
      },
      {
       "at": 11.3,
@@ -5418,7 +6162,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13.8,
         "u": ""
        }
-      ]
+      ],
+      "text": "(13.8)",
+      "dir": ""
      },
      {
       "at": 12.68,
@@ -5434,7 +6180,9 @@ export const NARRATIONS: Narration[] = [
         "v": 94.5,
         "u": "%"
        }
-      ]
+      ],
+      "text": "additional Strength Lab sessions (Atulan Purohit at 94.5 percent fill",
+      "dir": ""
      },
      {
       "at": 18.18,
@@ -5447,7 +6195,9 @@ export const NARRATIONS: Narration[] = [
         "v": 5393.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "each added session at his 5,393 rupees per class is direct revenue)",
+      "dir": ""
      },
      {
       "at": 30.22,
@@ -5462,7 +6212,9 @@ export const NARRATIONS: Narration[] = [
         "v": 24.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "and one pilot weekend class (weekend earns 2,122 rupees more per class on 24 percent of the schedule).",
+      "dir": ""
      },
      {
       "at": 39.02,
@@ -5476,7 +6228,9 @@ export const NARRATIONS: Narration[] = [
         "v": 13000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Moving six weekday classes to weekend windows is worth roughly 13,000 rupees a month before the fill uplift.",
+      "dir": "up"
      },
      {
       "at": 45.38,
@@ -5484,7 +6238,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Owners"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Owners",
+      "dir": ""
      },
      {
       "at": 46.96,
@@ -5494,7 +6250,9 @@ export const NARRATIONS: Narration[] = [
        "Assistant",
        "Ops"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Head Trainer and Assistant Ops Manager.",
+      "dir": ""
      }
     ]
    },
@@ -5509,7 +6267,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 7.",
+      "dir": ""
      },
      {
       "at": 1.68,
@@ -5530,7 +6290,9 @@ export const NARRATIONS: Narration[] = [
         "v": 82.2,
         "u": "%"
        }
-      ]
+      ],
+      "text": "Open waitlists with auto-fill for Strength Lab and powerCycle late cancellations (Strength Lab booking fill 96.1 percent against 82.2 percent actual",
+      "dir": ""
      },
      {
       "at": 11.98,
@@ -5549,7 +6311,9 @@ export const NARRATIONS: Narration[] = [
         "v": 12.8,
         "u": "%"
        }
-      ]
+      ],
+      "text": "powerCycle late-cancel 12.5 percent) and tighten Friday reminders (12.8 percent rate).",
+      "dir": ""
      },
      {
       "at": 19.06,
@@ -5570,7 +6334,9 @@ export const NARRATIONS: Narration[] = [
         "v": 25000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Refilling half of Strength Lab's cancelled seats at 784 rupees is worth about 25,000 rupees a month.",
+      "dir": ""
      },
      {
       "at": 26.48,
@@ -5579,7 +6345,9 @@ export const NARRATIONS: Narration[] = [
        "Team",
        "Leader"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Team Leader CS.",
+      "dir": ""
      }
     ]
    },
@@ -5594,7 +6362,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 8.",
+      "dir": ""
      },
      {
       "at": 1.74,
@@ -5603,7 +6373,9 @@ export const NARRATIONS: Narration[] = [
        "Lift",
        "ATV"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Lift the low-A T V desk",
+      "dir": ""
      },
      {
       "at": 3.34,
@@ -5618,7 +6390,9 @@ export const NARRATIONS: Narration[] = [
         "v": 88.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "pair Vaishali Fitter (88 transactions",
+      "dir": ""
      },
      {
       "at": 6.76,
@@ -5635,7 +6409,9 @@ export const NARRATIONS: Narration[] = [
         "v": 18414.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "6,915 rupees A T V) with the desk that averages 18,414 rupees for shadowing",
+      "dir": ""
      },
      {
       "at": 15.9,
@@ -5643,7 +6419,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Single"
       ],
-      "nums": []
+      "nums": [],
+      "text": "make a 6- or 12-class pack the first offer on every single-class sale.",
+      "dir": ""
      },
      {
       "at": 22.36,
@@ -5661,7 +6439,9 @@ export const NARRATIONS: Narration[] = [
         "v": 88000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Each 1,000 rupees of her A T V is worth about 88,000 rupees a month",
+      "dir": ""
      },
      {
       "at": 28.12,
@@ -5672,7 +6452,9 @@ export const NARRATIONS: Narration[] = [
         "v": 9000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the deck's target is 9,000 rupees by next review.",
+      "dir": ""
      },
      {
       "at": 32.54,
@@ -5681,7 +6463,9 @@ export const NARRATIONS: Narration[] = [
        "Team",
        "Leader"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Team Leader CS.",
+      "dir": ""
      }
     ]
    },
@@ -5696,7 +6480,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 9.",
+      "dir": ""
      },
      {
       "at": 2.26,
@@ -5714,7 +6500,9 @@ export const NARRATIONS: Narration[] = [
         "v": 400000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Cap private-class discounts at 15 percent (approval above that) and rebuild the privates pipeline toward 4.0 lakh rupees",
+      "dir": "up"
      },
      {
       "at": 11.2,
@@ -5728,7 +6516,9 @@ export const NARRATIONS: Narration[] = [
         "v": 290000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "the pre-discount run-rate implies roughly 2.9 lakh rupees recoverable.",
+      "dir": ""
      },
      {
       "at": 16.42,
@@ -5736,7 +6526,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Ops"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Ops Head.",
+      "dir": ""
      }
     ]
    },
@@ -5751,7 +6543,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 10.",
+      "dir": ""
      },
      {
       "at": 2.08,
@@ -5759,7 +6553,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Upgrade"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Upgrade short terms to long",
+      "dir": "up"
      },
      {
       "at": 4.18,
@@ -5773,7 +6569,9 @@ export const NARRATIONS: Narration[] = [
         "v": 17.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "convert 1-Month Unlimited buyers (17 units",
+      "dir": ""
      },
      {
       "at": 7.74,
@@ -5787,7 +6585,9 @@ export const NARRATIONS: Narration[] = [
         "v": 70.0,
         "u": "%"
        }
-      ]
+      ],
+      "text": "up 70 percent) to 3-Month and Annual (currently 4 and 6 units).",
+      "dir": "up"
      },
      {
       "at": 13.14,
@@ -5801,7 +6601,9 @@ export const NARRATIONS: Narration[] = [
         "v": 56000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "Each 1-to-3-Month shift adds about 56,000 rupees of upfront cash",
+      "dir": "up"
      },
      {
       "at": 19.42,
@@ -5812,7 +6614,9 @@ export const NARRATIONS: Narration[] = [
         "v": 190000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "five upgrades are about 1.9 lakh rupees.",
+      "dir": "up"
      }
     ]
    },
@@ -5827,7 +6631,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 11.",
+      "dir": ""
      },
      {
       "at": 1.96,
@@ -5835,7 +6641,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Protect"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Protect the expiry book",
+      "dir": ""
      },
      {
       "at": 3.84,
@@ -5850,7 +6658,9 @@ export const NARRATIONS: Narration[] = [
         "v": 290000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "resolve the 11 open endings by 15 November (worth about 2.9 lakh rupees)",
+      "dir": ""
      },
      {
       "at": 10.1,
@@ -5861,7 +6671,9 @@ export const NARRATIONS: Narration[] = [
         "v": 21.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "run T plus 21 save calls on every annual",
+      "dir": ""
      },
      {
       "at": 14.06,
@@ -5874,7 +6686,9 @@ export const NARRATIONS: Narration[] = [
         "v": 150000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "6-month and 3-month expiry (three annual endings alone lapsed 1.5 lakh rupees)",
+      "dir": "down"
      },
      {
       "at": 21.28,
@@ -5893,7 +6707,9 @@ export const NARRATIONS: Narration[] = [
         "v": 78.3,
         "u": "%"
        }
-      ]
+      ],
+      "text": "convert 8-Class and 4-Class expires to 1-Month Unlimited (packs renew at 55.6 percent against 78.3 percent for the unlimited product)",
+      "dir": ""
      },
      {
       "at": 34.38,
@@ -5914,7 +6730,9 @@ export const NARRATIONS: Narration[] = [
         "v": 100000.0,
         "u": ""
        }
-      ]
+      ],
+      "text": "and add a lapse-reason code plus a 10-day win-back offer on all 29 October lapses (a 10 percent win-back is about 1 lakh rupees).",
+      "dir": "down"
      },
      {
       "at": 44.36,
@@ -5922,7 +6740,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Owners"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Owners",
+      "dir": ""
      },
      {
       "at": 45.02,
@@ -5931,7 +6751,9 @@ export const NARRATIONS: Narration[] = [
        "Team",
        "Leader"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Team Leader CS",
+      "dir": ""
      },
      {
       "at": 48.5,
@@ -5939,7 +6761,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Ops"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Ops Head.",
+      "dir": ""
      }
     ]
    },
@@ -5954,7 +6778,9 @@ export const NARRATIONS: Narration[] = [
       "at": 0.0,
       "sec": "closing",
       "terms": [],
-      "nums": []
+      "nums": [],
+      "text": "Recommendation 12.",
+      "dir": ""
      },
      {
       "at": 2.0,
@@ -5962,7 +6788,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Fix"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Fix the reporting layer",
+      "dir": ""
      },
      {
       "at": 3.42,
@@ -5971,7 +6799,9 @@ export const NARRATIONS: Narration[] = [
        "Renew",
        "Rate"
       ],
-      "nums": []
+      "nums": [],
+      "text": "one renewal-rate definition",
+      "dir": ""
      },
      {
       "at": 7.76,
@@ -5979,7 +6809,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Meta"
       ],
-      "nums": []
+      "nums": [],
+      "text": "Meta spend reconciliation",
+      "dir": ""
      },
      {
       "at": 11.74,
@@ -5988,7 +6820,9 @@ export const NARRATIONS: Narration[] = [
        "Barre",
        "powerCycle"
       ],
-      "nums": []
+      "nums": [],
+      "text": "and restore the missing October Barre and powerCycle series.",
+      "dir": ""
      },
      {
       "at": 18.28,
@@ -5996,7 +6830,9 @@ export const NARRATIONS: Narration[] = [
       "terms": [
        "Section"
       ],
-      "nums": []
+      "nums": [],
+      "text": "This report's entire Section 11 exists because these fixes have not happened yet.",
+      "dir": ""
      }
     ]
    }

@@ -5,6 +5,7 @@
  * as they were, and the most recently opened review is shown by default.
  */
 import { createPortal } from 'react-dom';
+import { GuideOverlay, showAnn } from '../components/report/GuideOverlay';
 import { describe, interactive, locate, sectionPoint, sectionToViewport, setValue, type ElDesc } from '../lib/live';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -96,13 +97,13 @@ const RVideo = createContext<{ rid: string; available: boolean; videos: Record<s
   presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; time: number }) => void; remote: LiveSync | null } | null>(null);
 type LiveSync = { part: string; open: boolean; playing: boolean; time: number; at: number; seq: number };
 /* ── pre-recorded narration (Blomp): one Listen button at the top, a docked player with a section playlist ── */
-type NarrCue = { at: number; sec: string; terms: string[]; nums: { v: number; u: '' | '%' | 'pp' }[] };
+type NarrCue = { at: number; sec: string; terms: string[]; nums: { v: number; u: '' | '%' | 'pp' }[]; text: string; dir: '' | 'up' | 'down' };
 type NarrTrack = { id: string; title: string; clips: { id: string; section: string; seconds: number; home: string; cues: NarrCue[] }[] };
 /* guided focus: bring the metric / table row being discussed into view and highlight it.
  * Spoken numbers are matched against the numbers shown on screen (₹33.9L, 18.8%, 11,076 …) — the strongest signal;
  * keywords break ties and cover sentences without numbers. */
 const GUIDE_SEL = '.epr-kpi, .epr-card, tr, .epr-spot, .epr-hero-lead, .epr-sum, li, p';
-const clearGuide = () => document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide'));
+const clearGuide = () => { document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide')); showAnn(null); };
 const SCALE: Record<string, number> = { k: 1e3, l: 1e5, cr: 1e7, m: 1e6 };
 function shownNums(txt: string): { v: number; u: string }[] {
   const out: { v: number; u: string }[] = [];
@@ -135,6 +136,8 @@ function guideTo(cue: NarrCue) {
   }
   clearGuide();
   if (best) best.classList.add('epr-guide');
+  const target = best ?? home.querySelector<HTMLElement>('.epr-hero h1, .epr-hero h2') ?? null;
+  setTimeout(() => showAnn(target ? { el: target, cue, key: Date.now() } : null), 350);   // after the scroll starts
   (best ?? home).scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' });
 }
 type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
@@ -201,6 +204,7 @@ function NarrationPlayer() {
   return <>
     <button className="epr-vid ready no-print" onClick={() => { setOpen(true); autoNext.current = presenter; setTimeout(() => send(true), 0); }} title="Listen to the narrated report">
       <span className="ic"><Headphones size={12} /></span>Listen · {mmss(total)}</button>
+    {open && guide && <GuideOverlay />}
     {open && createPortal(<div className="epr-narr no-print" data-live-skip>
       <div className="epr-narr-top">
         <Headphones size={15} />
