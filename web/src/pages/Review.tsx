@@ -11,7 +11,7 @@ import clsx from 'clsx';
 import * as EX from '../lib/exportReport';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, Play, Pause, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Download, Copy, FileText, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, Play, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Download, Copy, FileText, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -964,7 +964,7 @@ function Glance({ rv, ai, gl, P, base, live, busy, canAi, onRewrite, jump }: { r
   const B = useChg();
   return (
     <section id="epr-glance" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={[...rv.glance.cards, ...rv.scorecard.filter((k) => !rv.glance.cards.some((c) => c.id === k.id))]} speak={gl ? `${gl.headline} ${gl.summary}` : undefined} vid="glance" />
+      <SectionHead n={1} total={rv.sections.length + 2} kicker="Overview" title={GLANCE_TITLE} lead={`${rv.scope} · ${P.label} — every key metric and finding from the sections that follow.`} right={<PartActions ai={gl} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={[...rv.glance.cards, ...rv.scorecard.filter((k) => !rv.glance.cards.some((c) => c.id === k.id))]} vid="glance" />
       <Sub n="1.1" title="Executive summary" />
       <Analysis part="glance" ai={gl} live={live} label="Executive summary" fallback={[]} />
       <Sub n="1.2" full title="Headline numbers" note="Click any number for the records behind it" />
@@ -1061,14 +1061,13 @@ function HeroArt({ id }: { id: string }) {
   );
 }
 /** Chapter opener: every chapter starts with a hero — number, title, intro, the headline and its three key numbers. */
-function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], speak, vid }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; speak?: string; vid?: string }) {
+function SectionHead({ n, total, kicker, title, lead, right, part, headline, stats = [], vid }: { n: number; total: number; kicker: string; title: string; lead: string; right?: ReactNode; part?: string; headline?: ReactNode; stats?: Kpi[]; vid?: string }) {
   const d = useRD(); const B = useChg();
   return (
     <header className="epr-hero"><div className="epr-hero-bg" aria-hidden /><HeroArt id={vid ?? 'closing'} />
       <div className="epr-hero-top">
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
-        {speak && <AudioSummary text={`Chapter ${n}. ${title}. ${speak}`} />}
         {vid === 'glance' && <VideoExplainer part="glance" title={title} />}
         {right}
       </div>
@@ -1105,7 +1104,6 @@ function ReviewSectionView({ req, n, total, s, ai, live, busy, base, P, canAi, o
   return (
     <section id={`epr-${s.id}`} data-spy className="epr-sec epr-build-in">
       <SectionHead n={n} total={total} kicker={({ sales: 'Revenue', attendance: 'Attendance', funnel: 'Acquisition', classes: 'Schedule', trainers: 'People', formats: 'Portfolio', churn: 'Retention' } as Record<string, string>)[s.id] ?? 'Chapter'} title={chTitle(s)} lead={ai?.lead ?? s.lead} part={ai ? s.id : undefined} right={<PartActions ai={ai} busy={busy} canAi={canAi} onRewrite={onRewrite} />} stats={s.kpis} vid={s.id}
-        speak={ai ? [ai.headline, ai.summary, ai.insights.length ? `Key insights. ${ai.insights.slice(0, 3).join(' ')}` : ''].join(' ') : undefined}
         headline={ai ? (live && !ed?.on ? <p><Words text={ai.headline} live /></p> : <Ed as="p" part={s.id} path={['headline']} value={ai.headline} />) : undefined} />
 
       <Sub n={`${n}.1`} title="Analysis" />
@@ -1179,8 +1177,7 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
   const n = rv.sections.length + 2;
   return (
     <section id="epr-closing" data-spy className="epr-sec epr-build-in">
-      <SectionHead n={n} total={n} kicker="Conclusions" title={CLOSING_TITLE} lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`}
-        speak={[...rv.sections.map((s) => ai?.sections[s.id]?.headline ?? '').filter(Boolean), recs.length ? `There are ${recs.length} recommended actions, ${recs.filter((r) => r.priority === 'high').length} of them high priority. ${recs.filter((r) => r.priority === 'high').slice(0, 4).map((r) => `${r.title}, owned by ${r.owner}.`).join(' ')}` : ''].join(' ')} />
+      <SectionHead n={n} total={n} kicker="Conclusions" title={CLOSING_TITLE} lead={`What ${P.label} tells us, and what we do next — every recommended action from the review, with an owner and a timeline.`} />
       <Sub n={`${n}.1`} title="Main findings" />
       <ol className="epr-concl">{rv.sections.map((s, i) => {
         const h = ai?.sections[s.id]?.headline ?? ai?.glance?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0];
@@ -1214,35 +1211,6 @@ function Closing({ rv, ai, P, jump }: { rv: Review; ai?: AI; P: ReportPeriod; ju
         ))}</div>
       )}
     </section>
-  );
-}
-
-/* ── audio summary: reads the chapter aloud with the browser's speech engine ── */
-function AudioSummary({ text }: { text: string }) {
-  const [on, setOn] = useState(false);
-  const [pct, setPct] = useState(0);
-  const ok = typeof window !== 'undefined' && 'speechSynthesis' in window;
-  useEffect(() => () => { if (on) window.speechSynthesis.cancel(); }, [on]);
-  if (!ok || !text.trim()) return null;
-  const play = () => {
-    const sp = window.speechSynthesis;
-    if (on) { sp.cancel(); setOn(false); return; }
-    sp.cancel();
-    const clean = text.replace(/₹/g, 'rupees ').replace(/(\d)L\b/g, '$1 lakh').replace(/(\d)Cr\b/g, '$1 crore').replace(/\bpp\b/g, 'percentage points').replace(/\s+/g, ' ');
-    const u = new SpeechSynthesisUtterance(clean);
-    const vs = sp.getVoices(); u.voice = vs.find((v) => /en-IN/i.test(v.lang)) ?? vs.find((v) => /en-GB/i.test(v.lang)) ?? vs.find((v) => /^en/i.test(v.lang)) ?? null;
-    u.rate = 1; u.pitch = 1;
-    u.onboundary = (e) => setPct(Math.min(1, e.charIndex / clean.length));
-    u.onend = u.onerror = () => { setOn(false); setPct(0); };
-    setOn(true); setPct(0); sp.speak(u);
-  };
-  return (
-    <button className={clsx('epr-audio no-print', on && 'on')} onClick={play} title={on ? 'Stop the audio summary' : 'Play an audio summary of this chapter'}>
-      <span className="ic">{on ? <Pause size={13} /> : <Play size={13} />}</span>
-      <span className="lb">{on ? 'Playing' : 'Listen'}</span>
-      {on ? <span className="eq" aria-hidden><i /><i /><i /><i /></span> : <span className="dur">~{Math.max(1, Math.round(text.split(/\s+/).length / 150))} min</span>}
-      {on && <span className="bar" style={{ width: `${pct * 100}%` }} />}
-    </button>
   );
 }
 
