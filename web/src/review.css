@@ -1330,3 +1330,22 @@
 .epr-live-chip { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 150; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 600; box-shadow: var(--shadow-lg); pointer-events: none; }
 .epr-live-chip i { width: 8px; height: 8px; border-radius: 50%; }
 @media print { .epr-live, .epr-live-chip { display: none !important; } }
+
+/* narration player — docked bottom bar */
+.epr-narr { position: fixed; z-index: 150; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); background: var(--card, #fff); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.epr-narr button { display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); border-radius: 8px; padding: 4px 6px; }
+.epr-narr button:hover:not(:disabled) { color: var(--ink); background: var(--line); }
+.epr-narr button:disabled { opacity: .4; }
+.epr-narr-top { display: flex; align-items: center; gap: 8px; }
+.epr-narr-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.epr-narr-t b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.epr-narr-t span { font-size: 11px; color: var(--ink-3); }
+.epr-narr-tabs { display: flex; gap: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+.epr-narr-tabs button { font-size: 11px; border-radius: 999px; padding: 2px 8px; }
+.epr-narr-tabs button.on { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+.epr-narr-ctl { display: flex; align-items: center; gap: 6px; }
+.epr-narr-ctl audio { flex: 1; min-width: 0; height: 36px; }
+.epr-narr-list { max-height: 40vh; overflow: auto; border-top: 1px solid var(--line); padding-top: 6px; }
+.epr-narr-sec { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin: 8px 4px 2px; }
+.epr-narr-list button { width: 100%; justify-content: space-between; font-size: 12px; }
+.epr-narr-list button.on { color: var(--accent); font-weight: 600; }

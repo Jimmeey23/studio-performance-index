@@ -25,7 +25,8 @@ import { generateInsights, rulesInsights } from './report/insights.js';
 import { buildReview, writeGlance, writeSection, reviewContext, reviewDefinitions, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
 import { attachVideo, enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
-import { streamTo } from './report/blobStore.js';
+import { streamTo, blobConfigured } from './report/blobStore.js';
+import { narrationFor } from './report/narration.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
 import { SOURCES } from './sources.js';
@@ -107,6 +108,27 @@ app.get('/api/public/review/:id/video/:part', (req, res) => {
     res.sendFile(f, { headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600' } });
   }).catch((e) => { log.warn({ err: (e as Error).message }, 'video stream failed'); if (!res.headersSent) res.status(502).end(); });
 });
+/* Pre-recorded narration (Blomp): manifest + per-clip audio stream. Public with the review link, like the video. */
+const narrOf = async (id: string) => {
+  const s = await reviewStore.byIdPublic(id); if (!s) return undefined;
+  const r = s.review as { scope?: string; period?: { start?: string } };
+  return narrationFor(r.scope ?? '', r.period?.start ?? '');
+};
+app.get('/api/public/review/:id/narration', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Not found' });
+  const n = blobConfigured() ? await narrOf(id) : undefined;
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ tracks: n ? n.tracks.map((t) => ({ id: t.id, title: t.title, clips: t.clips.map(({ id, section, seconds }) => ({ id, section, seconds })) })) : [] });
+}));
+app.get('/api/public/review/:id/narration/:track/:n', (req, res) => {
+  const id = String(req.params.id); const tr = String(req.params.track); const i = Number(req.params.n);
+  if (!/^rv_[a-z0-9-]{6,}$/i.test(id) || !Number.isInteger(i)) return res.status(404).end();
+  narrOf(id).then((n) => {
+    const clip = n?.tracks.find((t) => t.id === tr)?.clips[i];
+    if (!n || !clip || !blobConfigured()) { res.status(404).end(); return; }
+    return streamTo(`${n.root}/${clip.file}`, req.headers.range, res, 'audio/mpeg');
+  }).catch((e) => { log.warn({ err: (e as Error).message }, 'narration stream failed'); if (!res.headersSent) res.status(502).end(); });
+});
 /* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
 app.get('/api/public/review/:id', wrap(async (req, res) => {
   const id = String(req.params.id);
@@ -119,8 +141,8 @@ app.get('/api/public/review/:id', wrap(async (req, res) => {
 /* Live presenter channel: the review's owner broadcasts what they do (video, scroll, clicks, inputs, pointer,
  * annotations) and every open copy of the report follows over SSE. In-memory, single instance. */
 type LiveEv = { t: string; at: number; seq: number; [k: string]: unknown };
-const LIVE_TYPES = new Set(['video', 'live', 'scroll', 'click', 'input', 'ptr', 'extras', 'key']);
-const SNAPSHOT = new Set(['video', 'live', 'scroll', 'extras', 'ptr']);   // replayed to late joiners
+const LIVE_TYPES = new Set(['video', 'narr', 'live', 'scroll', 'click', 'input', 'ptr', 'extras', 'key']);
+const SNAPSHOT = new Set(['video', 'narr', 'live', 'scroll', 'extras', 'ptr']);   // replayed to late joiners
 const liveSnap = new Map<string, Map<string, LiveEv>>();
 const liveSeq = new Map<string, number>();
 const vidSubs = new Map<string, Set<Response>>();
