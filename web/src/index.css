@@ -182,12 +182,26 @@ body { background:
 .panel-body { padding: 14px 20px 20px; }
 
 /* kpi cards */
-.kpi-card { border-radius: 18px; background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
-  box-shadow: 0 1px 2px rgb(16 17 20 / .04), 0 10px 28px -18px rgb(16 17 20 / .2); padding: 0 !important; }
-.kpi-card .kpi-inner { padding: 16px 18px 0; }
-.kpi-value { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; }
-.kpi-card .kpi-spark { margin-top: 10px; height: 46px; }
-.kpi-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent), 0 18px 36px -18px rgb(16 17 20 / .3); }
+.kpi-card { --kpi-tone: var(--accent); position: relative; isolation: isolate; border-radius: 18px; padding: 0 !important;
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--kpi-tone) 9%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface-2) 55%, var(--surface)));
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: 0 1px 0 rgb(255 255 255 / .5) inset, 0 1px 2px rgb(16 17 20 / .04), 0 12px 30px -20px rgb(16 17 20 / .28); }
+.kpi-card[data-tone="good"] { --kpi-tone: var(--good); }
+.kpi-card[data-tone="bad"] { --kpi-tone: var(--bad); }
+.kpi-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; border-radius: 18px 0 0 18px;
+  background: linear-gradient(180deg, var(--kpi-tone), color-mix(in srgb, var(--kpi-tone) 25%, transparent)); opacity: .85; }
+.kpi-card .kpi-inner { padding: 16px 18px 0 20px; }
+.kpi-card .kpi-label { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.kpi-card .kpi-icon { display: inline-flex; width: 30px; height: 30px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 10px;
+  color: var(--kpi-tone); background: color-mix(in srgb, var(--kpi-tone) 12%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kpi-tone) 22%, transparent); }
+.kpi-value { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.035em; color: var(--ink); }
+.kpi-card .kpi-foot { margin-top: 12px; padding-top: 10px; border-top: 1px dashed color-mix(in srgb, var(--line) 80%, transparent); }
+.kpi-card .kpi-spark { margin-top: 8px; height: 46px; margin-left: 2px; }
+.kpi-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--kpi-tone) 38%, var(--line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kpi-tone) 9%, transparent), 0 20px 40px -20px rgb(16 17 20 / .35); }
 .pill-good { background: color-mix(in srgb, var(--good) 12%, transparent); color: var(--good); }
 .pill-bad { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }
 .pill-flat { background: var(--surface-2); color: var(--ink-2); }

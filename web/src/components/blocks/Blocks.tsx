@@ -41,18 +41,18 @@ export function KpiCards({ result, metrics, series: seriesResult }: { result: Re
         const Icon = c.format === 'currency' ? IndianRupee : c.format === 'percent' ? Gauge : c.format === 'days' ? Timer : /client|member|lead/.test(c.key) ? Users : Activity;
         const pill = (x: number | null | undefined) => (x === null || x === undefined || x === 0 || pol === 0 ? 'pill-flat' : x * pol > 0 ? 'pill-good' : 'pill-bad');
         return (
-          <div key={c.key} onClick={req ? () => drill!(req) : undefined} title={req ? 'Click to see the records behind this number' : undefined} className={clsx('kpi-card card-in group relative flex flex-col overflow-hidden transition-all duration-200', req && 'cursor-pointer')} style={{ animationDelay: `${i * 50}ms` }}>
+          <div key={c.key} onClick={req ? () => drill!(req) : undefined} title={req ? 'Click to see the records behind this number' : undefined} data-tone={good === null ? undefined : good ? 'good' : 'bad'} className={clsx('kpi-card card-in group relative flex flex-col overflow-hidden transition-all duration-200', req && 'cursor-pointer')} style={{ animationDelay: `${i * 50}ms` }}>
             <div className="kpi-inner flex-1">
               <div className="flex items-center gap-2.5">
-                <span className="panel-tile !h-7 !w-7 !rounded-lg"><Icon size={14} /></span>
-                <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink-2">{c.label}</div>
+                <span className="kpi-icon"><Icon size={15} /></span>
+                <div className="kpi-label min-w-0 flex-1 truncate" title={c.label}>{c.label}</div>
                 {req ? <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent opacity-0 transition group-hover:opacity-100">records ↗</span>
                   : hasPeriod && last ? <span className="text-[10px] text-ink-3">{fmtPeriod(String(last.period), 'month')}</span> : null}
               </div>
-              <div className="kpi-value mt-3 text-[30px] leading-none tabular">
+              <div className="kpi-value mt-3.5 text-[32px] leading-none tabular">
                 <CountUp value={v} format={(n) => fmt(c.format === 'number' ? Math.round(n) : n, c.format, { compact: c.format === 'currency' && Math.abs(v) >= 1e6 })} />
               </div>
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <div className="kpi-foot flex flex-wrap items-center gap-1.5 text-[11px]">
                 {chg !== undefined && <span className={clsx('inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-semibold tabular', pill(chg))}>{arrow(chg)}{fmtChange(chg, c.format === 'percent')}</span>}
                 {chg !== undefined && <span className="whitespace-nowrap text-ink-3">{cmpLabel} {fmt(prev, c.format, { compact: true })}</span>}
                 {mom !== null && <span className={clsx('inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-medium tabular', pill(mom))}>{arrow(mom)}{fmtChange(mom, c.format === 'percent')} MoM</span>}

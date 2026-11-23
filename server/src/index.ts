@@ -597,7 +597,7 @@ app.listen(config.port, () => log.info(`Physique 57 BI listening on http://local
  * remember Settings → Rebuild models.
  */
 loadAppConfig().catch((e) => log.warn({ err: (e as Error).message }, 'app config not loaded'));
-const REQUIRED_COLUMNS: Record<string, string[]> = { fct_new_clients: ['is_trial', 'is_new_client'], fct_sessions: ['session_title'] };
+const REQUIRED_COLUMNS: Record<string, string[]> = { fct_new_clients: ['is_trial', 'is_new_client'], fct_sessions: ['session_title'], fct_sales: ['is_first_purchase'] };
 (async () => {
   try {
     const db = await warehouse();
