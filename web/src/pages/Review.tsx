@@ -96,19 +96,63 @@ const RVideo = createContext<{ rid: string; available: boolean; videos: Record<s
   presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; time: number }) => void; remote: LiveSync | null } | null>(null);
 type LiveSync = { part: string; open: boolean; playing: boolean; time: number; at: number; seq: number };
 /* ── pre-recorded narration (Blomp): one Listen button at the top, a docked player with a section playlist ── */
-type NarrTrack = { id: string; title: string; clips: { id: string; section: string; seconds: number }[] };
+type NarrCue = { at: number; sec: string; terms: string[] };
+type NarrTrack = { id: string; title: string; clips: { id: string; section: string; seconds: number; home: string; cues: NarrCue[] }[] };
+/* guided focus: bring the chapter / metric / table being discussed into view and highlight it */
+const GUIDE_SEL = '.epr-kpi, .epr-card, table, .epr-spot, .epr-hero-lead, .epr-sum, li, p';
+const clearGuide = () => document.querySelectorAll('.epr-guide').forEach((x) => x.classList.remove('epr-guide'));
+function guideTo(cue: NarrCue) {
+  const sec = document.getElementById(`epr-${cue.sec}`); if (!sec) return;
+  let best: HTMLElement | null = null; let score = 0;
+  if (cue.terms.length) for (const el of sec.querySelectorAll<HTMLElement>(GUIDE_SEL)) {
+    const txt = (el.textContent ?? '').toLowerCase(); if (!txt || txt.length > 1500) continue;
+    const head = (el.querySelector('.epr-kpi-l, .epr-card-t, .epr-card-h, th')?.textContent ?? '').toLowerCase();
+    let sc = 0; cue.terms.forEach((t, i) => { const w = cue.terms.length - i; const lt = t.toLowerCase(); if (head.includes(lt)) sc += 3 * w; else if (txt.includes(lt)) sc += w; });
+    if (el.matches('.epr-kpi, .epr-card, table')) sc *= 1.5;
+    sc -= txt.length / 3000;
+    if (sc > score) { score = sc; best = el; }
+  }
+  clearGuide();
+  const target = best ?? sec;
+  if (best) best.classList.add('epr-guide');
+  target.scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' });
+}
 type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
 const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+/** Small headphones icon that starts the narration at the first clip about this chapter. */
+function NarrIcon({ sec }: { sec: string }) {
+  const c = useContext(RNarr);
+  const hit = c?.tracks.flatMap((t) => t.clips.map((x, n) => ({ t: t.id, n, x }))).filter((q) => q.x.home === sec) ?? [];
+  if (!hit.length) return null;
+  const secs = hit.reduce((a, q) => a + q.x.seconds, 0);
+  return <button className="epr-narr-ic no-print" title={`Listen to this chapter (${mmss(secs)})`}
+    onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('narr:play', { detail: { track: hit[0].t, n: hit[0].n } })); }}>
+    <Headphones size={13} /></button>;
+}
 function NarrationPlayer() {
   const c = useContext(RNarr);
   const [open, setOpen] = useState(false); const [ti, setTi] = useState(0); const [n, setN] = useState(0);
   const [list, setList] = useState(false); const [blocked, setBlocked] = useState(false);
+  const [guide, setGuide] = useState(true); const cueRef = useRef(-1);
   const aref = useRef<HTMLAudioElement>(null); const autoNext = useRef(false);
   const presenter = !!c?.presenter; const tracks = c?.tracks ?? [];
   const track = tracks[ti];
   const send = (o = open, t = ti, i = n) => { const el = aref.current; if (presenter && c && tracks[t]) c.send({ open: o, track: tracks[t].id, n: i, playing: o && !!el && !el.paused, time: el?.currentTime ?? 0 }); };
-  const go = (t: number, i: number, play = true) => { setTi(t); setN(i); autoNext.current = play; };
+  const go = (t: number, i: number, play = true) => { setTi(t); setN(i); autoNext.current = play; cueRef.current = -1; };
+  // chapter icons start playback here
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent<{ track: string; n: number }>).detail;
+      if (!presenter && c?.remote?.open) return;
+      setOpen(true); go(Math.max(0, tracks.findIndex((x) => x.id === d.track)), d.n); };
+    window.addEventListener('narr:play', on); return () => window.removeEventListener('narr:play', on);
+  });
+  useEffect(() => clearGuide, []);
+  const onTime = (el: HTMLAudioElement) => {
+    const cues = tracks[ti]?.clips[n]?.cues ?? []; if (!guide || !cues.length) return;
+    let i = 0; for (let k = 0; k < cues.length; k++) if (el.currentTime >= cues[k].at) i = k;
+    if (i !== cueRef.current) { cueRef.current = i; guideTo(cues[i]); }
+  };
   // presenter: announce clip changes
   useEffect(() => { if (open) send(); }, [ti, n]); // eslint-disable-line react-hooks/exhaustive-deps
   // viewers: follow the presenter
@@ -133,7 +177,7 @@ function NarrationPlayer() {
   const total = track.clips.reduce((a, x) => a + x.seconds, 0);
   const done = track.clips.slice(0, n).reduce((a, x) => a + x.seconds, 0);
   const sections = [...new Set(track.clips.map((x) => x.section))];
-  const close = () => { aref.current?.pause(); setOpen(false); send(false); };
+  const close = () => { aref.current?.pause(); setOpen(false); send(false); clearGuide(); };
   return <>
     <button className="epr-vid ready no-print" onClick={() => { setOpen(true); autoNext.current = presenter; setTimeout(() => send(true), 0); }} title="Listen to the narrated report">
       <span className="ic"><Headphones size={12} /></span>Listen · {mmss(total)}</button>
@@ -145,6 +189,7 @@ function NarrationPlayer() {
           <span>{track.title} · part {n + 1} of {track.clips.length} · {mmss(done)} / {mmss(total)}</span>
         </div>
         {tracks.length > 1 && <div className="epr-narr-tabs">{tracks.map((t, i) => <button key={t.id} className={clsx(i === ti && 'on')} disabled={!presenter && !!r?.open} onClick={() => go(i, 0)}>{t.id === 'recs' ? 'Actions' : 'Report'}</button>)}</div>}
+        <button className={clsx(guide && 'on')} onClick={() => { setGuide((v) => !v); clearGuide(); cueRef.current = -1; }} title={guide ? 'Guided focus on: the report follows the narration' : 'Guided focus off'}><Target size={15} /></button>
         <button onClick={() => setList((v) => !v)} title="Sections"><ScrollText size={15} /></button>
         <button onClick={close} title="Close"><X size={15} /></button>
       </div>
@@ -152,7 +197,7 @@ function NarrationPlayer() {
         <button disabled={n === 0} onClick={() => go(ti, n - 1)} title="Previous part"><SkipBack size={15} /></button>
         <audio ref={aref} key={`${track.id}-${n}`} src={`/api/public/review/${c.rid}/narration/${track.id}/${n}`} controls preload="auto"
           onLoadedMetadata={(e) => { if (presenter && autoNext.current) e.currentTarget.play().catch(() => {}); else syncViewer(); }}
-          onPlay={() => send()} onPause={() => send()} onSeeked={() => send()}
+          onPlay={(e) => { send(); onTime(e.currentTarget); }} onPause={() => send()} onSeeked={(e) => { send(); cueRef.current = -1; onTime(e.currentTarget); }} onTimeUpdate={(e) => onTime(e.currentTarget)}
           onEnded={() => { if (presenter || !r?.open) { if (n + 1 < track.clips.length) go(ti, n + 1); else send(); } }} />
         <button disabled={n + 1 >= track.clips.length} onClick={() => go(ti, n + 1)} title="Next part"><SkipForward size={15} /></button>
       </div>
@@ -1270,6 +1315,7 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
       <div className="epr-hero-top">
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
+        <NarrIcon sec={vid ?? 'closing'} />
         {vid === 'glance' && <><VideoExplainer part="glance" title={title} /><NarrationPlayer /></>}
         {right}
       </div>
