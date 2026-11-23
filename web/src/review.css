@@ -1349,3 +1349,8 @@
 .epr-narr-sec { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin: 8px 4px 2px; }
 .epr-narr-list button { width: 100%; justify-content: space-between; font-size: 12px; }
 .epr-narr-list button.on { color: var(--accent); font-weight: 600; }
+.epr-narr button.on { color: var(--accent); }
+.epr-narr-ic { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-2); background: transparent; }
+.epr-narr-ic:hover { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.epr-guide { position: relative; z-index: 2; outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 14%, transparent); transition: outline-color .3s, box-shadow .3s; animation: epr-guide-in .6s ease-out; }
+@keyframes epr-guide-in { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); } }

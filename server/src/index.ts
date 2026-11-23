@@ -118,7 +118,7 @@ app.get('/api/public/review/:id/narration', wrap(async (req, res) => {
   const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Not found' });
   const n = blobConfigured() ? await narrOf(id) : undefined;
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ tracks: n ? n.tracks.map((t) => ({ id: t.id, title: t.title, clips: t.clips.map(({ id, section, seconds }) => ({ id, section, seconds })) })) : [] });
+  res.json({ tracks: n ? n.tracks.map((t) => ({ id: t.id, title: t.title, clips: t.clips.map(({ file: _f, ...c }) => c) })) : [] });
 }));
 app.get('/api/public/review/:id/narration/:track/:n', (req, res) => {
   const id = String(req.params.id); const tr = String(req.params.track); const i = Number(req.params.n);
