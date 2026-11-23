@@ -33,6 +33,16 @@ function scribble(x: number, y: number, w: number, h: number, round: boolean, se
   return `M${x - p + r(1)},${y - p} L${x + w + p},${y - p + r(2)} L${x + w + p + r(3)},${y + h + p} L${x - p},${y + h + p + r(4)} L${x - p + r(5)},${y - p - 4}`;
 }
 
+/** Box of the first rendered line of text inside el, so the underline sits under the words, not across them. */
+function firstLine(el: HTMLElement): DOMRect | null {
+  const r = document.createRange(); r.selectNodeContents(el);
+  const rs = [...r.getClientRects()].filter((x) => x.width > 2 && x.height > 2);
+  if (!rs.length) return null;
+  const top = rs[0].top; const line = rs.filter((x) => Math.abs(x.top - top) < 4);
+  const left = Math.min(...line.map((x) => x.left)); const right = Math.max(...line.map((x) => x.right)); const bottom = Math.max(...line.map((x) => x.bottom));
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
 export function GuideOverlay() {
   const [ann, setAnn] = useState<Ann>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -79,7 +89,8 @@ export function GuideOverlay() {
         <path className="gx-draw gx-ink" d={`M${rect.left - 6},${rect.top - 2} L${rect.left - 14},${rect.top - 2} L${rect.left - 14},${rect.bottom + 2} L${rect.left - 6},${rect.bottom + 2}`} pathLength={1} />
         <path className="gx-draw gx-ink thin" d={`M${rect.left},${rect.bottom + 3} Q${rect.left + rect.width / 2},${rect.bottom + 7} ${rect.right},${rect.bottom + 2}`} pathLength={1} />
       </>}
-      {kind === 'mark' && <path className="gx-draw gx-marker" d={`M${rect.left},${Math.min(rect.bottom, rect.top + 26) - 4} Q${rect.left + rect.width / 2},${Math.min(rect.bottom, rect.top + 26)} ${Math.min(rect.right, rect.left + 520)},${Math.min(rect.bottom, rect.top + 26) - 5}`} pathLength={1} />}
+      {kind === 'mark' && (() => { const ln = firstLine(ann.el) ?? rect; const y = ln.bottom + 4; const x2 = Math.min(ln.right, ln.left + 520);
+        return <path className="gx-draw gx-marker" d={`M${ln.left},${y} Q${(ln.left + x2) / 2},${y + 3} ${x2},${y - 1}`} pathLength={1} />; })()}
       {visible && <g className="gx-arrow">
         <path className="gx-draw gx-ink thin" d={`M${ax},${ay} Q${mx},${my} ${tx},${ty}`} pathLength={1} />
         <path className="gx-head" d={`M${ah(0.45)} L${tx},${ty} L${ah(-0.45)}`} />
