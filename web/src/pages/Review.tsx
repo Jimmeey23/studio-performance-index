@@ -12,7 +12,7 @@ import clsx from 'clsx';
 import * as EX from '../lib/exportReport';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
-  Link2, Loader2, Play, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Download, Copy, FileText, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X,
+  Link2, Loader2, Play, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Download, Copy, FileText, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X, Headphones, SkipBack, SkipForward,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useMe } from '../App';
@@ -95,6 +95,75 @@ type VideoState = { status: 'queued' | 'processing' | 'ready' | 'failed'; step?:
 const RVideo = createContext<{ rid: string; available: boolean; videos: Record<string, VideoState>; retry: ((part: string) => void) | null; upload: ((part: string, f: File) => Promise<void>) | null;
   presenter: boolean; send: (st: { part: string; open: boolean; playing: boolean; time: number }) => void; remote: LiveSync | null } | null>(null);
 type LiveSync = { part: string; open: boolean; playing: boolean; time: number; at: number; seq: number };
+/* ── pre-recorded narration (Blomp): one Listen button at the top, a docked player with a section playlist ── */
+type NarrTrack = { id: string; title: string; clips: { id: string; section: string; seconds: number }[] };
+type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
+const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function NarrationPlayer() {
+  const c = useContext(RNarr);
+  const [open, setOpen] = useState(false); const [ti, setTi] = useState(0); const [n, setN] = useState(0);
+  const [list, setList] = useState(false); const [blocked, setBlocked] = useState(false);
+  const aref = useRef<HTMLAudioElement>(null); const autoNext = useRef(false);
+  const presenter = !!c?.presenter; const tracks = c?.tracks ?? [];
+  const track = tracks[ti];
+  const send = (o = open, t = ti, i = n) => { const el = aref.current; if (presenter && c && tracks[t]) c.send({ open: o, track: tracks[t].id, n: i, playing: o && !!el && !el.paused, time: el?.currentTime ?? 0 }); };
+  const go = (t: number, i: number, play = true) => { setTi(t); setN(i); autoNext.current = play; };
+  // presenter: announce clip changes
+  useEffect(() => { if (open) send(); }, [ti, n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // viewers: follow the presenter
+  const r = c?.remote;
+  useEffect(() => {
+    if (presenter || !r) return;
+    setOpen(r.open); if (!r.open) { aref.current?.pause(); return; }
+    const t = Math.max(0, tracks.findIndex((x) => x.id === r.track));
+    if (t !== ti || r.n !== n) { setTi(t); setN(r.n); }
+  }, [r?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+  const syncViewer = () => {
+    const el = aref.current; if (presenter || !r || !r.open || !el) return;
+    if (tracks[ti]?.id !== r.track || n !== r.n) return;
+    const target = r.time + (r.playing ? (Date.now() - r.at) / 1000 : 0);
+    if (Math.abs(el.currentTime - target) > 1.2) el.currentTime = target;
+    if (r.playing && el.paused) el.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
+    if (!r.playing && !el.paused) el.pause();
+  };
+  useEffect(syncViewer, [r?.seq, ti, n, open]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!c || !tracks.length || !track) return null;
+  const clip = track.clips[n];
+  const total = track.clips.reduce((a, x) => a + x.seconds, 0);
+  const done = track.clips.slice(0, n).reduce((a, x) => a + x.seconds, 0);
+  const sections = [...new Set(track.clips.map((x) => x.section))];
+  const close = () => { aref.current?.pause(); setOpen(false); send(false); };
+  return <>
+    <button className="epr-vid ready no-print" onClick={() => { setOpen(true); autoNext.current = presenter; setTimeout(() => send(true), 0); }} title="Listen to the narrated report">
+      <span className="ic"><Headphones size={12} /></span>Listen · {mmss(total)}</button>
+    {open && createPortal(<div className="epr-narr no-print" data-live-skip>
+      <div className="epr-narr-top">
+        <Headphones size={15} />
+        <div className="epr-narr-t">
+          <b>{clip?.section}</b>
+          <span>{track.title} · part {n + 1} of {track.clips.length} · {mmss(done)} / {mmss(total)}</span>
+        </div>
+        {tracks.length > 1 && <div className="epr-narr-tabs">{tracks.map((t, i) => <button key={t.id} className={clsx(i === ti && 'on')} disabled={!presenter && !!r?.open} onClick={() => go(i, 0)}>{t.id === 'recs' ? 'Actions' : 'Report'}</button>)}</div>}
+        <button onClick={() => setList((v) => !v)} title="Sections"><ScrollText size={15} /></button>
+        <button onClick={close} title="Close"><X size={15} /></button>
+      </div>
+      <div className="epr-narr-ctl">
+        <button disabled={n === 0} onClick={() => go(ti, n - 1)} title="Previous part"><SkipBack size={15} /></button>
+        <audio ref={aref} key={`${track.id}-${n}`} src={`/api/public/review/${c.rid}/narration/${track.id}/${n}`} controls preload="auto"
+          onLoadedMetadata={(e) => { if (presenter && autoNext.current) e.currentTarget.play().catch(() => {}); else syncViewer(); }}
+          onPlay={() => send()} onPause={() => send()} onSeeked={() => send()}
+          onEnded={() => { if (presenter || !r?.open) { if (n + 1 < track.clips.length) go(ti, n + 1); else send(); } }} />
+        <button disabled={n + 1 >= track.clips.length} onClick={() => go(ti, n + 1)} title="Next part"><SkipForward size={15} /></button>
+      </div>
+      {blocked && <button className="epr-small" onClick={() => aref.current?.play().then(() => setBlocked(false)).catch(() => {})}>🔈 Tap to hear the presenter</button>}
+      {!presenter && r?.open && <span className="epr-small">Following the presenter</span>}
+      {list && <div className="epr-narr-list">{sections.map((sec) => <div key={sec}><div className="epr-narr-sec">{sec}</div>
+        {track.clips.map((x, i) => x.section === sec && <button key={x.id} className={clsx(i === n && 'on')} disabled={!presenter && !!r?.open} onClick={() => go(ti, i)}>
+          <span>Part {i + 1}</span><span>{mmss(x.seconds)}</span></button>)}</div>)}</div>}
+    </div>, document.body)}
+  </>;
+}
 function VideoExplainer({ part, title }: { part: string; title: string }) {
   const c = useContext(RVideo); const [open, setOpenRaw] = useState(false); const [up, setUp] = useState(false);
   const vref = useRef<HTMLVideoElement>(null); const [muted, setMuted] = useState(false);
@@ -629,6 +698,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [askOpen, setAskOpen] = useState(false);
   const [spkOpen, setSpkOpen] = useState(false); const [viewOpen, setViewOpen] = useState(false); const [expOpen, setExpOpen] = useState(false); const [expMsg, setExpMsg] = useState<string | null>(null);
   const [spkNotes, setSpkNotes] = useState<Record<string, string>>({});
+  const [narr, setNarr] = useState<NarrTrack[]>([]);
+  const [narrRemote, setNarrRemote] = useState<NarrSync | null>(null);
   const [vids, setVids] = useState<{ available: boolean; videos: Record<string, VideoState> }>({ available: false, videos: {} });
   const vidAsked = useRef<string | null>(null);
   const [tool, setTool] = useState<Tool>('none');
@@ -781,6 +852,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     };
     load(); return () => { live = false; clearTimeout(t); };
   }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!rv?.id) return; api<{ tracks: NarrTrack[] }>(`/api/public/review/${rv.id}/narration`).then((q) => setNarr(q.tracks)).catch(() => {}); }, [rv?.id]);
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
 
   /* ── live presenter: the owner's screen drives every viewer's copy of this report ── */
@@ -861,6 +933,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       let ev: Record<string, unknown>; try { ev = JSON.parse(m.data); } catch { return; }
       switch (ev.t) {
         case 'video': setRemote(ev as unknown as LiveSync); break;
+        case 'narr': setNarrRemote(ev as unknown as NarrSync); break;
         case 'live': setFollowing(!!ev.on); if (!ev.on) setRPtr(null); break;
         case 'scroll': {
           const sc = scroller.current; if (!sc) break;
@@ -1002,7 +1075,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
-            <RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
+            <RNarr.Provider value={{ rid: rv.id, tracks: narr, presenter, send: (st) => { if (rv && presenter) post({ t: 'narr', ...st }); }, remote: narrRemote }}><RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               <div className="epr-main">
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
                 {visible.has('glance') && <Glance rv={rv} ai={ai} gl={gl} P={P} base={base} live={fresh.has('glance')} busy={busy.has('glance')} canAi={!!me?.aiConfigured} onRewrite={() => writePart(rv.id, 'glance', true)} jump={jump} />}
@@ -1012,7 +1085,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
                 {!building && !!saved?.definitions?.length && <Definitions defs={saved.definitions} />}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
-            </RDrill.Provider></RBase.Provider></RVideo.Provider>
+            </RDrill.Provider></RBase.Provider></RVideo.Provider></RNarr.Provider>
           )}
         </div>
       </div>
@@ -1197,7 +1270,7 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
       <div className="epr-hero-top">
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
-        {vid === 'glance' && <VideoExplainer part="glance" title={title} />}
+        {vid === 'glance' && <><VideoExplainer part="glance" title={title} /><NarrationPlayer /></>}
         {right}
       </div>
       <div className="epr-hero-body">
