@@ -1361,13 +1361,13 @@
 .gx-svg { position: absolute; inset: 0; overflow: visible; }
 .gx-ink { fill: none; stroke: #e5484d; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .gx-ink.thin { stroke-width: 2.2; }
-.gx-marker { fill: none; stroke: color-mix(in srgb, #ffd43b 75%, transparent); stroke-width: 14; stroke-linecap: round; mix-blend-mode: multiply; }
+.gx-marker { fill: none; stroke: #e5484d; stroke-width: 2.5; stroke-linecap: round; }
 .gx-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: gx-draw .7s cubic-bezier(.6,.05,.3,1) forwards; }
 .gx-arrow .gx-draw { animation-delay: .45s; animation-duration: .5s; }
 .gx-head { fill: none; stroke: #e5484d; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; animation: gx-fade .2s .9s forwards; }
 @keyframes gx-draw { to { stroke-dashoffset: 0; } }
 @keyframes gx-fade { to { opacity: 1; } }
-.gx-rowfill { position: absolute; background: color-mix(in srgb, #ffd43b 30%, transparent); border-radius: 4px; transform-origin: left; animation: gx-sweep .5s ease-out both; }
+.gx-rowfill { position: absolute; background: color-mix(in srgb, #ffd43b 16%, transparent); border-radius: 4px; transform-origin: left; animation: gx-sweep .5s ease-out both; }
 @keyframes gx-sweep { from { transform: scaleX(0); } }
 .gx-badge { position: absolute; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.2); animation: gx-pop .45s .55s cubic-bezier(.3,1.6,.5,1) both; }
 .gx-badge.up { background: #12a150; } .gx-badge.down { background: #e5484d; } .gx-badge.flat { background: var(--accent); }
