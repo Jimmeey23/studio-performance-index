@@ -1515,3 +1515,14 @@ table.xb-ar-k { width: 100%; border-collapse: collapse; display: table; }
 .xb-ins li > span { font-size: 10.5px; font-weight: 600; background: var(--ink-2); }
 .xb-note { font-size: 10.5px !important; color: var(--ink-3) !important; }
 .xb-logo { display: block; height: 52px; width: auto; margin-bottom: 12px; }
+
+/* report videos (MediaPlaylist) */
+.epr-media-btn .ic { background: linear-gradient(135deg, #6ecff6, var(--accent)); }
+.epr-media { display: flex; flex-direction: column; gap: 10px; }
+.epr-media-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-3); margin-left: auto; }
+.epr-media-live i { width: 8px; height: 8px; border-radius: 50%; background: #e5484d; animation: ro-wave 1.2s infinite; }
+.epr-media-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.epr-media-list button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.epr-media-list button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.epr-media-list button:disabled:not(.on) { opacity: .55; }
+.epr-media-unmute { align-self: center; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; border-radius: 999px; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
