@@ -391,8 +391,8 @@ export const METRICS: Metric[] = [
     description: 'Members in the New sheet whose "Is New" value contains "new" (e.g. New - Trial Class, New - Hosted Class), by first-visit date.' }),
   m({ id: 'converted_clients', label: 'Converted clients', model: 'new_clients', sql: 'count(*) filter (where is_converted)', format: 'number', additive: true, higherIsBetter: true,
     description: 'New clients with Conversion Status = Converted (bought after trial).' }),
-  m({ id: 'conversion_rate', label: 'Trial→paid conversion', model: 'new_clients', sql: 'count(*) filter (where is_converted) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
-    description: 'Converted ÷ new clients, by first-visit cohort.',
+  m({ id: 'conversion_rate', label: 'Newcomer conversion (first visit → paid)', model: 'new_clients', sql: 'count(*) filter (where is_converted) / nullif(count(*), 0)', format: 'percent', higherIsBetter: true,
+    description: 'New clients who went on to buy ÷ all new clients, by first-visit cohort (Day End "New" sheet). Not the lead funnel: lead trial→member uses CRM leads by lead date.',
     caveat: 'Recent cohorts are still maturing — conversion for the last 30–60 days will rise.' }),
   m({ id: 'retained_clients', label: 'Retained clients', model: 'new_clients', sql: 'count(*) filter (where is_retained)', format: 'number', additive: true, higherIsBetter: true,
     description: 'New clients with Retention Status = Retained.' }),
@@ -455,7 +455,9 @@ export const METRICS: Metric[] = [
 
   // ── Memberships ──────────────────────────────────────────────────────────
   m({ id: 'memberships_expiring', label: 'Memberships ending', model: 'memberships', sql: 'count(*)', format: 'number', additive: true,
-    description: 'Membership instances whose end date falls in the period. For renewal rates use the renewal analysis.' }),
+    description: 'Membership instances whose end date falls in the period, whatever their status. Renewal rate counts only those marked Renewed or Lapsed; the rest are shown as "other status".' }),
+  m({ id: 'memberships_other_status', label: 'Ending memberships, other status', model: 'memberships', sql: "count(*) filter (where status is null or status not in ('Renewed', 'Lapsed'))", format: 'number', additive: true,
+    description: 'Memberships ending in the period that are neither Renewed nor Lapsed in the Lapsed sheet (e.g. still active, frozen, transferred or not yet resolved). Memberships ending = Renewed + Lapsed + other status.' }),
   m({ id: 'members_expiring', label: 'Members with an expiry', model: 'memberships', sql: 'count(distinct member_id)', format: 'number',
     description: 'Distinct members with a membership ending in the period.' }),
   m({ id: 'expiring_value', label: 'Value of ending memberships', model: 'memberships', sql: 'sum(coalesce(amount_paid, 0))', format: 'currency', additive: true,

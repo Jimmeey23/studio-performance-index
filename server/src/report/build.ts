@@ -399,7 +399,7 @@ export async function buildReport(raw: unknown): Promise<Report> {
   const ren = await executeTool('renewal_analysis', { start: req.start, end: req.end, group_by: 'none', ...L }).catch(() => ({ result: undefined }));
   if (ren.result) results.push(ren.result);
   await add({ id: 'churn', kicker: kick(), title: 'Lapsed & Membership Churn', icon: 'UserMinus', summary: 'Recurring memberships ending in the period — renewals, lapses and value at stake (zero-value and non-recurring memberships excluded).',
-    kpiIds: ['memberships_expiring', 'memberships_renewed_flag', 'sheet_renewal_rate', 'churn_rate', 'lapsed_memberships', 'lapsed_value', 'expiring_value', 'members_expiring'],
+    kpiIds: ['memberships_expiring', 'memberships_renewed_flag', 'lapsed_memberships', 'memberships_other_status', 'sheet_renewal_rate', 'churn_rate', 'lapsed_value', 'expiring_value', 'members_expiring'],
     charts: [await trend(ctx, 'Renewal vs churn rate — 14 months', ['sheet_renewal_rate', 'churn_rate'], { chart: 'line' }), await trend(ctx, 'Lapsed vs renewed memberships — 14 months', ['lapsed_memberships', 'memberships_renewed_flag'], { chart: 'stacked_bar' })],
     tables: [await table(ctx, 'By membership', ['memberships_expiring', 'sheet_renewal_rate', 'churn_rate', 'lapsed_value'], ['membership'], { limit: 10 }),
       await table(ctx, 'By product family', ['memberships_expiring', 'sheet_renewal_rate', 'lapsed_value'], ['product_family'], { limit: 6 }),
