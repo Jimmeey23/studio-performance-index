@@ -11,6 +11,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import * as EX from '../lib/exportReport';
+import { collectReadouts, readoutCsv, readoutJson, readoutMarkdown } from '../lib/readout';
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Check, Filter, Flag, Lightbulb,
   Link2, Loader2, Play, ChevronDown, MessageSquare, Pin, ScrollText, SlidersHorizontal, BookOpenText, ArrowLeft, ArrowRight, Pencil, PenLine, Printer, Download, Copy, FileText, Minus, RefreshCw, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Wand2, X, Headphones, SkipBack, SkipForward,
@@ -1136,6 +1137,17 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
                   ['Markdown', '.md — for Notion, GitHub', (r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.md`, EX.toMarkdown(r, t), 'text/markdown'), FileText],
                   ['JSON', 'Raw data and commentary', (_r: HTMLElement, t: string) => EX.download(`${EX.slug(t)}.json`, JSON.stringify(saved, null, 2), 'application/json'), FileText],
                 ] as const).map(([label, sub, fn, I]) => <button key={label} className="epr-exp-i" onClick={() => runExport(label, fn)}><I size={14} /><span><b>{label}</b><em>{sub}</em></span></button>)}
+                <div className="epr-pop-l">Readout script (for recording clips)</div>
+                {([
+                  ['Script', '.md — every paragraph with its clip id', 'md'],
+                  ['Spreadsheet', '.csv — id, chapter, file name, text', 'csv'],
+                  ['JSON', 'Blocks with ids and text hashes', 'json'],
+                ] as const).map(([label, sub, f]) => <button key={f} className="epr-exp-i" onClick={() => runExport(`Readout ${label}`, (r, t) => {
+                  const rs = collectReadouts(r).map(({ el: _el, ...x }) => x); const name = `${EX.slug(t)}-readout`;
+                  if (f === 'md') EX.download(`${name}.md`, readoutMarkdown(rs, t), 'text/markdown');
+                  else if (f === 'csv') EX.download(`${name}.csv`, '\ufeff' + readoutCsv(rs), 'text/csv;charset=utf-8');
+                  else EX.download(`${name}.json`, readoutJson(rs, { review: rv.id, scope: rv.scope, period: rv.period.label }), 'application/json');
+                })}><Headphones size={14} /><span><b>{label}</b><em>{sub}</em></span></button>)}
                 <div className="epr-pop-l">Copy</div>
                 <button className="epr-exp-i" onClick={() => runExport('Copied — paste into Docs, Word or email', (r, t) => EX.copyRich(r, t), true)}><Copy size={14} /><span><b>Formatted</b><em>Rich text with tables</em></span></button>
                 <button className="epr-exp-i" onClick={() => runExport('Copied as Markdown', (r, t) => EX.copyText(EX.toMarkdown(r, t)), true)}><Copy size={14} /><span><b>Markdown</b><em>For Notion, Slack, GitHub</em></span></button>
