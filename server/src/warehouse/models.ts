@@ -391,22 +391,36 @@ export const MODELS: ModelDef[] = [
   {
     name: 'fct_ad_spend',
     grain: 'One row per date × campaign × ad set × ad × platform',
-    description: 'Meta Ads daily delivery and cost. City inferred from campaign naming (MUM-/BLR-).',
+    description: 'Paid ads daily delivery and cost (Meta and Google Ads, see platform). City / studio inferred from campaign naming (MUM_/BLR-, Bandra, Kemps/Kwality …).',
     sourceOfTruth: '❖ PM - Leads ❖ › Meta_Daily_Data',
     raw: { x: 'raw_meta_ads' },
     optional: true,
+    // Accepts both the original Meta export (objective, adset_name, publisher) and the multi-platform layout
+    // (platform, campaign_type, adset_or_adgroup_name, row_key, purchase_value).
     sql: () => `
-      select try_cast(p57_ts({{x:date}}) as date) as ad_date, date_trunc('month', p57_ts({{x:date}}))::date as ad_month,
-        p57_txt({{x:campaign_id}}) as campaign_id, p57_txt({{x:campaign_name}}) as campaign, p57_txt({{x:objective}}) as objective,
-        p57_txt({{x:adset_name?}}) as adset, p57_txt({{x:ad_name?}}) as ad, p57_txt({{x:publisher?}}) as platform,
-        coalesce(p57_num({{x:impressions}}),0) as impressions, coalesce(p57_num({{x:reach}}),0) as reach,
-        coalesce(p57_num({{x:clicks}}),0) as clicks, coalesce(p57_num({{x:spend}}),0) as spend,
-        coalesce(p57_num({{x:leads}}),0) as ad_leads, coalesce(p57_num({{x:purchases}}),0) as ad_purchases,
-        coalesce(p57_num({{x:purchase_v?}}),0) as ad_purchase_value,
-        case when upper(p57_txt({{x:campaign_name}})) like 'MUM%' then 'Mumbai' when upper(p57_txt({{x:campaign_name}})) like 'BLR%' then 'Bengaluru' end as city,
-        p57_loc(case when p57_txt({{x:campaign_name}}) ilike '%bandra%' then 'Bandra' when p57_txt({{x:campaign_name}}) ilike '%kemps%' or p57_txt({{x:campaign_name}}) ilike '%kwality%' then 'Kwality'
-             when p57_txt({{x:campaign_name}}) ilike '%kenkere%' then 'Kenkere' when p57_txt({{x:campaign_name}}) ilike '%plash%' then 'Plash' when p57_txt({{x:campaign_name}}) ilike '%copper%' then 'Copper' end) as location
-      from raw_meta_ads where p57_ts({{x:date}}) is not null`,
+      with x as (
+        select try_cast(p57_ts({{x:date}}) as date) as ad_date,
+          p57_txt({{x:row_key?}}) as row_key,
+          p57_txt({{x:campaign_id}}) as campaign_id, p57_txt({{x:campaign_name}}) as campaign,
+          coalesce(p57_txt({{x:objective?}}), p57_txt({{x:campaign_type?}})) as objective,
+          coalesce(p57_txt({{x:adset_or_adgroup_name?}}), p57_txt({{x:adset_name?}})) as adset, p57_txt({{x:ad_name?}}) as ad,
+          coalesce(p57_txt({{x:platform?}}), p57_txt({{x:publisher?}})) as platform,
+          coalesce(p57_num({{x:impressions}}),0) as impressions, coalesce(p57_num({{x:reach?}}),0) as reach,
+          coalesce(p57_num({{x:clicks}}),0) as clicks, coalesce(p57_num({{x:spend}}),0) as spend,
+          coalesce(p57_num({{x:leads}}),0) as ad_leads, coalesce(p57_num({{x:purchases?}}),0) as ad_purchases,
+          coalesce(p57_num({{x:purchase_v?}}),0) as ad_purchase_value,
+          _row_num
+        from raw_meta_ads where p57_ts({{x:date}}) is not null
+      )
+      select ad_date, date_trunc('month', ad_date)::date as ad_month, campaign_id, campaign, objective, adset, ad, platform,
+        case when platform ilike '%google%' or platform ilike '%youtube%' then 'Google Ads' else 'Meta' end as ad_network,   -- Facebook / Instagram / Messenger / Audience Network = Meta
+        impressions, reach, clicks, spend, ad_leads, ad_purchases, ad_purchase_value,
+        case when upper(campaign) like 'MUM%' then 'Mumbai' when upper(campaign) like 'BLR%' then 'Bengaluru' end as city,
+        p57_loc(case when campaign ilike '%bandra%' or campaign ilike '%supreme%' then 'Bandra' when campaign ilike '%kemps%' or campaign ilike '%kwality%' then 'Kwality'
+             when campaign ilike '%kenkere%' then 'Kenkere' when campaign ilike '%plash%' then 'Plash' when campaign ilike '%copper%' then 'Copper' end) as location
+      from x
+      -- the sheet is appended by a sync job: keep one row per row_key (latest) when the key is present
+      qualify row_number() over (partition by coalesce(row_key, _row_num::varchar) order by _row_num desc) = 1`,
   },
   {
     name: 'fct_memberships',

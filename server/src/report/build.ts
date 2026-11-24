@@ -328,7 +328,7 @@ export async function buildReport(raw: unknown): Promise<Report> {
   const lk = await kpis(ctx, ['leads', 'lead_trials', 'lead_conversions']);
   const lv = (id: string) => lk.find((k) => k.id === id)?.value ?? null;
   await add({ id: 'leads', kicker: kick(), title: 'Lead & Funnel Health', icon: 'Megaphone', summary: 'Lead volume and quality, trial booking, lead conversion, pipeline hygiene and paid-media efficiency.',
-    kpiIds: ['leads', 'lead_trials', 'lead_to_trial_rate', 'lead_conversions', 'lead_conversion_rate', 'open_leads', 'ad_spend', 'cost_per_lead'],
+    kpiIds: ['leads', 'lead_trials', 'lead_to_trial_rate', 'lead_conversions', 'lead_conversion_rate', 'open_leads', 'ad_spend', 'meta_spend', 'google_ads_spend', 'cost_per_lead'],
     charts: [await trend(ctx, 'Leads by channel — 14 months', ['leads'], { chart: 'stacked_bar', dimension: 'channel' }), await mix(ctx, 'Lead mix by channel', 'leads', 'channel')],
     tables: [await table(ctx, 'Lead sources', ['leads', 'lead_trials', 'lead_conversions', 'lead_conversion_rate'], ['source'], { limit: 10 }),
       await table(ctx, 'Lead owners (associates)', ['leads', 'lead_trials', 'lead_conversions', 'lead_conversion_rate'], ['associate'], { limit: 8 }),
