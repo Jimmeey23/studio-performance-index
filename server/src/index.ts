@@ -27,6 +27,7 @@ import * as reviewStore from './report/reviewStore.js';
 import { attachVideo, enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
 import { streamTo, blobConfigured } from './report/blobStore.js';
 import { narrationFor } from './report/narration.js';
+import { readoutFor } from './report/readoutClips.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
 import { SOURCES } from './sources.js';
@@ -128,6 +129,27 @@ app.get('/api/public/review/:id/narration/:track/:n', (req, res) => {
     if (!n || !clip || !blobConfigured()) { res.status(404).end(); return; }
     return streamTo(`${n.root}/${clip.file}`, req.headers.range, res, 'audio/mpeg');
   }).catch((e) => { log.warn({ err: (e as Error).message }, 'narration stream failed'); if (!res.headersSent) res.status(502).end(); });
+});
+/* Per-paragraph readout clips (Blomp): [id, hash, seconds] list + per-block stream. Public with the review link. */
+const readoutOf = async (id: string) => {
+  const s = await reviewStore.byIdPublic(id); if (!s) return undefined;
+  const r = s.review as { scope?: string; period?: { start?: string } };
+  return readoutFor(r.scope ?? '', r.period?.start ?? '');
+};
+app.get('/api/public/review/:id/readout', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Not found' });
+  const r = blobConfigured() ? await readoutOf(id) : undefined;
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ clips: r ? r.clips.map(([bid, hash, , sec]) => [bid, hash, sec]) : [] });
+}));
+app.get('/api/public/review/:id/readout/:block', (req, res) => {
+  const id = String(req.params.id); const block = String(req.params.block);
+  if (!/^rv_[a-z0-9-]{6,}$/i.test(id) || !/^[a-z]+-[a-z]+-\d{2,3}$/.test(block)) return res.status(404).end();
+  readoutOf(id).then((r) => {
+    const clip = r?.clips.find((c) => c[0] === block);
+    if (!r || !clip || !blobConfigured()) { res.status(404).end(); return; }
+    return streamTo(`${r.root}/${clip[2]}`, req.headers.range, res, 'audio/mpeg');
+  }).catch((e) => { log.warn({ err: (e as Error).message }, 'readout stream failed'); if (!res.headersSent) res.status(502).end(); });
 });
 /* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
 app.get('/api/public/review/:id', wrap(async (req, res) => {

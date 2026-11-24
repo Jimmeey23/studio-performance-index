@@ -6,6 +6,7 @@
  */
 import { createPortal } from 'react-dom';
 import { GuideOverlay, showAnn } from '../components/report/GuideOverlay';
+import { ReadoutIcons } from '../components/report/ReadoutIcons';
 import { describe, interactive, locate, sectionPoint, sectionToViewport, setValue, type ElDesc } from '../lib/live';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -792,6 +793,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [spkOpen, setSpkOpen] = useState(false); const [viewOpen, setViewOpen] = useState(false); const [expOpen, setExpOpen] = useState(false); const [expMsg, setExpMsg] = useState<string | null>(null);
   const [spkNotes, setSpkNotes] = useState<Record<string, string>>({});
   const [narr, setNarr] = useState<NarrTrack[]>([]);
+  const [roClips, setRoClips] = useState<[string, string, number][]>([]);
   const [narrRemote, setNarrRemote] = useState<NarrSync | null>(null);
   const [vids, setVids] = useState<{ available: boolean; videos: Record<string, VideoState> }>({ available: false, videos: {} });
   const vidAsked = useRef<string | null>(null);
@@ -945,7 +947,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     };
     load(); return () => { live = false; clearTimeout(t); };
   }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!rv?.id) return; api<{ tracks: NarrTrack[] }>(`/api/public/review/${rv.id}/narration`).then((q) => setNarr(q.tracks)).catch(() => {}); }, [rv?.id]);
+  useEffect(() => { if (!rv?.id) return; api<{ tracks: NarrTrack[] }>(`/api/public/review/${rv.id}/narration`).then((q) => setNarr(q.tracks)).catch(() => {});
+    api<{ clips: [string, string, number][] }>(`/api/public/review/${rv.id}/readout`).then((q) => setRoClips(q.clips)).catch(() => {}); }, [rv?.id]);
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
 
   /* ── live presenter: the owner's screen drives every viewer's copy of this report ── */
@@ -1180,6 +1183,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
             <RNarr.Provider value={{ rid: rv.id, tracks: narr, presenter, send: (st) => { if (rv && presenter) post({ t: 'narr', ...st }); }, remote: narrRemote }}><RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
+              {!brief && !building && !!roClips.length && <ReadoutIcons rid={rv.id} clips={roClips} root={mainRef} />}
               <div className="epr-main">
                 {brief && !building ? <ExecBrief rv={rv} ai={ai} P={P} /> : <>
                 {visible.has('glance') && <Cover rv={rv} gl={gl} P={P} live={fresh.has('glance')} jump={jump} drill={drillApi} />}
@@ -1478,56 +1482,100 @@ const clip = (t: string | undefined, n: number) => { const x = (t ?? '').replace
 const firstSentences = (t: string | undefined, n: number) => (t ?? '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z₹0-9])/).slice(0, n).join(' ');
 function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
   const gl = ai?.glance;
-  // headline scorecard: cover KPIs first, then the glance cards, de-duplicated — eight tiles
-  const seen = new Set<string>();
-  const kpis = [...rv.cover.headlineKpis, ...rv.glance.cards, ...rv.scorecard].filter((k) => k.value !== null && !seen.has(k.id) && seen.add(k.id)).slice(0, 8);
+  const all = (() => { const seen = new Set<string>(); return [...rv.cover.headlineKpis, ...rv.glance.cards, ...rv.scorecard, ...rv.sections.flatMap((s) => s.kpis)].filter((k) => k.value !== null && !seen.has(k.id) && seen.add(k.id)); })();
+  const kpis = all.slice(0, 12);
   const delta = (k: Kpi, c: number | null) => <span className={clsx('xb-d', tone(k, c) > 0 ? 'good' : tone(k, c) < 0 ? 'bad' : 'flat')}>{c === null ? '—' : <>{c > 0 ? <ArrowUpRight size={11} /> : c < 0 ? <ArrowDownRight size={11} /> : null}{fmtDelta(c, k.format)}</>}</span>;
-  // chapter status: share of chapter KPIs moving the right way vs the previous period
+  // movers: biggest moves in the right / wrong direction vs the previous period (metrics with a known direction)
+  const dir = all.filter((k) => k.chg !== null && k.higherIsBetter !== undefined && isFinite(k.chg));
+  const gains = dir.filter((k) => tone(k, k.chg) > 0).sort((a, b) => Math.abs(b.chg!) - Math.abs(a.chg!)).slice(0, 4);
+  const drops = dir.filter((k) => tone(k, k.chg) < 0).sort((a, b) => Math.abs(b.chg!) - Math.abs(a.chg!)).slice(0, 4);
+  // sustained trends: three consecutive periods moving the wrong / right way
+  const trend = (k: Kpi) => { const v = (k.series ?? []).filter((x): x is number => x !== null).slice(-3); if (v.length < 3) return 0; const up = v[2] > v[1] && v[1] > v[0], dn = v[2] < v[1] && v[1] < v[0]; return up ? (k.higherIsBetter ? 1 : -1) : dn ? (k.higherIsBetter ? -1 : 1) : 0; };
+  const slipping = dir.filter((k) => trend(k) < 0).slice(0, 5); const building = dir.filter((k) => trend(k) > 0).slice(0, 5);
+  const improving = dir.filter((k) => tone(k, k.chg) > 0).length; const worsening = dir.filter((k) => tone(k, k.chg) < 0).length;
   const rows = rv.sections.map((s) => {
     const ks = s.kpis.filter((k) => k.chg !== null && k.higherIsBetter !== undefined);
     const good = ks.filter((k) => tone(k, k.chg) > 0).length; const r = ks.length ? good / ks.length : 0.5;
     const status = r >= 0.6 ? 'on' : r >= 0.4 ? 'watch' : 'off';
     const a = ai?.sections[s.id];
-    return { s, status, headline: clip(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0], 150), key: s.kpis.filter((k) => k.value !== null).slice(0, 2) };
+    return { s, a, status, good, n: ks.length, headline: clip(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0], 170),
+      summary: firstSentences(a?.summary, 2), points: (a?.insights?.length ? a.insights : s.ruleFindings).slice(0, 2).map((x) => clip(x, 170)),
+      key: s.kpis.filter((k) => k.value !== null).slice(0, 4) };
   });
   const STATUS = { on: 'On track', watch: 'Watch', off: 'Needs action' } as const;
-  const insights = (gl?.insights?.length ? gl.insights : rows.map((r) => r.headline)).slice(0, 5).map((x) => clip(x, 220));
-  const risks = (gl?.watch ?? []).slice(0, 4).map((x) => clip(x, 180));
+  const insights = (gl?.insights?.length ? gl.insights : rows.map((r) => r.headline)).slice(0, 8).map((x) => clip(x, 240));
+  const risks = (gl?.watch ?? []).slice(0, 6).map((x) => clip(x, 200));
   const order = { high: 0, medium: 1, low: 2 } as const;
   const decisions = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), chapter: chTitle(s) })))
-    .sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 6);
+    .sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 10);
   const counts = { on: rows.filter((r) => r.status === 'on').length, watch: rows.filter((r) => r.status === 'watch').length, off: rows.filter((r) => r.status === 'off').length };
+  const pages = 4; let pg = 0;
+  const Foot = ({ right }: { right?: string }) => <footer className="xb-foot"><span>Page {++pg} of {pages}</span><span>{right ?? `${rv.scope} · ${P.label}`}</span></footer>;
+  const Mover = ({ k }: { k: Kpi }) => <li><span className="xb-ml">{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}<em>{k.prev !== null ? `from ${fmtK(k.prev, k.format)}` : ''}</em></li>;
   return (
     <div className="xb">
+      {/* ── page 1: the bottom line and the scorecard ── */}
       <section className="xb-page" id="epr-brief">
         <header className="xb-mast">
-          <div><span className="xb-kick">Executive brief · Confidential</span><h1>{rv.scope}</h1><span className="xb-sub">{P.label} performance review · compared with {P.prevLabel} and {P.lyLabel}</span></div>
-          <div className="xb-meta"><b>{counts.on}</b> on track<br /><b>{counts.watch}</b> to watch<br /><b>{counts.off}</b> need action</div>
+          <div><span className="xb-kick">Executive brief · Confidential</span><h1>{rv.scope}</h1><span className="xb-sub">{P.label} performance review · compared with {P.prevLabel}, {P.lyLabel} and {P.ytdLabel}</span></div>
+          <div className="xb-meta"><b>{counts.on}</b> areas on track<br /><b>{counts.watch}</b> to watch<br /><b>{counts.off}</b> need action</div>
         </header>
         <div className="xb-bl">
           <span className="xb-label">Bottom line</span>
           <p className="xb-head">{gl?.headline ?? `${rv.scope}: ${P.label} review`}</p>
-          {(gl?.tagline || gl?.summary) && <p className="xb-sum">{firstSentences(gl?.summary || gl?.tagline, 3)}</p>}
+          {(gl?.summary || gl?.tagline) && <p className="xb-sum">{firstSentences(gl?.summary || gl?.tagline, 4)}</p>}
+        </div>
+        <div className="xb-pulse">
+          <div><b>{improving}</b><span>metrics improved vs {P.prevLabel}</span></div>
+          <div><b>{worsening}</b><span>metrics worsened</span></div>
+          <div><b>{building.length}</b><span>on a 3-period upward run</span></div>
+          <div><b>{slipping.length}</b><span>on a 3-period slide</span></div>
         </div>
         <span className="xb-label">Key business metrics</span>
         <div className="xb-kpis">{kpis.map((k) => (
           <div key={k.id} className="xb-kpi">
-            <span className="xb-kl">{k.label}</span>
+            <span className="xb-kl" title={k.description}>{k.label}</span>
             <b className="xb-kv">{fmtK(k.value, k.format)}</b>
             <div className="xb-kc"><span>vs {P.prevLabel}</span>{delta(k, k.chg)}</div>
             <div className="xb-kc"><span>vs {P.lyLabel}</span>{delta(k, k.chgLy)}</div>
+            <div className="xb-kc"><span>vs {P.ytdLabel} avg</span>{delta(k, k.chgYtd)}</div>
           </div>))}
+        </div>
+        <Foot />
+      </section>
+
+      {/* ── page 2: what moved, and how each area is doing ── */}
+      <section className="xb-page">
+        <div className="xb-cols even">
+          <div><span className="xb-label">Biggest gains vs {P.prevLabel}</span>{gains.length ? <ul className="xb-mov good">{gains.map((k) => <Mover key={k.id} k={k} />)}</ul> : <p className="xb-none">No material gains.</p>}</div>
+          <div><span className="xb-label">Biggest setbacks vs {P.prevLabel}</span>{drops.length ? <ul className="xb-mov bad">{drops.map((k) => <Mover key={k.id} k={k} />)}</ul> : <p className="xb-none">No material setbacks.</p>}</div>
         </div>
         <span className="xb-label">Performance by area</span>
         <table className="xb-tbl">
           <thead><tr><th>Area</th><th>Status</th><th>Assessment</th><th>Key numbers</th></tr></thead>
-          <tbody>{rows.map(({ s, status, headline, key }) => (
-            <tr key={s.id}><td className="xb-area">{chTitle(s)}</td><td><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></td><td>{headline}</td>
-              <td className="xb-nums">{key.map((k) => <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}</div>)}</td></tr>))}
+          <tbody>{rows.map(({ s, status, headline, key, good, n }) => (
+            <tr key={s.id}><td className="xb-area">{chTitle(s)}<em>{good} of {n} metrics improving</em></td><td><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></td><td>{headline}</td>
+              <td className="xb-nums">{key.slice(0, 3).map((k) => <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}</div>)}</td></tr>))}
           </tbody>
         </table>
-        <footer className="xb-foot"><span>Page 1 of 2</span><span>{rv.scope} · {P.label}</span></footer>
+        <Foot />
       </section>
+
+      {/* ── page 3: area-by-area read ── */}
+      <section className="xb-page">
+        <span className="xb-label">Area-by-area read</span>
+        <div className="xb-areas">{rows.map(({ s, status, summary, points, key }) => (
+          <article key={s.id} className="xb-ar">
+            <header><b>{chTitle(s)}</b><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></header>
+            {summary && <p className="xb-ar-sum">{summary}</p>}
+            <div className="xb-ar-k">{key.map((k) => <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}</div>)}</div>
+            {!!points.length && <ul>{points.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+          </article>))}
+        </div>
+        <Foot />
+      </section>
+
+      {/* ── page 4: insight, risk, decisions ── */}
       <section className="xb-page">
         <div className="xb-cols">
           <div>
@@ -1537,15 +1585,16 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
           <div>
             <span className="xb-label">Risks to watch</span>
             {risks.length ? <ul className="xb-risk">{risks.map((t, i) => <li key={i}><AlertTriangle size={13} /><p>{t}</p></li>)}</ul> : <p className="xb-none">No material risks flagged this period.</p>}
+            {!!slipping.length && <><span className="xb-label">Sustained slides (3 periods)</span><ul className="xb-mov bad sm">{slipping.map((k) => <Mover key={k.id} k={k} />)}</ul></>}
           </div>
         </div>
         <span className="xb-label">Decisions and actions</span>
         {decisions.length ? <table className="xb-tbl xb-dec">
-          <thead><tr><th>Priority</th><th>Action</th><th>Owner</th><th>By</th><th>Expected impact</th></tr></thead>
-          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><b>{clip(d.title, 90)}</b><em>{d.chapter}</em></td><td>{d.owner}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{clip(d.impact ?? d.kpi, 110) || '—'}</td></tr>)}</tbody>
+          <thead><tr><th>Priority</th><th>Action</th><th>Owner</th><th>By</th><th>Measure of success</th></tr></thead>
+          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><b>{clip(d.title, 100)}</b><em>{d.chapter}</em></td><td>{d.owner}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{clip([d.kpi, d.impact].filter(Boolean).join(' · '), 130) || '—'}</td></tr>)}</tbody>
         </table> : <p className="xb-none">Action plan not yet written for this review.</p>}
-        <p className="xb-note">Figures are computed from synced studio data for {P.label}. Deltas compare with {P.prevLabel} and {P.lyLabel}. Area status reflects the share of that area's metrics moving in the right direction. Switch to <b>Full report</b> for the analysis, charts and record-level detail behind every number.</p>
-        <footer className="xb-foot"><span>Page 2 of 2</span><span>Prepared {new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span></footer>
+        <p className="xb-note">Figures are computed from synced studio data for {P.label}; deltas compare with {P.prevLabel}, {P.lyLabel} and the {P.ytdLabel} monthly average. Area status reflects the share of that area's metrics moving in the right direction; a sustained run means three consecutive periods moving the same way. Switch to <b>Full report</b> for the analysis, charts and record-level detail behind every number.</p>
+        <Foot right={`Prepared ${new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`} />
       </section>
     </div>
   );
