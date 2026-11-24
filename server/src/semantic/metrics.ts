@@ -377,8 +377,8 @@ export const METRICS: Metric[] = [
   m({ id: 'class_revenue', label: 'Class revenue', model: 'sessions', sql: 'sum(revenue)', format: 'currency', additive: true, higherIsBetter: true,
     description: 'Session-level revenue attributed by Momence (per-visit value).',
     caveat: 'Usage-based value attributed to classes; do not add to sales revenue.' }),
-  m({ id: 'revenue_per_class', label: 'Revenue per class', model: 'sessions', sql: 'sum(revenue) / nullif(count(*), 0)', format: 'currency', higherIsBetter: true,
-    description: 'Class revenue ÷ classes held.' }),
+  m({ id: 'revenue_per_class', label: 'Class revenue per class', model: 'sessions', sql: 'sum(revenue) / nullif(count(*), 0)', format: 'currency', higherIsBetter: true,
+    description: 'Class revenue (the visit value attributed to each class from the pack or membership used) ÷ classes held. Not total sales ÷ classes: retail, unused pack value and non-class sales are excluded.' }),
   m({ id: 'scheduled_classes', label: 'Scheduled classes (all)', model: 'sessions', sql: 'count(*)', format: 'number', additive: true,
     description: 'All classes incl. future schedule. Use with include_future=true.' }),
 

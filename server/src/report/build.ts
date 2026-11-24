@@ -278,7 +278,10 @@ export async function buildReport(raw: unknown): Promise<Report> {
     compareLabel: wholeMonth ? 'the previous month' : 'the previous period', seriesLabels: months.map((m) => monLabel(`${m}-01`)),
   };
   const add = async (s: Omit<ReportSection, 'insights' | 'kpis'> & { kpiIds: string[]; kpiExtra?: Filter[] }) => {
-    const k = await kpis(ctx, s.kpiIds, s.kpiExtra);
+    let k = await kpis(ctx, s.kpiIds, s.kpiExtra);
+    // KPIs computed on a filtered base (e.g. the three core formats) must not pose as the studio-wide figure
+    // shown on other pages under the same name
+    if (s.kpiExtra?.some((f) => f.dimension === 'format')) k = k.map((x) => ({ ...x, label: `${x.label} · core formats`, description: `${x.description} Barre, powerCycle and Strength Lab classes only.` }));
     const { kpiIds: _a, kpiExtra: _b, ...rest } = s;
     sections.push({ ...rest, kpis: k, insights: sectionInsights({ kpis: k, tables: s.tables }, period) });
   };

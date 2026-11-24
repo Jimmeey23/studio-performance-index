@@ -69,6 +69,18 @@ export interface ReviewAI { glance?: ReviewGlanceAI; sections: Record<string, Re
 const cache = new Map<string, { review: Review; report: Report }>();
 export const getReview = (id: string) => cache.get(id);
 
+/** Cost per CRM lead = paid ad spend ÷ the CRM leads shown beside it (the platform-reported CPL uses the ad
+ *  platforms' own lead counts, which do not match the CRM, so it read as a contradiction next to 'Leads'). */
+function crmCpl(ks: Kpi[]): Kpi[] {
+  const sp = ks.find((k) => k.id === 'ad_spend'), ld = ks.find((k) => k.id === 'leads'); if (!sp || !ld) return [];
+  const div = (a: number | null, b: number | null) => (a === null || b === null || !b ? null : a / b);
+  const rel = (a: number | null, b: number | null) => (a === null || b === null || !b ? null : a / b - 1);
+  const value = div(sp.value, ld.value), prev = div(sp.prev, ld.prev), ly = div(sp.ly, ld.ly), ytd = div(sp.ytd, ld.ytd);
+  return [{ id: 'cost_per_crm_lead', label: 'Cost per lead (CRM)', format: 'currency', higherIsBetter: false, additive: false,
+    description: 'Paid ad spend (Meta + Google, incl. a lead-share of city-wide campaigns) ÷ CRM leads in the period.',
+    value, prev, chg: rel(value, prev), ly, chgLy: rel(value, ly), ytd, chgYtd: rel(value, ytd),
+    series: sp.series.map((s, i) => div(s, ld.series[i] ?? null)) }];
+}
 const pickK = (ks: Kpi[], ids: string[]) => ids.map((id) => ks.find((k) => k.id === id)).filter((k): k is Kpi => !!k);
 const sec = (r: Report, id: string) => r.sections.find((s) => s.id === id);
 const tbl = (s: ReportSection | undefined, re: RegExp) => s?.tables.find((t) => re.test(t.title));
@@ -176,7 +188,7 @@ export async function buildReview(raw: unknown): Promise<Review> {
   });
 
   push('funnel', {
-    kpis: [...pickK(S.leads?.kpis ?? [], ['leads', 'lead_to_trial_rate', 'lead_conversion_rate', 'cost_per_lead']), ...pickK(S.nc?.kpis ?? [], ['new_clients', 'second_visit_rate', 'conversion_rate', 'retention_rate', 'avg_days_to_convert', 'new_client_avg_ltv'])],
+    kpis: [...pickK(S.leads?.kpis ?? [], ['leads', 'lead_to_trial_rate', 'lead_conversion_rate']), ...crmCpl(S.leads?.kpis ?? []), ...pickK(S.nc?.kpis ?? [], ['new_clients', 'second_visit_rate', 'conversion_rate', 'retention_rate', 'avg_days_to_convert', 'new_client_avg_ltv'])],
     charts: [S.leads?.charts[0], S.nc?.charts[0]].filter(Boolean).slice(0, 2) as ReportChart[],
     tables: funX.tables.length ? funX.tables : [...(S.leads?.tables.slice(0, 2) ?? []), ...(S.nc?.tables.slice(0, 2) ?? [])],
     funnels: [S.leads?.visuals?.funnel && { title: 'Lead funnel', steps: S.leads.visuals.funnel }, S.nc?.visuals?.funnel && { title: 'Newcomer journey', steps: S.nc.visuals.funnel }].filter(Boolean) as ReviewSection['funnels'],
