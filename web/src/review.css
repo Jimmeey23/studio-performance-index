@@ -1526,3 +1526,24 @@ table.xb-ar-k { width: 100%; border-collapse: collapse; display: table; }
 .epr-media-list button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
 .epr-media-list button:disabled:not(.on) { opacity: .55; }
 .epr-media-unmute { align-self: center; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; border-radius: 999px; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+
+/* report videos: frameless, edge-to-edge */
+.epr-mx { position: fixed; inset: 0; z-index: 210; background: #000; display: flex; align-items: center; justify-content: center; }
+.epr-mx video { width: 100vw; height: 100dvh; object-fit: contain; background: #000; display: block; outline: none; }
+.epr-mx.follow video { pointer-events: none; }
+.epr-mx-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; color: #fff;
+  background: linear-gradient(rgba(0,0,0,.55), transparent); opacity: 0; transition: opacity .25s; }
+.epr-mx:hover .epr-mx-top, .epr-mx.follow .epr-mx-top { opacity: 1; }
+.epr-mx.follow .epr-mx-top { animation: mx-fade 3s 2s forwards; }
+@keyframes mx-fade { to { opacity: 0; } }
+.epr-mx-t { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.epr-mx-x { color: #fff; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); }
+.epr-mx-x:hover { background: rgba(255,255,255,.25); }
+.epr-mx .epr-media-live { color: rgba(255,255,255,.8); margin: 0; }
+.epr-mx-list { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; opacity: 0; transition: opacity .25s; }
+.epr-mx:hover .epr-mx-list { opacity: 1; }
+.epr-mx-list button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 12px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.25); }
+.epr-mx-list button.on { background: rgba(255,255,255,.9); color: #000; }
+.epr-mx .epr-media-unmute { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); }
+.epr-media-btn.locked { cursor: not-allowed; opacity: .75; }
+.epr-media-btn.locked .ic { background: var(--ink-3); }
