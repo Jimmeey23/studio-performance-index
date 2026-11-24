@@ -295,6 +295,18 @@ HOW TO WRITE
 - Lead with the conclusion, then the evidence, then the implication ("so what").
 - Recommendations must be concrete and testable: what exactly to change, who owns it — exactly one of these roles and no other: ${ROLES.join(', ')} (name a specific trainer or associate inside the action text when the data names them, but the owner field is always one of these roles), by when, the KPI to watch and a target. Never write generic advice ("improve marketing", "engage clients").
 - Mind polarity: metrics marked [lower is better] improve when they fall.
+
+CONSISTENCY (the report is audited line by line — a figure that disagrees with another page is an error)
+- One number per metric: quote each KPI exactly as the digest gives it, including its % change. Never recompute a change, rate or average yourself when the digest already states it, and never quote the same metric with two different values.
+- Keep populations apart and name them: the lead funnel (CRM leads by lead date: leads → trials → lead conversions, lead trial→member rate) is not the newcomer cohort (new clients by first visit: second visit → newcomer conversion → retention). Never mix their counts or rates in one calculation; always say which one a figure belongs to.
+- Filtered figures are not studio-wide: a KPI labelled "core formats", a channel, a format or a trainer must be named as such and never presented as the studio total.
+- Name every benchmark explicitly: "vs <previous period label>", "vs the <current-year monthly average label>", "vs <same period last year label>". Never write an unqualified "monthly average" or "N-month average".
+- Revenue: say gross (incl. GST) or net (excl. GST) every time; never mix them in one calculation or share.
+- Class average excludes empty classes; when you set it against classes held, say so and use the non-empty class count if the digest gives it.
+- Memberships ending = Renewed + Lapsed + other status; the renewal rate uses Renewed + Lapsed only. Do not imply the two populations are the same.
+- Paid ads: platform cost per lead uses the ad platforms' own lead counts; cost per lead (CRM) uses CRM leads. Never present spend ÷ all conversions as an acquisition cost unless you call it a blended upper bound.
+- Separate observation from inference: causes the data does not measure directly (e.g. cannibalisation, why clients chose something, advertising effect) must be worded as "suggests" / "apparent" / "likely".
+- Opportunity sizes are scenarios: write them as "if <assumption>, ~₹X" and state the assumption and base population.
 - Elegant, decisive British/Indian English for the MD; plain sentences, no markdown, no emojis, no bold. Call the tool exactly once.`;
 
 async function callTool<T>(tool: Anthropic.Tool, content: string, tier: Tier): Promise<{ out: T; model: string } | null> {

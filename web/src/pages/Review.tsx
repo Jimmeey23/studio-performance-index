@@ -371,8 +371,8 @@ function context(vals: number[], k: Kpi, single: boolean): { text: string; t: st
   const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
   if (!avg) return null;
   const p = (v - avg) / Math.abs(avg);
-  if (Math.abs(p) < 0.03) return { text: `${pre}in line with the ${hist.length}-month average`.replace(/^i/, 'I'), t: 'flat' };
-  return { text: `${pre}${p > 0 ? 'above' : 'below'} the ${hist.length}-month average by ${Math.abs(p * 100).toFixed(0)}%`.replace(/^([ab])/, (m) => m.toUpperCase()), t: p > 0 ? good : bad };
+  if (Math.abs(p) < 0.03) return { text: `${pre}in line with the average of the previous ${hist.length} months`.replace(/^i/, 'I'), t: 'flat' };
+  return { text: `${pre}${p > 0 ? 'above' : 'below'} the average of the previous ${hist.length} months by ${Math.abs(p * 100).toFixed(0)}%`.replace(/^([ab])/, (m) => m.toUpperCase()), t: p > 0 ? good : bad };
 }
 /* ── inline editing (admins): any AI-written text can be edited in place and autosaves ── */
 type Path = (string | number)[];
