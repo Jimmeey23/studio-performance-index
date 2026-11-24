@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs';
 import type { Response } from 'express';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Readable } from 'node:stream';
 
 const E = process.env;
@@ -30,4 +30,17 @@ export async function streamTo(key: string, range: string | undefined, res: Resp
   if (r.ContentLength !== undefined) res.setHeader('Content-Length', String(r.ContentLength));
   if (r.ContentRange) res.setHeader('Content-Range', r.ContentRange);
   (r.Body as Readable).pipe(res);
+}
+
+/** First key in `keys` that exists in the bucket (HEAD), cached per key list for 10 minutes. */
+const found = new Map<string, { key: string | null; at: number }>();
+export async function firstExisting(keys: string[]): Promise<string | null> {
+  const ck = keys.join('|'); const hit = found.get(ck);
+  if (hit && Date.now() - hit.at < 600_000) return hit.key;
+  let key: string | null = null;
+  for (const k of keys) {
+    try { await s3().send(new HeadObjectCommand({ Bucket: E.BLOMP_BUCKET!, Key: k })); key = k; break; } catch { /* not there */ }
+  }
+  found.set(ck, { key, at: Date.now() });
+  return key;
 }

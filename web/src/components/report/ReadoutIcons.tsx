@@ -26,6 +26,7 @@ export function ReadoutIcons({ rid, clips, root, onPlay }: { rid: string; clips:
       a.src = `/api/public/review/${rid}/readout/${btn.dataset.ro}`;
       cur.current = { btn, block }; btn.classList.add('on'); block.classList.add('epr-ro-active');
       a.play().catch(() => stop());
+      a.onerror = () => { btn.classList.add('na'); btn.title = 'Audio for this paragraph is not available yet'; stop(); };
     };
     a.onended = () => {
       const was = cur.current; stop();

@@ -25,7 +25,7 @@ import { generateInsights, rulesInsights } from './report/insights.js';
 import { buildReview, writeGlance, writeSection, reviewContext, reviewDefinitions, REVIEW_SECTIONS, type ReviewAI } from './report/review.js';
 import * as reviewStore from './report/reviewStore.js';
 import { attachVideo, enqueue, explainersAvailable, videoFile, videoStates } from './report/explainers.js';
-import { streamTo, blobConfigured } from './report/blobStore.js';
+import { streamTo, blobConfigured, firstExisting } from './report/blobStore.js';
 import { narrationFor } from './report/narration.js';
 import { readoutFor } from './report/readoutClips.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
@@ -148,7 +148,10 @@ app.get('/api/public/review/:id/readout/:block', (req, res) => {
   readoutOf(id).then((r) => {
     const clip = r?.clips.find((c) => c[0] === block);
     if (!r || !clip || !blobConfigured()) { res.status(404).end(); return; }
-    return streamTo(`${r.root}/${clip[2]}`, req.headers.range, res, 'audio/mpeg');
+    return firstExisting([r.root, ...(r.alt ?? [])].map((root) => `${root}/${clip[2]}`)).then((key) => {
+      if (!key) { log.warn({ block, file: clip[2] }, 'readout clip not found in Blomp'); res.status(404).end(); return; }
+      return streamTo(key, req.headers.range, res, 'audio/mpeg');
+    });
   }).catch((e) => { log.warn({ err: (e as Error).message }, 'readout stream failed'); if (!res.headersSent) res.status(502).end(); });
 });
 /* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
