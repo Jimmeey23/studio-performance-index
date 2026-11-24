@@ -1471,3 +1471,4 @@
 .xb-ar ul { margin: 0; padding-left: 16px; font-size: 11.5px; line-height: 1.45; color: var(--ink-2); display: flex; flex-direction: column; gap: 3px; }
 @media (max-width: 720px) { .xb-pulse { grid-template-columns: 1fr 1fr; } .xb-cols.even, .xb-areas { grid-template-columns: 1fr; } }
 .epr-ro.na { opacity: .35; text-decoration: line-through; cursor: not-allowed; border-style: dashed; }
+.xb-logo { display: block; height: 52px; width: auto; margin-bottom: 12px; }

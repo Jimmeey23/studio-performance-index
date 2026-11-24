@@ -66,18 +66,20 @@ function collectCss(): string {
   for (const sh of [...document.styleSheets]) { try { for (const r of [...sh.cssRules]) css += r.cssText + '\n'; } catch { /* cross-origin sheet */ } }
   return css;
 }
+const logoUrl = () => `${location.origin}/brand/p57-logo.png`;
+const metaTags = (title: string) => `<meta name="author" content="Physique 57 India"><meta name="generator" content="Physique 57 Business Intelligence"><meta name="description" content="${title.replace(/"/g, '&quot;')}"><link rel="icon" href="${location.origin}/brand/review-mark-64.png">`;
 export function toHtml(root: HTMLElement, title: string): string {
   const c = cleanClone(root);
   const theme = document.documentElement.getAttribute('class') ?? '';
-  return `<!doctype html><html class="${theme}"><head><meta charset="utf-8"><meta name="author" content="Jimmeey G."><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title.replace(/</g, '&lt;')}</title><style>${collectCss()}
-body{background:#fff;margin:0}.epr-rv{opacity:1!important;transform:none!important}</style></head><body><div class="epr epr-standalone"><div style="max-width:1200px;margin:0 auto;padding:32px clamp(16px,5vw,64px)">${c.innerHTML}</div></div></body></html>`;
+  return `<!doctype html><html class="${theme}"><head><meta charset="utf-8">${metaTags(title)}<meta name="viewport" content="width=device-width,initial-scale=1"><title>${title.replace(/</g, '&lt;')}</title><style>${collectCss()}
+body{background:#fff;margin:0}.epr-rv{opacity:1!important;transform:none!important}</style></head><body><div class="epr epr-standalone"><div style="max-width:1200px;margin:0 auto;padding:32px clamp(16px,5vw,64px)"><header style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #20201e;padding-bottom:12px;margin-bottom:24px"><img src="${logoUrl()}" alt="Physique 57" style="height:44px"><span style="font:600 11px Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#6b7280">Performance Review · Confidential</span></header>${c.innerHTML}</div></div></body></html>`;
 }
 
 /* ── Word (.doc — Word opens HTML documents) ── */
 export function toWord(root: HTMLElement, title: string): string {
   const c = cleanClone(root);
-  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><meta name="author" content="Jimmeey G."><title>${title}</title>
-<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111}h1,h2,h3,h4{font-family:Georgia,serif}table{border-collapse:collapse;margin:8pt 0}td,th{border:1px solid #ccc;padding:3pt 6pt;font-size:9pt}img{max-width:40px}</style></head><body><h1>${title}</h1>${c.innerHTML}</body></html>`;
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">${metaTags(title)}<title>${title}</title>
+<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111}h1,h2,h3,h4{font-family:Georgia,serif}table{border-collapse:collapse;margin:8pt 0}td,th{border:1px solid #ccc;padding:3pt 6pt;font-size:9pt}img{max-width:40px}</style></head><body><p><img src="${logoUrl()}" alt="Physique 57" width="120" style="width:120px;max-width:120px"></p><h1>${title}</h1>${c.innerHTML}</body></html>`;
 }
 
 /* ── Excel (.xls — every table on one sheet, titled) ── */

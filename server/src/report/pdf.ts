@@ -5,7 +5,9 @@
  */
 import fs from 'node:fs';
 import puppeteer, { type Browser } from 'puppeteer-core';
+import path from 'node:path';
 import { log } from '../util/log.js';
+import { config } from '../config.js';
 
 const CANDIDATES = [process.env.CHROMIUM_PATH, '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean) as string[];
 let browserP: Promise<Browser> | null = null;
@@ -18,6 +20,12 @@ const browser = () => (browserP ??= (async () => {
 })().catch((e) => { browserP = null; throw e; }));
 
 let running = 0;
+/** Report mark as an inline image for the PDF footer (header/footer templates cannot load URLs). */
+let logoData: string | null | undefined;
+function logoTag() {
+  if (logoData === undefined) { try { logoData = `data:image/png;base64,${fs.readFileSync(path.join(config.webDist, 'brand', 'review-mark-64.png')).toString('base64')}`; } catch { logoData = null; } }
+  return logoData ? `<img src="${logoData}" style="width:12px;height:12px;border-radius:3px" />` : '';
+}
 export async function reviewPdf(url: string, title: string): Promise<Uint8Array> {
   if (running >= 2) throw new Error('Two PDFs are already being prepared — try again in a moment.');
   running++;
@@ -38,7 +46,7 @@ export async function reviewPdf(url: string, title: string): Promise<Uint8Array>
     });
     await new Promise((r) => setTimeout(r, 1200));
     const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-    const foot = `<div style="width:100%;font:8px Inter,Helvetica,Arial,sans-serif;color:#8a8a8a;padding:0 14mm;display:flex;justify-content:space-between"><span>Physique 57 India · ${esc(title)} · Confidential</span><span>Prepared by Jimmeey G. · <span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
+    const foot = `<div style="width:100%;font:8px Inter,Helvetica,Arial,sans-serif;color:#8a8a8a;padding:0 14mm;display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:6px">${logoTag()}Physique 57 India · ${esc(title)} · Confidential</span><span>Prepared by Jimmeey G. · <span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
     return await page.pdf({ format: 'A4', printBackground: true, displayHeaderFooter: true, headerTemplate: '<span></span>', footerTemplate: foot,
       margin: { top: '12mm', bottom: '16mm', left: '10mm', right: '10mm' }, preferCSSPageSize: false, scale: 0.62, tagged: true, outline: true, timeout: 120_000 });
   } catch (e) { log.warn({ err: (e as Error).message }, 'review pdf failed'); throw e; }

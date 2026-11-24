@@ -947,6 +947,14 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     };
     load(); return () => { live = false; clearTimeout(t); };
   }, [rv?.id, allWritten, publicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the review's own tab title and icon (the server sets the same for shared links / previews)
+  useEffect(() => {
+    if (!rv) return;
+    const prev = document.title; document.title = `${rv.scope} · ${rv.period.label} — ${brief ? 'Executive Brief' : 'Performance Review'} | Physique 57`;
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]'); const prevIcon = link?.href;
+    if (link) link.href = '/brand/review-mark-64.png';
+    return () => { document.title = prev; if (link && prevIcon) link.href = prevIcon; };
+  }, [rv?.id, rv?.scope, rv?.period.label, brief]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!rv?.id) return; api<{ tracks: NarrTrack[] }>(`/api/public/review/${rv.id}/narration`).then((q) => setNarr(q.tracks)).catch(() => {});
     api<{ clips: [string, string, number][] }>(`/api/public/review/${rv.id}/readout`).then((q) => setRoClips(q.clips)).catch(() => {}); }, [rv?.id]);
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
@@ -1517,7 +1525,7 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
       {/* ── page 1: the bottom line and the scorecard ── */}
       <section className="xb-page" id="epr-brief">
         <header className="xb-mast">
-          <div><span className="xb-kick">Executive brief · Confidential</span><h1>{rv.scope}</h1><span className="xb-sub">{P.label} performance review · compared with {P.prevLabel}, {P.lyLabel} and {P.ytdLabel}</span></div>
+          <div><img className="xb-logo" src={BRAND.logoOnLight} alt="Physique 57" /><span className="xb-kick">Executive brief · Confidential</span><h1>{rv.scope}</h1><span className="xb-sub">{P.label} performance review · compared with {P.prevLabel}, {P.lyLabel} and {P.ytdLabel}</span></div>
           <div className="xb-meta"><b>{counts.on}</b> areas on track<br /><b>{counts.watch}</b> to watch<br /><b>{counts.off}</b> need action</div>
         </header>
         <div className="xb-bl">

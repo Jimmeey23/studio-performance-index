@@ -665,6 +665,42 @@ if (fs.existsSync(config.webDist)) {
   // hashed build assets never change → let browsers cache them for a year; index.html always revalidates
   app.use('/assets', express.static(path.join(config.webDist, 'assets'), { immutable: true, maxAge: '365d' }));
   app.use(express.static(config.webDist, { maxAge: '1h', setHeaders: (res, p) => { if (p.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache'); } }));
+  // Review links get their own metadata (title, description, logo / social card, icon) so shared links preview properly.
+  let indexHtml: string | null = null;
+  const escAttr = (x: string) => x.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+  app.get(/^\/review\/(rv_[a-z0-9-]{6,})\/?$/i, async (req, res, next) => {
+    try {
+      const id = String(req.params[0]);
+      const s = await reviewStore.byIdPublic(id); if (!s) return next();
+      indexHtml ??= fs.readFileSync(path.join(config.webDist, 'index.html'), 'utf8');
+      const r = s.review as { scope?: string; period?: { label?: string }; generatedAt?: string };
+      const gl = (s.ai as { glance?: { headline?: string; tagline?: string } } | undefined)?.glance;
+      const brief = 'brief' in req.query;
+      const title = `${r.scope ?? 'Studio'} · ${r.period?.label ?? ''} — ${brief ? 'Executive Brief' : 'Performance Review'} | Physique 57`;
+      const desc = (gl?.headline ?? gl?.tagline ?? `${r.period?.label ?? ''} performance review for ${r.scope ?? 'the studio'}: key metrics, findings and actions.`).slice(0, 300);
+      const origin = `${String(req.headers['x-forwarded-proto'] ?? req.protocol).split(',')[0]}://${req.get('host')}`;
+      const url = `${origin}/review/${id}${brief ? '?brief=1' : ''}`;
+      const meta = [
+        `<title>${escAttr(title)}</title>`,
+        `<meta name="description" content="${escAttr(desc)}" />`,
+        `<meta name="author" content="Physique 57 India" />`,
+        `<meta name="application-name" content="Physique 57 Performance Review" />`,
+        `<meta name="robots" content="noindex, nofollow" />`,
+        `<meta property="og:type" content="article" />`, `<meta property="og:site_name" content="Physique 57 India" />`,
+        `<meta property="og:title" content="${escAttr(title)}" />`, `<meta property="og:description" content="${escAttr(desc)}" />`,
+        `<meta property="og:url" content="${escAttr(url)}" />`,
+        `<meta property="og:image" content="${origin}/brand/review-og.png" />`, `<meta property="og:image:width" content="1200" />`, `<meta property="og:image:height" content="630" />`,
+        `<meta property="og:image:alt" content="Physique 57 Performance Review" />`,
+        r.generatedAt ? `<meta property="article:published_time" content="${escAttr(r.generatedAt)}" />` : '',
+        `<meta name="twitter:card" content="summary_large_image" />`, `<meta name="twitter:title" content="${escAttr(title)}" />`,
+        `<meta name="twitter:description" content="${escAttr(desc)}" />`, `<meta name="twitter:image" content="${origin}/brand/review-og.png" />`,
+        `<link rel="icon" type="image/png" sizes="64x64" href="/brand/review-mark-64.png" />`, `<link rel="apple-touch-icon" href="/brand/review-mark-180.png" />`,
+        `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'Report', name: title, description: desc, datePublished: r.generatedAt, publisher: { '@type': 'Organization', name: 'Physique 57 India', logo: `${origin}/brand/review-mark-512.png` }, image: `${origin}/brand/review-og.png` }).replace(/</g, '\\u003c')}</script>`,
+      ].filter(Boolean).join('\n    ');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.type('html').send(indexHtml.replace(/<title>[\s\S]*?<\/title>/, meta));
+    } catch (e) { next(e); }
+  });
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(config.webDist, 'index.html')));
 }
 
