@@ -1514,3 +1514,4 @@ table.xb-ar-k { width: 100%; border-collapse: collapse; display: table; }
 .xb-ins { gap: 10px; } .xb-risk { gap: 10px; }
 .xb-ins li > span { font-size: 10.5px; font-weight: 600; background: var(--ink-2); }
 .xb-note { font-size: 10.5px !important; color: var(--ink-3) !important; }
+.xb-logo { display: block; height: 52px; width: auto; margin-bottom: 12px; }
