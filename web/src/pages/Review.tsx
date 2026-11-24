@@ -1478,8 +1478,14 @@ function ActionCard({ r, n, jump, compact }: { r: PlanRec; n: number; jump: (id:
 }
 
 /* ── Executive brief: the whole review as a two-page senior-management read ── */
-const clip = (t: string | undefined, n: number) => { const x = (t ?? '').replace(/\s+/g, ' ').trim(); return x.length <= n ? x : `${x.slice(0, n).replace(/[\s,;:—-]+\S*$/, '')}…`; };
-const firstSentences = (t: string | undefined, n: number) => (t ?? '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z₹0-9])/).slice(0, n).join(' ');
+/** Whole sentences up to ~max characters (always at least the first sentence); strips markdown emphasis. */
+const trimTo = (t: string | undefined, max: number) => {
+  const x = (t ?? '').replace(/\*\*|__|\*/g, '').replace(/\s+/g, ' ').trim(); if (x.length <= max) return x;
+  const parts = x.split(/(?<=[.!?])\s+(?=[A-Z₹0-9])/); let out = parts[0];
+  for (const p of parts.slice(1)) { if ((out + ' ' + p).length > max) break; out += ' ' + p; }
+  return out;
+};
+const firstSentences = (t: string | undefined, n: number) => (t ?? '').replace(/\*\*|__|\*/g, '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+(?=[A-Z₹0-9])/).slice(0, n).join(' ');
 function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
   const gl = ai?.glance;
   const all = (() => { const seen = new Set<string>(); return [...rv.cover.headlineKpis, ...rv.glance.cards, ...rv.scorecard, ...rv.sections.flatMap((s) => s.kpis)].filter((k) => k.value !== null && !seen.has(k.id) && seen.add(k.id)); })();
@@ -1498,27 +1504,27 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
     const good = ks.filter((k) => tone(k, k.chg) > 0).length; const r = ks.length ? good / ks.length : 0.5;
     const status = r >= 0.6 ? 'on' : r >= 0.4 ? 'watch' : 'off';
     const a = ai?.sections[s.id];
-    return { s, a, status, good, n: ks.length, headline: clip(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0], 170),
-      summary: firstSentences(a?.summary, 2), points: (a?.insights?.length ? a.insights : s.ruleFindings).slice(0, 2).map((x) => clip(x, 170)),
+    return { s, a, status, good, n: ks.length, headline: trimTo(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0], 170),
+      summary: firstSentences(a?.summary, 2), points: (a?.insights?.length ? a.insights : s.ruleFindings).slice(0, 2).map((x) => trimTo(x, 170)),
       key: s.kpis.filter((k) => k.value !== null).slice(0, 4) };
   });
   const STATUS = { on: 'On track', watch: 'Watch', off: 'Needs action' } as const;
-  const insights = (gl?.insights?.length ? gl.insights : rows.map((r) => r.headline)).slice(0, 8).map((x) => clip(x, 240));
-  const risks = (gl?.watch ?? []).slice(0, 6).map((x) => clip(x, 200));
+  const insights = (gl?.insights?.length ? gl.insights : rows.map((r) => r.headline)).slice(0, 8).map((x) => trimTo(x, 240));
+  const risks = (gl?.watch ?? []).slice(0, 6).map((x) => trimTo(x, 200));
   const order = { high: 0, medium: 1, low: 2 } as const;
   const decisions = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), chapter: chTitle(s) })))
     .sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 10);
   const counts = { on: rows.filter((r) => r.status === 'on').length, watch: rows.filter((r) => r.status === 'watch').length, off: rows.filter((r) => r.status === 'off').length };
   const pages = 4; let pg = 0;
   const Foot = ({ right }: { right?: string }) => <footer className="xb-foot"><span>Page {++pg} of {pages}</span><span>{right ?? `${rv.scope} · ${P.label}`}</span></footer>;
-  const Mover = ({ k }: { k: Kpi }) => <li><span className="xb-ml">{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}<em>{k.prev !== null ? `from ${fmtK(k.prev, k.format)}` : ''}</em></li>;
+  const Mover = ({ k }: { k: Kpi }) => <li><span className="xb-ml">{k.label}</span><span className="xb-v">{fmtK(k.value, k.format)}</span>{delta(k, k.chg)}<span className="xb-from">{k.prev !== null ? `from ${fmtK(k.prev, k.format)}` : ''}</span></li>;
   return (
     <div className="xb">
       {/* ── page 1: the bottom line and the scorecard ── */}
       <section className="xb-page" id="epr-brief">
         <header className="xb-mast">
           <div><span className="xb-kick">Executive brief · Confidential</span><h1>{rv.scope}</h1><span className="xb-sub">{P.label} performance review · compared with {P.prevLabel}, {P.lyLabel} and {P.ytdLabel}</span></div>
-          <div className="xb-meta"><b>{counts.on}</b> areas on track<br /><b>{counts.watch}</b> to watch<br /><b>{counts.off}</b> need action</div>
+          <div className="xb-meta"><span><i className="xb-dot on" />{counts.on} on track</span><span><i className="xb-dot watch" />{counts.watch} to watch</span><span><i className="xb-dot off" />{counts.off} need action</span></div>
         </header>
         <div className="xb-bl">
           <span className="xb-label">Bottom line</span>
@@ -1538,7 +1544,7 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
             <b className="xb-kv">{fmtK(k.value, k.format)}</b>
             <div className="xb-kc"><span>vs {P.prevLabel}</span>{delta(k, k.chg)}</div>
             <div className="xb-kc"><span>vs {P.lyLabel}</span>{delta(k, k.chgLy)}</div>
-            <div className="xb-kc"><span>vs {P.ytdLabel} avg</span>{delta(k, k.chgYtd)}</div>
+            <div className="xb-kc"><span>vs {/avg/i.test(P.ytdLabel) ? P.ytdLabel : `${P.ytdLabel} avg`}</span>{delta(k, k.chgYtd)}</div>
           </div>))}
         </div>
         <Foot />
@@ -1554,8 +1560,8 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
         <table className="xb-tbl">
           <thead><tr><th>Area</th><th>Status</th><th>Assessment</th><th>Key numbers</th></tr></thead>
           <tbody>{rows.map(({ s, status, headline, key, good, n }) => (
-            <tr key={s.id}><td className="xb-area">{chTitle(s)}<em>{good} of {n} metrics improving</em></td><td><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></td><td>{headline}</td>
-              <td className="xb-nums">{key.slice(0, 3).map((k) => <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}</div>)}</td></tr>))}
+            <tr key={s.id}><td className="xb-area">{chTitle(s)}<span className="xb-from">{good} of {n} metrics improving</span></td><td><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></td><td>{headline}</td>
+              <td className="xb-nums">{key.slice(0, 3).map((k) => <div key={k.id}><span className="xb-nl">{k.label}</span><span className="xb-v">{fmtK(k.value, k.format)}</span>{delta(k, k.chg)}</div>)}</td></tr>))}
           </tbody>
         </table>
         <Foot />
@@ -1568,7 +1574,7 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
           <article key={s.id} className="xb-ar">
             <header><b>{chTitle(s)}</b><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span></header>
             {summary && <p className="xb-ar-sum">{summary}</p>}
-            <div className="xb-ar-k">{key.map((k) => <div key={k.id}><span>{k.label}</span><b>{fmtK(k.value, k.format)}</b>{delta(k, k.chg)}</div>)}</div>
+            <table className="xb-ar-k"><tbody>{key.map((k) => <tr key={k.id}><td>{k.label}</td><td className="xb-v">{fmtK(k.value, k.format)}</td><td>{delta(k, k.chg)}</td></tr>)}</tbody></table>
             {!!points.length && <ul>{points.map((p, i) => <li key={i}>{p}</li>)}</ul>}
           </article>))}
         </div>
@@ -1591,9 +1597,9 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
         <span className="xb-label">Decisions and actions</span>
         {decisions.length ? <table className="xb-tbl xb-dec">
           <thead><tr><th>Priority</th><th>Action</th><th>Owner</th><th>By</th><th>Measure of success</th></tr></thead>
-          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><b>{clip(d.title, 100)}</b><em>{d.chapter}</em></td><td>{d.owner}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{clip([d.kpi, d.impact].filter(Boolean).join(' · '), 130) || '—'}</td></tr>)}</tbody>
+          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><span className="xb-dt">{trimTo(d.title, 140)}</span><span className="xb-from">{d.chapter}</span></td><td>{d.owner}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{trimTo([d.kpi, d.impact].filter(Boolean).join(' · '), 130) || '—'}</td></tr>)}</tbody>
         </table> : <p className="xb-none">Action plan not yet written for this review.</p>}
-        <p className="xb-note">Figures are computed from synced studio data for {P.label}; deltas compare with {P.prevLabel}, {P.lyLabel} and the {P.ytdLabel} monthly average. Area status reflects the share of that area's metrics moving in the right direction; a sustained run means three consecutive periods moving the same way. Switch to <b>Full report</b> for the analysis, charts and record-level detail behind every number.</p>
+        <p className="xb-note">Figures are computed from synced studio data for {P.label}; deltas compare with {P.prevLabel}, {P.lyLabel} and the {P.ytdLabel} monthly average. Area status reflects the share of that area's metrics moving in the right direction; a sustained run means three consecutive periods moving the same way. Switch to Full report for the analysis, charts and record-level detail behind every number.</p>
         <Foot right={`Prepared ${new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`} />
       </section>
     </div>
