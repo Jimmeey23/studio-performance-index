@@ -1471,3 +1471,46 @@
 .xb-ar ul { margin: 0; padding-left: 16px; font-size: 11.5px; line-height: 1.45; color: var(--ink-2); display: flex; flex-direction: column; gap: 3px; }
 @media (max-width: 720px) { .xb-pulse { grid-template-columns: 1fr 1fr; } .xb-cols.even, .xb-areas { grid-template-columns: 1fr; } }
 .epr-ro.na { opacity: .35; text-decoration: line-through; cursor: not-allowed; border-style: dashed; }
+
+/* ── executive brief: uniform typography (one body style, no emphasis inside sentences) ── */
+.xb-page { --xb-body: 12.5px; --xb-lh: 1.55; font-size: var(--xb-body); line-height: var(--xb-lh); color: var(--ink-2); font-weight: 400; }
+.xb-page :is(p, li, td) { font-size: var(--xb-body); line-height: var(--xb-lh); color: var(--ink-2); font-weight: 400; font-style: normal; }
+.xb-page :is(b, strong, em, i:not(.xb-dot)) { font-weight: inherit; font-style: normal; }
+.xb-label { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; color: var(--ink-3); margin: 10px 0 8px; padding-bottom: 6px; }
+.xb-mast h1 { font-weight: 600; }
+.xb-meta { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--ink-2); }
+.xb-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.xb-dot.on { background: #12a150; } .xb-dot.watch { background: #f5a524; } .xb-dot.off { background: #d93036; }
+.xb-bl { padding: 14px 18px; }
+.xb-page p.xb-head { font-family: var(--serif, Georgia, serif); font-size: 17px; line-height: 1.4; font-weight: 600; color: var(--ink); }
+.xb-sum { margin-top: 8px; }
+.xb-pulse b { font-weight: 600; font-size: 19px; color: var(--ink); }
+.xb-kv { font-weight: 600; color: var(--ink); }
+.xb-kl { white-space: normal; overflow: visible; line-height: 1.3; min-height: 2.6em; }
+.xb-v { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.xb-d { font-weight: 500; }
+.xb-from { display: block; font-size: 11px; color: var(--ink-3); font-weight: 400; margin-top: 1px; }
+/* movers */
+.xb-mov li { grid-template-columns: 1fr auto auto; padding: 7px 10px; }
+.xb-ml { font-weight: 400; color: var(--ink); }
+.xb-mov .xb-from { grid-column: 1 / -1; margin: 0; }
+/* tables */
+.xb-tbl td { color: var(--ink-2); }
+.xb-area { font-weight: 600; color: var(--ink) !important; }
+.xb-nums div { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: baseline; white-space: normal; }
+.xb-nl { color: var(--ink-3); }
+.xb-dt { display: block; color: var(--ink); }
+/* area cards */
+.xb-ar { padding: 12px 14px; gap: 8px; }
+.xb-ar header b { font-weight: 600; color: var(--ink); font-size: 13px; }
+.xb-ar-sum { color: var(--ink-2); }
+table.xb-ar-k { width: 100%; border-collapse: collapse; display: table; }
+.xb-ar-k td { padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 11.5px !important; }
+.xb-ar-k td:first-child { color: var(--ink-3) !important; padding-right: 8px; }
+.xb-ar-k td:nth-child(2), .xb-ar-k td:nth-child(3) { text-align: right; padding-left: 10px; white-space: nowrap; }
+.xb-ar ul { padding-left: 16px; gap: 4px; }
+.xb-ar ul li { font-size: 12px !important; }
+/* insights / risks */
+.xb-ins { gap: 10px; } .xb-risk { gap: 10px; }
+.xb-ins li > span { font-size: 10.5px; font-weight: 600; background: var(--ink-2); }
+.xb-note { font-size: 10.5px !important; color: var(--ink-3) !important; }
