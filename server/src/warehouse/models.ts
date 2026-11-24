@@ -391,9 +391,10 @@ export const MODELS: ModelDef[] = [
   {
     name: 'fct_ad_spend',
     grain: 'One row per date × campaign × ad set × ad × platform',
-    description: 'Paid ads daily delivery and cost (Meta and Google Ads, see platform). City / studio inferred from campaign naming (MUM_/BLR-, Bandra, Kemps/Kwality …).',
+    description: 'Paid ads daily delivery and cost (Meta and Google Ads, see ad_network). City / studio inferred from campaign naming (MUM_/BLR-, Bandra, Kemps/Kwality …). Campaigns without a studio in the name (city-wide / brand) are split across that city\'s studios by their share of CRM leads that month (allocated = true); totals are unchanged.',
     sourceOfTruth: '❖ PM - Leads ❖ › Meta_Daily_Data',
     raw: { x: 'raw_meta_ads' },
+    deps: ['dim_location', 'fct_leads'],
     optional: true,
     // Accepts both the original Meta export (objective, adset_name, publisher) and the multi-platform layout
     // (platform, campaign_type, adset_or_adgroup_name, row_key, purchase_value).
@@ -412,15 +413,37 @@ export const MODELS: ModelDef[] = [
           _row_num
         from raw_meta_ads where p57_ts({{x:date}}) is not null
       )
+      , base as materialized (
       select ad_date, date_trunc('month', ad_date)::date as ad_month, campaign_id, campaign, objective, adset, ad, platform,
         case when platform ilike '%google%' or platform ilike '%youtube%' then 'Google Ads' else 'Meta' end as ad_network,   -- Facebook / Instagram / Messenger / Audience Network = Meta
         impressions, reach, clicks, spend, ad_leads, ad_purchases, ad_purchase_value,
         case when upper(campaign) like 'MUM%' then 'Mumbai' when upper(campaign) like 'BLR%' then 'Bengaluru' end as city,
         p57_loc(case when campaign ilike '%bandra%' or campaign ilike '%supreme%' then 'Bandra' when campaign ilike '%kemps%' or campaign ilike '%kwality%' then 'Kwality'
              when campaign ilike '%kenkere%' then 'Kenkere' when campaign ilike '%plash%' then 'Plash' when campaign ilike '%copper%' then 'Copper' end) as location
+        , _row_num as rid
       from x
       -- the sheet is appended by a sync job: keep one row per row_key (latest) when the key is present
-      qualify row_number() over (partition by coalesce(row_key, _row_num::varchar) order by _row_num desc) = 1`,
+      qualify row_number() over (partition by coalesce(row_key, _row_num::varchar) order by _row_num desc) = 1
+      ),
+      -- studios that can receive city-wide spend, and their CRM leads per month (the allocation key)
+      pool as (select location, city from dim_location where location_type in ('studio', 'partner')),
+      lm as (select location, created_month as m, count(*) as n from fct_leads where location in (select location from pool) group by 1, 2),
+      w as (
+        select b.*, p.location as to_loc, p.city as to_city, coalesce(lm.n, 0) as n
+        from base b join pool p on b.city is null or p.city = b.city
+        left join lm on lm.location = p.location and lm.m = b.ad_month
+        where b.location is null
+      ),
+      t as (select *, sum(n) over (partition by rid) as tot, count(*) over (partition by rid) as cnt from w),
+      sh as (select *, case when tot > 0 then n::double / tot else 1.0::double / cnt end as share from t)
+      select ad_date, ad_month, campaign_id, campaign, objective, adset, ad, platform, ad_network,
+        impressions, reach, clicks, spend, ad_leads, ad_purchases, ad_purchase_value, city, location, false as allocated, 1.0::double as alloc_share
+      from base where location is not null
+      union all
+      select ad_date, ad_month, campaign_id, campaign, objective, adset, ad, platform, ad_network,
+        impressions * share, reach * share, clicks * share, spend * share, ad_leads * share, ad_purchases * share, ad_purchase_value * share,
+        to_city, to_loc, true, share::double
+      from sh where share > 0`,
   },
   {
     name: 'fct_memberships',
