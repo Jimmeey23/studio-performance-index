@@ -28,6 +28,7 @@ import { attachVideo, enqueue, explainersAvailable, videoFile, videoStates } fro
 import { streamTo, blobConfigured, firstExisting } from './report/blobStore.js';
 import { narrationFor } from './report/narration.js';
 import { readoutFor } from './report/readoutClips.js';
+import { mediaFor } from './report/media.js';
 import { detectAnomalies, forecast } from './analytics/analyses.js';
 import { syncFromGoogle, syncFromFiles, rebuildOnly, syncInProgress } from './ingest/pipeline.js';
 import { SOURCES } from './sources.js';
@@ -154,6 +155,27 @@ app.get('/api/public/review/:id/readout/:block', (req, res) => {
     });
   }).catch((e) => { log.warn({ err: (e as Error).message }, 'readout stream failed'); if (!res.headersSent) res.status(502).end(); });
 });
+/* Extra report videos (music-icon playlist, Blomp). Public with the review link; playback sync is owner-driven via the live channel. */
+const mediaOf = async (id: string) => {
+  const s = await reviewStore.byIdPublic(id); if (!s) return undefined;
+  const r = s.review as { scope?: string; period?: { start?: string } };
+  return mediaFor(r.scope ?? '', r.period?.start ?? '');
+};
+app.get('/api/public/review/:id/media', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).json({ error: 'Not found' });
+  const m = blobConfigured() ? await mediaOf(id) : undefined;
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ items: m ? m.items.map((x) => ({ title: x.title })) : [] });
+}));
+app.get('/api/public/review/:id/media/:n', (req, res) => {
+  const id = String(req.params.id); const n = Number(req.params.n);
+  if (!/^rv_[a-z0-9-]{6,}$/i.test(id) || !Number.isInteger(n) || n < 0) return res.status(404).end();
+  mediaOf(id).then((m) => {
+    const item = m?.items[n];
+    if (!item || !blobConfigured()) { res.status(404).end(); return; }
+    return streamTo(item.key, req.headers.range, res, 'video/mp4');
+  }).catch((e) => { log.warn({ err: (e as Error).message }, 'media stream failed'); if (!res.headersSent) res.status(502).end(); });
+});
 /* Public, read-only review by direct link: no sign-in. Everything else (AI, drill-down, editing, the app) stays behind auth. */
 app.get('/api/public/review/:id', wrap(async (req, res) => {
   const id = String(req.params.id);
@@ -166,19 +188,20 @@ app.get('/api/public/review/:id', wrap(async (req, res) => {
 /* Live presenter channel: the review's owner broadcasts what they do (video, scroll, clicks, inputs, pointer,
  * annotations) and every open copy of the report follows over SSE. In-memory, single instance. */
 type LiveEv = { t: string; at: number; seq: number; [k: string]: unknown };
-const LIVE_TYPES = new Set(['video', 'narr', 'live', 'scroll', 'click', 'input', 'ptr', 'extras', 'key']);
-const SNAPSHOT = new Set(['video', 'narr', 'live', 'scroll', 'extras', 'ptr']);   // replayed to late joiners
+const LIVE_TYPES = new Set(['video', 'narr', 'media', 'live', 'scroll', 'click', 'input', 'ptr', 'extras', 'key']);
+const SNAPSHOT = new Set(['video', 'narr', 'media', 'live', 'scroll', 'extras', 'ptr']);   // replayed to late joiners
 const liveSnap = new Map<string, Map<string, LiveEv>>();
 const liveSeq = new Map<string, number>();
 const vidSubs = new Map<string, Set<Response>>();
-const pushLive = (id: string, ev: LiveEv) => { const d = `data: ${JSON.stringify(ev)}\n\n`; for (const r of vidSubs.get(id) ?? []) r.write(d); };
+// `sent` (server clock, like `at`) lets a client work out how old a replayed event is: media sync uses it
+const pushLive = (id: string, ev: LiveEv) => { const d = `data: ${JSON.stringify({ ...ev, sent: Date.now() })}\n\n`; for (const r of vidSubs.get(id) ?? []) r.write(d); };
 app.get('/api/public/review/:id/live', (req, res) => {
   const id = String(req.params.id); if (!/^rv_[a-z0-9-]{6,}$/i.test(id)) return res.status(404).end();
   res.setHeader('Content-Type', 'text/event-stream'); res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no'); res.flushHeaders();
   const set = vidSubs.get(id) ?? new Set<Response>(); set.add(res); vidSubs.set(id, set);
   const snap = liveSnap.get(id);
-  if (snap) for (const t of ['live', 'extras', 'scroll', 'ptr', 'video']) { const ev = snap.get(t); if (ev) res.write(`data: ${JSON.stringify(ev)}\n\n`); }
+  if (snap) for (const t of ['live', 'extras', 'scroll', 'ptr', 'video', 'narr', 'media']) { const ev = snap.get(t); if (ev) res.write(`data: ${JSON.stringify({ ...ev, sent: Date.now() })}\n\n`); }
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   req.on('close', () => { clearInterval(ping); set.delete(res); if (!set.size) vidSubs.delete(id); });
 });

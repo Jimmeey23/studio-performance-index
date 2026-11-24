@@ -7,6 +7,7 @@
 import { createPortal } from 'react-dom';
 import { GuideOverlay, showAnn } from '../components/report/GuideOverlay';
 import { ReadoutIcons } from '../components/report/ReadoutIcons';
+import { MediaPlaylist, type MediaSync } from '../components/report/MediaPlaylist';
 import { describe, interactive, locate, sectionPoint, sectionToViewport, setValue, type ElDesc } from '../lib/live';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -165,6 +166,8 @@ function guideTo(cue: NarrCue) {
   if (!group.length) { if (moved) showAnn(null); return; }
   setTimeout(() => showAnn({ els: group, cue, key, add }), moved ? 450 : 50);
 }
+const RMedia = createContext<{ rid: string; items: { title: string }[]; presenter: boolean; send: (st: { open: boolean; idx: number; playing: boolean; time: number }) => void; remote: MediaSync | null } | null>(null);
+function MediaButton() { const c = useContext(RMedia); return c ? <MediaPlaylist {...c} /> : null; }
 type NarrSync = { open: boolean; track: string; n: number; playing: boolean; time: number; at: number; seq: number };
 const RNarr = createContext<{ rid: string; tracks: NarrTrack[]; presenter: boolean; send: (st: Omit<NarrSync, 'at' | 'seq'>) => void; remote: NarrSync | null } | null>(null);
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -794,6 +797,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
   const [spkNotes, setSpkNotes] = useState<Record<string, string>>({});
   const [narr, setNarr] = useState<NarrTrack[]>([]);
   const [roClips, setRoClips] = useState<[string, string, number][]>([]);
+  const [media, setMedia] = useState<{ title: string }[]>([]);
+  const [mediaRemote, setMediaRemote] = useState<MediaSync | null>(null);
   const [narrRemote, setNarrRemote] = useState<NarrSync | null>(null);
   const [vids, setVids] = useState<{ available: boolean; videos: Record<string, VideoState> }>({ available: false, videos: {} });
   const vidAsked = useRef<string | null>(null);
@@ -956,7 +961,8 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
     return () => { document.title = prev; if (link && prevIcon) link.href = prevIcon; };
   }, [rv?.id, rv?.scope, rv?.period.label, brief]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!rv?.id) return; api<{ tracks: NarrTrack[] }>(`/api/public/review/${rv.id}/narration`).then((q) => setNarr(q.tracks)).catch(() => {});
-    api<{ clips: [string, string, number][] }>(`/api/public/review/${rv.id}/readout`).then((q) => setRoClips(q.clips)).catch(() => {}); }, [rv?.id]);
+    api<{ clips: [string, string, number][] }>(`/api/public/review/${rv.id}/readout`).then((q) => setRoClips(q.clips)).catch(() => {});
+    api<{ items: { title: string }[] }>(`/api/public/review/${rv.id}/media`).then((q) => setMedia(q.items)).catch(() => {}); }, [rv?.id]);
   const retryVideo = publicView || !rv ? null : (part: string) => { api<{ videos: Record<string, VideoState> }>(`/api/review/${rv.id}/explainers`, { method: 'POST', json: { parts: [part], force: true } }).then((q) => setVids({ available: true, videos: q.videos })).catch((e) => setErr((e as Error).message)); };
 
   /* ── live presenter: the owner's screen drives every viewer's copy of this report ── */
@@ -1038,6 +1044,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
       switch (ev.t) {
         case 'video': setRemote(ev as unknown as LiveSync); break;
         case 'narr': setNarrRemote(ev as unknown as NarrSync); break;
+        case 'media': setMediaRemote({ ...(ev as unknown as MediaSync), rx: performance.now() }); break;
         case 'live': setFollowing(!!ev.on); if (!ev.on) setRPtr(null); break;
         case 'scroll': {
           const sc = scroller.current; if (!sc) break;
@@ -1190,7 +1197,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
         <div ref={(el) => { (revealRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mainRef.current = el; }} className="epr-wrap relative" onClick={placeNote}>
           {loading && <div className="epr-loading"><Loader2 className="animate-spin" />Opening review…</div>}
           {rv && P && (
-            <RNarr.Provider value={{ rid: rv.id, tracks: narr, presenter, send: (st) => { if (rv && presenter) post({ t: 'narr', ...st }); }, remote: narrRemote }}><RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
+            <RMedia.Provider value={{ rid: rv.id, items: media, presenter, send: (st) => { if (rv && presenter) post({ t: 'media', ...st }); }, remote: mediaRemote }}><RNarr.Provider value={{ rid: rv.id, tracks: narr, presenter, send: (st) => { if (rv && presenter) post({ t: 'narr', ...st }); }, remote: narrRemote }}><RVideo.Provider value={{ rid: rv.id, available: vids.available, videos: vids.videos, retry: retryVideo, upload: uploadVideo, presenter, send: sendLive, remote }}><RBase.Provider value={{ base, P }}><RDrill.Provider value={drillApi}>
               {!brief && !building && !!roClips.length && <ReadoutIcons rid={rv.id} clips={roClips} root={mainRef} />}
               <div className="epr-main">
                 {brief && !building ? <ExecBrief rv={rv} ai={ai} P={P} /> : <>
@@ -1203,7 +1210,7 @@ function ReviewDoc({ publicView }: { publicView: boolean }) {
                 </>}
                 {!building && <div className="epr-end">End of review · {rv.scope} · {P.label}</div>}
               </div>
-            </RDrill.Provider></RBase.Provider></RVideo.Provider></RNarr.Provider>
+            </RDrill.Provider></RBase.Provider></RVideo.Provider></RNarr.Provider></RMedia.Provider>
           )}
         </div>
       </div>
@@ -1389,7 +1396,7 @@ function SectionHead({ n, total, kicker, title, lead, right, part, headline, sta
         <span className="epr-hero-ch">Chapter {String(n).padStart(2, '0')}<i>/ {String(total).padStart(2, '0')}</i></span>
         <span className="epr-hero-kick">{kicker}</span>
         <NarrIcon sec={vid ?? 'closing'} />
-        {vid === 'glance' && <><VideoExplainer part="glance" title={title} /><NarrationPlayer /></>}
+        {vid === 'glance' && <><VideoExplainer part="glance" title={title} /><MediaButton /><NarrationPlayer /></>}
         {right}
       </div>
       <div className="epr-hero-body">
