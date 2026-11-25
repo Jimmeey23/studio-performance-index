@@ -164,7 +164,12 @@ export async function productList(req: Req) {
 
 /* ── retention: who churns, the leading indicators and the value at stake ── */
 const RET = ['memberships_expiring', 'sheet_renewal_rate', 'churn_rate', 'lapsed_memberships', 'lapsed_value', 'expiring_value'];
-export async function retentionExtras(req: Req) {
+export async function retentionExtras(req0: Req) {
+  // no memberships ending in the period → the breakdowns would all be empty; show the last 12 months instead, and say so
+  const here = await q(req0, ['memberships_expiring'], []);
+  const none = !here || !Number(here.rows[0]?.memberships_expiring);
+  const req: Req = none ? { ...req0, start: monthsBack(req0.end, 12) } : req0;
+  const sfx = none ? ' (last 12 months — no memberships ended this period)' : '';
   const big = (r: Record<string, unknown>) => Number(r.memberships_expiring) >= 3;
   const [usage, quiet, term, fam, mem, studio, seller, trend] = await Promise.all([
     q(req, RET, ['usage_band']), q(req, RET, ['last_visit_gap']), q(req, RET, ['term_length']), q(req, RET, ['product_family'], { sort: 'memberships_expiring' }),
@@ -174,10 +179,10 @@ export async function retentionExtras(req: Req) {
   ]);
   return {
     tables: compact([
-      table('Churn by usage — classes used during the membership', usage, 'Low usage is the strongest early-warning signal: members who barely use a membership rarely renew.'),
-      table('Churn by last visit before expiry', quiet, 'How long before the end date each member last attended. "Gone quiet" members are the save-play target.'),
-      table('Churn by membership length', term), table('Churn by product family', fam, 'Newcomer offers ending is structural churn; unlimited / class-pack lapses are true loss.'),
-      table('Memberships losing the most value', mem), table('Retention by studio', studio), table('Retention by seller', seller),
+      table('Churn by usage — classes used during the membership' + sfx, usage, 'Low usage is the strongest early-warning signal: members who barely use a membership rarely renew.'),
+      table('Churn by last visit before expiry' + sfx, quiet, 'How long before the end date each member last attended. "Gone quiet" members are the save-play target.'),
+      table('Churn by membership length' + sfx, term), table('Churn by product family' + sfx, fam, 'Newcomer offers ending is structural churn; unlimited / class-pack lapses are true loss.'),
+      table('Memberships losing the most value' + sfx, mem), table('Retention by studio' + sfx, studio), table('Retention by seller' + sfx, seller),
     ]),
     charts: compact([chart('Renewal and churn rate — 12 months', trend, 'line', ['sheet_renewal_rate', 'churn_rate'])]),
   };

@@ -541,7 +541,7 @@ export const METRICS: Metric[] = [
   m({ id: 'avg_first_purchase', label: 'Avg first purchase', model: 'new_clients', sql: 'avg(first_purchase_value) filter (where is_converted and first_purchase_value > 0)', format: 'currency', higherIsBetter: true,
     description: 'Average value of the first purchase by converted new clients.' }),
   m({ id: 'open_leads', label: 'Open pipeline', model: 'leads', sql: "count(*) filter (where not is_converted and coalesce(status, '') not in ('Lost', 'Disqualified', 'Won'))", format: 'number',
-    description: 'Leads not converted and not lost/disqualified.' }),
+    description: 'Leads not converted and not lost/disqualified. Includes the unresponsive leads (they are a subset of the open pipeline, not a separate group): open = responsive open + unresponsive.' }),
   m({ id: 'lost_leads', label: 'Lost + disqualified leads', model: 'leads', sql: "count(*) filter (where status in ('Lost', 'Disqualified'))", format: 'number', additive: true, higherIsBetter: false,
     description: 'Leads marked Lost or Disqualified.' }),
   m({ id: 'ad_clicks', label: 'Clicks', model: 'ads', sql: 'sum(clicks)', format: 'number', additive: true, higherIsBetter: true, description: 'Ad clicks.' }),
