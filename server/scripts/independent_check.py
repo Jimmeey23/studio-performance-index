@@ -99,6 +99,13 @@ paid_col = next(c for c in lp.columns if 'amount' in c.lower() or 'paid' in c.lo
 if rules.get('exclude_zero_value', True):
     lw2 = lw2[lw2[paid_col].map(lambda v: (num(v) or 0) > 0)]
 lw2 = lw2[~lw2[mcol].map(norm).isin(excl)]
+# governed lapse rule: unrenewed memberships stay in the Grace Period until grace_days+ past end, then Lapsed
+grace = int(rules.get('grace_days', 30))
+today = pd.Timestamp.now().normalize()
+unrenewed = lw2['Status'].isin(['Lapsed', 'Renewal Grace Period'])
+lw2 = lw2.assign(Status=lw2['Status'].where(~unrenewed, ((today - lw2.end.dt.normalize()).dt.days >= grace).map({True: 'Lapsed', False: 'Grace Period'})))
+res['lapsed_memberships'] = int((lw2['Status'] == 'Lapsed').sum())
+res['grace_memberships'] = int((lw2['Status'] == 'Grace Period').sum())
 rl = lw2[lw2['Status'].isin(['Renewed', 'Lapsed'])]
 res['sheet_renewal_rate'] = round((rl['Status'] == 'Renewed').mean(), 6)
 res['memberships_ending'] = int(len(lw2))

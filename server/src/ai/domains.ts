@@ -151,23 +151,23 @@ ${COMMON_METHOD}`,
   },
   {
     id: 'churn', label: 'Churn & win-backs', icon: 'UserMinus',
-    blurb: 'Lapsed memberships, churn rate, value lost, the lapsed pool and reactivations.',
+    blurb: 'Lapsed memberships, churn rate, value lost, grace-period memberships, the inactive-client pool and reactivations.',
     expert: `You are the Churn expert — you quantify and reverse lapse.
 KPI tree: Churn = lapsed ÷ (renewed + lapsed) by membership end date; value lost = amount paid on lapsed memberships; win-backs = purchases after 90+ days without a visit.
-Know the data: the Lapsed sheet status (Renewed / Lapsed / Active / Frozen / Not Activated) counts any later purchase as a renewal; the strict renewal analysis requires a membership/package repurchase. Complimentary, staff, referral and intro products inflate counts — segment by product family. The lapsed pool comes from the client master (last visit 90–365 days, lifetime revenue > 0).
-Diagnostics: churn by membership type, location and seller; value at risk; lapsed pool by lifetime value; win-back rate trend; usage before lapse (remaining sessions, last visit).
+Know the data: membership status is Renewed / Lapsed / Grace Period / Active / Frozen / New / Not Activated / (Ineligible). An unrenewed membership is in the Grace Period until it is 30+ days past its end date, and only then Lapsed — always report grace and genuinely lapsed counts separately; churn and renewal rates use Renewed + Lapsed only. The sheet status counts any later purchase as a renewal; the strict renewal analysis requires a membership/package repurchase. Complimentary, staff, referral and intro products inflate counts — segment by product family. The lapsed pool comes from the client master (last visit 90–365 days, lifetime revenue > 0).
+Diagnostics: churn by membership type, location and seller; value at risk; grace-period memberships still recoverable (grace_value); inactive-client pool (no visit N+ days — not the same as membership Lapsed) by lifetime value; win-back rate trend; usage before lapse (remaining sessions, last visit).
 Levers: save offers before expiry, win-back campaigns prioritised by LTV, pause/freeze options instead of lapse, associate ownership of high-value lapses.
 ${COMMON_METHOD}`,
-    kpis: ['memberships_expiring', 'lapsed_memberships', 'churn_rate', 'lapsed_value', 'sheet_renewal_rate', 'expiring_value'],
+    kpis: ['memberships_expiring', 'lapsed_memberships', 'grace_memberships', 'churn_rate', 'lapsed_value', 'grace_value', 'sheet_renewal_rate', 'expiring_value'],
     widgets: [
-      { type: 'kpis', title: 'Headline', metrics: ['memberships_expiring', 'lapsed_memberships', 'churn_rate', 'lapsed_value', 'sheet_renewal_rate', 'expiring_value'] },
-      { type: 'chart', title: 'Lapsed vs renewed memberships', metrics: ['lapsed_memberships', 'memberships_renewed_flag'], chart: 'stacked_bar', span: 2 },
+      { type: 'kpis', title: 'Headline', metrics: ['memberships_expiring', 'lapsed_memberships', 'grace_memberships', 'churn_rate', 'lapsed_value', 'grace_value', 'sheet_renewal_rate', 'expiring_value'] },
+      { type: 'chart', title: 'Lapsed vs renewed memberships', metrics: ['lapsed_memberships', 'grace_memberships', 'memberships_renewed_flag'], chart: 'stacked_bar', span: 2 },
       { type: 'chart', title: 'Churn rate by location', metrics: ['churn_rate'], dimension: 'location', chart: 'line' },
       { type: 'chart', title: 'Lapsed value by product family', metrics: ['lapsed_value'], dimension: 'product_family', chart: 'pie' },
-      { type: 'table', title: 'Churn by membership', metrics: ['memberships_expiring', 'lapsed_memberships', 'churn_rate', 'lapsed_value'], dimensions: ['membership'], span: 2, limit: 25 },
-      { type: 'table', title: 'Churn by location', metrics: ['memberships_expiring', 'lapsed_memberships', 'churn_rate', 'lapsed_value'], dimensions: ['location'] },
+      { type: 'table', title: 'Churn by membership', metrics: ['memberships_expiring', 'lapsed_memberships', 'grace_memberships', 'churn_rate', 'lapsed_value'], dimensions: ['membership'], span: 2, limit: 25 },
+      { type: 'table', title: 'Churn by location', metrics: ['memberships_expiring', 'lapsed_memberships', 'grace_memberships', 'churn_rate', 'lapsed_value'], dimensions: ['location'] },
       { type: 'analysis', title: 'Win-backs by month', tool: 'winback_analysis', input: { group_by: 'month' }, block: 'table' },
-      { type: 'mom', title: 'Month-on-month', metrics: ['memberships_expiring', 'lapsed_memberships', 'churn_rate', 'lapsed_value'] },
+      { type: 'mom', title: 'Month-on-month', metrics: ['memberships_expiring', 'lapsed_memberships', 'grace_memberships', 'churn_rate', 'lapsed_value'] },
     ],
     presets: [
       'How big is the lapsed client pool by location and lifetime value?',

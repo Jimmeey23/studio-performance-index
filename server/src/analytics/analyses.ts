@@ -328,7 +328,7 @@ export async function renewalAnalysis(input: { start?: string; end?: string; gro
       { key: 'grp', label: groupBy === 'month' ? 'Expiry month' : groupBy === 'location' ? 'Location' : groupBy === 'membership' ? 'Membership' : 'Group', kind: groupBy === 'month' ? 'period' : 'dimension', format: groupBy === 'month' ? 'date' : 'text' },
       { key: 'expiring', label: 'Expiring', kind: 'metric', format: 'number' },
       { key: 'renewed', label: 'Renewed', kind: 'metric', format: 'number' },
-      { key: 'pending', label: 'Window still open', kind: 'metric', format: 'number' },
+      { key: 'pending', label: 'In grace period (window open)', kind: 'metric', format: 'number' },
       { key: 'renewal_rate', label: 'Renewal rate', kind: 'metric', format: 'percent' },
       { key: 'renewal_revenue', label: 'Renewal revenue', kind: 'metric', format: 'currency' },
       { key: 'lapsed_value', label: 'Lapsed value', kind: 'metric', format: 'currency' },

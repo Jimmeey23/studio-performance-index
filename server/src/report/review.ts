@@ -305,7 +305,7 @@ CONSISTENCY (the report is audited line by line — a figure that disagrees with
 - Name every benchmark explicitly: "vs <previous period label>", "vs the <current-year monthly average label>", "vs <same period last year label>". Never write an unqualified "monthly average" or "N-month average".
 - Revenue: say gross (incl. GST) or net (excl. GST) every time; never mix them in one calculation or share.
 - Class average excludes empty classes; when you set it against classes held, say so and use the non-empty class count if the digest gives it.
-- Memberships ending = Renewed + Lapsed + other status; the renewal rate uses Renewed + Lapsed only. Do not imply the two populations are the same.
+- Memberships ending = Renewed + Lapsed + Grace Period + other status; the renewal and churn rates use Renewed + Lapsed only. Lapsed means 30+ days past end without renewal; under 30 days is Grace Period — always state both counts. Do not imply the two populations are the same.
 - Paid ads: platform cost per lead uses the ad platforms' own lead counts; cost per lead (CRM) uses CRM leads. Never present spend ÷ all conversions as an acquisition cost unless you call it a blended upper bound.
 - Separate observation from inference: causes the data does not measure directly (e.g. cannibalisation, why clients chose something, advertising effect) must be worded as "suggests" / "apparent" / "likely".
 - Opportunity sizes are scenarios: write them as "if <assumption>, ~₹X" and state the assumption and base population.

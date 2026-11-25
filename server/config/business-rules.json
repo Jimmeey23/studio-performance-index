@@ -295,6 +295,8 @@
       "Yashita's Sign up link"
     ],
     "window_after_days": 30,
+    "_grace_doc": "An unrenewed membership is in the Grace Period until it is grace_days or more days past its end date; only then is it Lapsed. Churn / renewal rates use Renewed + Lapsed only (grace is unresolved).",
+    "grace_days": 30,
     "renewal_categories": [
       "Memberships",
       "Class Packages"

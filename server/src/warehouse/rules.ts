@@ -16,7 +16,7 @@ export interface BusinessRules {
     new_client_is_new_contains?: string;
     trial_not_attended_values?: string[];
   };
-  renewal: { window_after_days: number; renewal_categories: string[]; include_membership_patterns: string[]; exclude_membership_patterns: string[]; exclude_zero_value?: boolean; exclude_memberships_exact?: string[] };
+  renewal: { window_after_days: number; grace_days?: number; renewal_categories: string[]; include_membership_patterns: string[]; exclude_membership_patterns: string[]; exclude_zero_value?: boolean; exclude_memberships_exact?: string[] };
   winback: { inactive_days: number };
   churn: { inactive_days: number };
   reporting: { default_trailing_months: number; exclude_incomplete_current_month_from_trends: boolean; week_start: string; location_groups?: Record<string, string[]> };
@@ -38,6 +38,9 @@ export function loadRules(): BusinessRules {
 export function saveRules(r: BusinessRules) {
   fs.writeFileSync(file, JSON.stringify(r, null, 2));
 }
+
+/** Days after a membership's end date during which an unrenewed member is in grace (not yet lapsed). */
+export const graceDays = (): number => Math.max(0, Math.round(Number(loadRules().renewal.grace_days ?? 30)));
 
 const norm = (sql: string) => `regexp_replace(lower(trim(${sql})), '\\s+', ' ', 'g')`;
 /**
