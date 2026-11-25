@@ -375,9 +375,10 @@ app.get('/api/review/:id/pdf', wrap(async (req, res) => {
   const title = `Performance Review — ${(s.review as { scope?: string }).scope ?? ''} ${(s.review as { period?: { label?: string } }).period?.label ?? ''}`.trim();
   try {
     const brief = req.query.brief === '1';
-    const pdf = await reviewPdf(`http://127.0.0.1:${config.port}/review/${id}?pdf=1${brief ? '&brief=1' : ''}`, brief ? title.replace('Performance Review', 'Executive Brief') : title);
+    const docTitle = brief ? title.replace('Performance Review', 'Executive Brief') : title;
+    const pdf = await reviewPdf(`http://127.0.0.1:${config.port}/review/${id}?pdf=1${brief ? '&brief=1' : ''}`, docTitle);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${title.replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 80) || 'review'}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${docTitle.replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 80) || 'review'}.pdf"`);
     res.end(Buffer.from(pdf));
   } catch (e) { res.status(503).json({ error: (e as Error).message }); }
 }));

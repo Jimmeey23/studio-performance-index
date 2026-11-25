@@ -1421,6 +1421,11 @@
 .xb-ins { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
 .xb-ins li { display: flex; gap: 10px; } .xb-ins li > span { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--card, #fff); font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
 .xb-ins p, .xb-risk p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+/* brief page 1: conclusions and decisions lead — the data follows on page 2 */
+.xb-concl { list-style: none; margin: 8px 0 14px; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.xb-concl li { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: start; } .xb-concl .xb-st { justify-self: start; }
+.xb-concl p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.xb-decide li > p > .xb-from { display: block; margin-top: 2px; }
 .xb-risk { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
 .xb-risk li { display: flex; gap: 8px; } .xb-risk svg { flex: none; color: #d97706; margin-top: 3px; }
 .xb-dec td b { display: block; font-weight: 600; } .xb-dec td em { font-style: normal; font-size: 10.5px; color: var(--ink-3); }

@@ -222,7 +222,7 @@ function sectionInsights(s: { kpis: Kpi[]; tables: ReportTable[] }, P: Report['p
   }
   return out;
 }
-const PLAYBOOK: Record<string, string> = {
+export const PLAYBOOK: Record<string, string> = {
   revenue: 'Run a renewal-window upsell push (3-month → 6-month / annual) and review top products by studio.',
   atv: 'Shift mix towards unlimited / longer memberships and tighten discount approvals.',
   discount_rate: 'Audit discount codes by associate and cap ad-hoc discounts.',

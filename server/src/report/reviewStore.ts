@@ -3,7 +3,7 @@
  * stored per part (glance + each section) so a part is written once and reused.
  */
 import { appDb, parseJson, ddl } from '../store/app.js';
-import type { Review, ReviewAI } from './review.js';
+import { briefVerdict, type Review, type ReviewAI } from './review.js';
 
 let ready = false;
 async function db() {
@@ -15,7 +15,9 @@ export const reviewKey = (r: { start: string; end: string; locations: string[] }
 export interface SavedReview { review: Review; ai: ReviewAI; created_at: string; updated_at: string }
 type Row = { data: string; ai: string | null; created_at: string; updated_at: string };
 const cols = `data, ai, created_at::varchar created_at, updated_at::varchar updated_at`;
-const hydrate = (r: Row | null | undefined): SavedReview | null => (r ? { review: parseJson<Review>(r.data), ai: r.ai ? parseJson<ReviewAI>(r.ai) : { sections: {} }, created_at: r.created_at, updated_at: r.updated_at } : null);
+/** reviews saved before the executive-brief verdict existed get it computed on read (pure function of the stored KPIs) */
+const withBrief = (rv: Review): Review => (rv.brief || !Array.isArray(rv.sections) ? rv : { ...rv, brief: briefVerdict(rv.sections, rv.period) });
+const hydrate = (r: Row | null | undefined): SavedReview | null => (r ? { review: withBrief(parseJson<Review>(r.data)), ai: r.ai ? parseJson<ReviewAI>(r.ai) : { sections: {} }, created_at: r.created_at, updated_at: r.updated_at } : null);
 
 export async function findByKey(uid: string, key: string) { return hydrate(await (await db()).one<Row>(`select ${cols} from exec_reviews where user_id = ? and req_key = ? order by created_at desc limit 1`, [uid, key])); }
 export async function latest(uid: string) { return hydrate(await (await db()).one<Row>(`select ${cols} from exec_reviews where user_id = ? order by updated_at desc limit 1`, [uid])); }

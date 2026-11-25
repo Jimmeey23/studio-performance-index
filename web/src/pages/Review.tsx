@@ -57,7 +57,8 @@ type Section = {
   notes: Record<string, string>; ruleFindings: string[];
 };
 type Review = { id: string; generatedAt: string; request: { start: string; end: string; locations: string[] }; period: ReportPeriod; scope: string; cover: { photo: number; headlineKpis: Kpi[] };
-  glance: { cards: Kpi[]; tables: Table[]; charts: Chart[]; lists: List[]; notes: Record<string, string> }; sections: Section[]; scorecard: Kpi[]; studios?: Table };
+  glance: { cards: Kpi[]; tables: Table[]; charts: Chart[]; lists: List[]; notes: Record<string, string> }; sections: Section[]; scorecard: Kpi[]; studios?: Table;
+  brief?: { conclusions: { section: string; area: string; status: 'on' | 'watch' | 'off'; text: string }[]; decisions: { section: string; area: string; priority: 'high' | 'medium'; decision: string; because: string; target: string; metric: string }[] } };
 type Rec = { title: string; detail: string; owner: string; priority: 'high' | 'medium' | 'low'; timeline?: string; kpi?: string; impact?: string };
 type SectionAI = { title?: string; lead?: string; edited?: boolean; headline: string; summary: string; insights: string[]; findings: string[]; recommendations: Rec[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
 type GlanceAI = { edited?: boolean; headline: string; tagline: string; summary: string; insights: string[]; highlights: { section: string; text: string }[]; watch: string[]; notes: Record<string, string>; model?: string; source: 'ai' | 'rules'; at: string };
@@ -1518,9 +1519,10 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
   const rows = rv.sections.map((s) => {
     const ks = s.kpis.filter((k) => k.chg !== null && k.higherIsBetter !== undefined);
     const good = ks.filter((k) => tone(k, k.chg) > 0).length; const r = ks.length ? good / ks.length : 0.5;
-    const status = r >= 0.6 ? 'on' : r >= 0.4 ? 'watch' : 'off';
+    const v = rv.brief?.conclusions.find((c) => c.section === s.id);
+    const status = v?.status ?? (r >= 0.6 ? 'on' : r >= 0.4 ? 'watch' : 'off');
     const a = ai?.sections[s.id];
-    return { s, a, status, good, n: ks.length, headline: trimTo(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? s.ruleFindings[0], 170),
+    return { s, a, status, good, n: ks.length, verdict: v?.text, headline: trimTo(a?.headline ?? gl?.highlights.find((x) => x.section === s.id)?.text ?? v?.text ?? s.ruleFindings[0], 200),
       summary: firstSentences(a?.summary, 2), points: (a?.insights?.length ? a.insights : s.ruleFindings).slice(0, 2).map((x) => trimTo(x, 170)),
       key: s.kpis.filter((k) => k.value !== null).slice(0, 4) };
   });
@@ -1528,9 +1530,18 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
   const insights = (gl?.insights?.length ? gl.insights : rows.map((r) => r.headline)).slice(0, 8).map((x) => trimTo(x, 240));
   const risks = (gl?.watch ?? []).slice(0, 6).map((x) => trimTo(x, 200));
   const order = { high: 0, medium: 1, low: 2 } as const;
-  const decisions = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), chapter: chTitle(s) })))
-    .sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 10);
+  // decisions: the AI action plan where written; the data-backed rule decisions fill every area it has not covered
+  const aiDec = rv.sections.flatMap((s) => (ai?.sections[s.id]?.recommendations ?? []).map((r) => ({ ...r, owner: normaliseOwner(r.owner), chapter: chTitle(s), section: s.id, because: r.detail as string | undefined })));
+  const covered = new Set(aiDec.map((d) => d.section));
+  const ruleDec = (rv.brief?.decisions ?? []).filter((d) => !covered.has(d.section as typeof rv.sections[number]['id'])).map((d) => {
+    const sec = rv.sections.find((x) => x.id === d.section);
+    return { title: d.decision, detail: d.because, because: d.because, owner: '', priority: d.priority as Rec['priority'], timeline: undefined as string | undefined, kpi: d.target, impact: undefined as string | undefined, chapter: sec ? chTitle(sec) : d.area, section: d.section };
+  });
+  const decisions = [...aiDec, ...ruleDec].sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 10);
   const counts = { on: rows.filter((r) => r.status === 'on').length, watch: rows.filter((r) => r.status === 'watch').length, off: rows.filter((r) => r.status === 'off').length };
+  const verdictLine = counts.off ? `${counts.off} of ${rows.length} areas are off course and need a leadership decision now; ${counts.watch} more need watching.`
+    : counts.watch ? `No area is off course, but ${counts.watch} of ${rows.length} show a weak spot to correct before it becomes a trend.` : `All ${rows.length} areas are on track — the priority is protecting and scaling what is working.`;
+  const ranked = [...rows].sort((a, b) => ({ off: 0, watch: 1, on: 2 }[a.status as 'on'] - { off: 0, watch: 1, on: 2 }[b.status as 'on']));
   const pages = 4; let pg = 0;
   const Foot = ({ right }: { right?: string }) => <footer className="xb-foot"><span>Page {++pg} of {pages}</span><span>{right ?? `${rv.scope} · ${P.label}`}</span></footer>;
   const Mover = ({ k }: { k: Kpi }) => <li><span className="xb-ml">{k.label}</span><span className="xb-v">{fmtK(k.value, k.format)}</span>{delta(k, k.chg)}<span className="xb-from">{k.prev !== null ? `from ${fmtK(k.prev, k.format)}` : ''}</span></li>;
@@ -1544,7 +1555,8 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
         </header>
         <div className="xb-bl">
           <span className="xb-label">Bottom line</span>
-          <p className="xb-head">{gl?.headline ?? `${rv.scope}: ${P.label} review`}</p>
+          <p className="xb-head">{gl?.headline ?? verdictLine}</p>
+          {gl?.headline && <p className="xb-sum"><b>{verdictLine}</b></p>}
           {(gl?.summary || gl?.tagline) && <p className="xb-sum">{firstSentences(gl?.summary || gl?.tagline, 4)}</p>}
         </div>
         <div className="xb-pulse">
@@ -1553,6 +1565,19 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
           <div><b>{building.length}</b><span>on a 3-period upward run</span></div>
           <div><b>{slipping.length}</b><span>on a 3-period slide</span></div>
         </div>
+        <span className="xb-label">Conclusions</span>
+        <ul className="xb-concl">{ranked.map(({ s, status, verdict, headline }) => (
+          <li key={s.id}><span className={`xb-st ${status}`}>{STATUS[status as keyof typeof STATUS]}</span><p><b>{chTitle(s)}.</b> {verdict ?? headline}</p></li>))}
+        </ul>
+        <span className="xb-label">Decisions for leadership</span>
+        {decisions.length ? <ol className="xb-ins xb-decide">{decisions.slice(0, 5).map((d, i) => (
+          <li key={i}><span>{i + 1}</span><p><b>{trimTo(d.title, 150)}</b>{d.because ? <> — because {trimTo(d.because.replace(/^because\s+/i, ''), 170)}</> : null}{d.kpi ? <span className="xb-from"> Target: {trimTo(d.kpi, 110)}{d.owner ? ` · Owner: ${d.owner}` : ''} · By {d.timeline ?? WHEN[d.priority]}</span> : null}</p></li>))}
+        </ol> : <p className="xb-none">No area moved materially the wrong way — no corrective decision required this period; hold course.</p>}
+        <Foot />
+      </section>
+
+      {/* ── page 2: the numbers behind the verdict ── */}
+      <section className="xb-page">
         <span className="xb-label">Key business metrics</span>
         <div className="xb-kpis">{kpis.map((k) => (
           <div key={k.id} className="xb-kpi">
@@ -1563,11 +1588,6 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
             <div className="xb-kc"><span>vs {/avg/i.test(P.ytdLabel) ? P.ytdLabel : `${P.ytdLabel} avg`}</span>{delta(k, k.chgYtd)}</div>
           </div>))}
         </div>
-        <Foot />
-      </section>
-
-      {/* ── page 2: what moved, and how each area is doing ── */}
-      <section className="xb-page">
         <div className="xb-cols even">
           <div><span className="xb-label">Biggest gains vs {P.prevLabel}</span>{gains.length ? <ul className="xb-mov good">{gains.map((k) => <Mover key={k.id} k={k} />)}</ul> : <p className="xb-none">No material gains.</p>}</div>
           <div><span className="xb-label">Biggest setbacks vs {P.prevLabel}</span>{drops.length ? <ul className="xb-mov bad">{drops.map((k) => <Mover key={k.id} k={k} />)}</ul> : <p className="xb-none">No material setbacks.</p>}</div>
@@ -1610,10 +1630,10 @@ function ExecBrief({ rv, ai, P }: { rv: Review; ai?: AI; P: ReportPeriod }) {
             {!!slipping.length && <><span className="xb-label">Sustained slides (3 periods)</span><ul className="xb-mov bad sm">{slipping.map((k) => <Mover key={k.id} k={k} />)}</ul></>}
           </div>
         </div>
-        <span className="xb-label">Decisions and actions</span>
+        <span className="xb-label">Full decision list — owners, deadlines, measures</span>
         {decisions.length ? <table className="xb-tbl xb-dec">
           <thead><tr><th>Priority</th><th>Action</th><th>Owner</th><th>By</th><th>Measure of success</th></tr></thead>
-          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><span className="xb-dt">{trimTo(d.title, 140)}</span><span className="xb-from">{d.chapter}</span></td><td>{d.owner}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{trimTo([d.kpi, d.impact].filter(Boolean).join(' · '), 130) || '—'}</td></tr>)}</tbody>
+          <tbody>{decisions.map((d, i) => <tr key={i}><td><span className={`xb-pr ${d.priority}`}>{d.priority}</span></td><td><span className="xb-dt">{trimTo(d.title, 140)}</span><span className="xb-from">{d.chapter}{d.because ? ` · ${trimTo(d.because, 120)}` : ''}</span></td><td>{d.owner || '—'}</td><td>{d.timeline ?? WHEN[d.priority]}</td><td>{trimTo([d.kpi, d.impact].filter(Boolean).join(' · '), 130) || '—'}</td></tr>)}</tbody>
         </table> : <p className="xb-none">Action plan not yet written for this review.</p>}
         <p className="xb-note">Figures are computed from synced studio data for {P.label}; deltas compare with {P.prevLabel}, {P.lyLabel} and the {P.ytdLabel} monthly average. Area status reflects the share of that area's metrics moving in the right direction; a sustained run means three consecutive periods moving the same way. Switch to Full report for the analysis, charts and record-level detail behind every number.</p>
         <Foot right={`Prepared ${new Date(rv.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`} />
