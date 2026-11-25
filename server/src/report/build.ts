@@ -149,7 +149,9 @@ async function kpis(ctx: Ctx, metrics: string[], extra: Filter[] = []): Promise<
       const value = n(a[m]);
       // current-year baseline = mean of the monthly values Jan → month before the period (volumes scaled to the period length)
       const mv = (ytd?.rows ?? []).map((r) => n(r[m])).filter((x): x is number => x !== null);
-      let yv = mv.length ? mv.reduce((p, q) => p + q, 0) / mv.length : null;
+      // additive volumes: a month with no rows is a real zero, so divide by every month in the window (not just the
+      // months that returned a value — that inflated sparse measures such as lapsed value); rates average their months
+      let yv = mt.additive ? (ctx.ytd ? mv.reduce((p, q) => p + q, 0) / ctx.ytd.months : null) : mv.length ? mv.reduce((p, q) => p + q, 0) / mv.length : null;
       if (yv !== null && mt.additive) yv *= ctx.periodMonths;
       const chgYtd = value === null || yv === null ? null : mt.format === 'percent' ? value - yv : yv ? (value - yv) / Math.abs(yv) : null;
       out.set(m, {
