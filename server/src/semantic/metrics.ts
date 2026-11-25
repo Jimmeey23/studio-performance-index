@@ -208,9 +208,9 @@ export const MODELS: SemanticModel[] = [
   {
     id: 'ads', table: 'fct_ad_spend', label: 'Paid ads', timeColumn: 'ad_date', timeLabel: 'ad delivery date',
     source: '❖ PM - Leads ❖ › Meta_Daily_Data',
-    dims: { city: 'city', location: 'location', campaign: 'campaign', platform: 'platform', ad_network: 'ad_network', weekpart: WEEKPART('ad_date'), day_of_week: 'dayname(ad_date)' },
+    dims: { city: 'city', location: 'location', campaign: 'campaign', platform: 'platform', ad_network: 'ad_network', spend_attribution: "case when allocated then 'Shared (city-wide, split by lead share)' else 'Direct (studio campaign)' end", weekpart: WEEKPART('ad_date'), day_of_week: 'dayname(ad_date)' },
     drill: { order: 'ad_date desc', columns: [
-      ['ad_date::varchar', 'ad_date', 'Date'], ['ad_network', 'ad_network', 'Network'], ['campaign', 'campaign', 'Campaign'], ['platform', 'platform', 'Platform'], ['city', 'city', 'City'],
+      ['ad_date::varchar', 'ad_date', 'Date'], ['ad_network', 'ad_network', 'Network'], ['case when allocated then round(alloc_share * 100, 1)::varchar || \'% share\' else \'direct\' end', 'attribution', 'Attribution'], ['campaign', 'campaign', 'Campaign'], ['platform', 'platform', 'Platform'], ['city', 'city', 'City'],
       ['spend', 'spend', 'Spend'], ['impressions', 'impressions', 'Impressions'], ['clicks', 'clicks', 'Clicks'], ['ad_leads', 'ad_leads', 'Leads'],
       ['round(spend / nullif(ad_leads, 0), 2)', 'cpl', 'CPL'],
     ] },
