@@ -19,7 +19,7 @@ import { log } from '../util/log.js';
 import { attendanceExtras, classExtras, formatComparison, funnelExtras, productList, retentionExtras, trainerScorecard } from './reviewExtras.js';
 import { discountAnalysis } from '../analytics/discounts.js';
 import { trainerChanges } from '../analytics/trainerChanges.js';
-import { buildReport, fmtVal, fmtChg, type Kpi, type Report, type ReportChart, type ReportSection, type ReportTable } from './build.js';
+import { buildReport, fmtVal, fmtChg, PLAYBOOK, type Kpi, type Report, type ReportChart, type ReportSection, type ReportTable } from './build.js';
 
 export const ReviewRequestSchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -59,6 +59,45 @@ export interface Review {
   id: string; generatedAt: string; request: ReviewRequest; period: Report['period']; scope: string;
   cover: { photo: number; headlineKpis: Kpi[] };
   glance: ReviewGlance; sections: ReviewSection[]; scorecard: Kpi[]; studios?: ReportTable;
+  /** data-backed verdict for the executive brief: a conclusion per area and the decisions that follow from it */
+  brief?: ReviewBrief;
+}
+export interface BriefConclusion { section: ReviewSectionId; area: string; status: 'on' | 'watch' | 'off'; text: string }
+export interface BriefDecision { section: ReviewSectionId; area: string; priority: 'high' | 'medium'; decision: string; because: string; target: string; metric: string }
+export interface ReviewBrief { conclusions: BriefConclusion[]; decisions: BriefDecision[] }
+
+/* ── executive brief verdict: rules over the KPI deltas, so every conclusion and decision cites its numbers ── */
+const material = (k: Kpi, c: number | null) => c !== null && Math.abs(c) >= (k.format === 'percent' ? 0.02 : 0.05);
+const wrongWay = (k: Kpi, c: number | null) => c !== null && k.higherIsBetter !== undefined && c !== 0 && (c > 0) !== k.higherIsBetter;
+const kMove = (k: Kpi, P: Report['period']) => `${k.label} ${fmtVal(k.value, k.format)} (${fmtChg(k)} vs ${P.prevLabel}${k.chgLy !== null ? `, ${fmtChg(k, 'chgLy')} vs ${P.lyLabel}` : ''})`;
+export function briefVerdict(sections: ReviewSection[], P: Report['period']): ReviewBrief {
+  const conclusions: BriefConclusion[] = []; const decisions: BriefDecision[] = [];
+  for (const s of sections) {
+    const ks = s.kpis.filter((k) => k.value !== null && k.chg !== null && k.higherIsBetter !== undefined);
+    if (!ks.length) { conclusions.push({ section: s.id, area: s.title, status: 'watch', text: `No comparable data for ${P.label} vs ${P.prevLabel} — the numbers for this area are not reliable enough to conclude; check the data feed before acting.` }); continue; }
+    const bad = ks.filter((k) => wrongWay(k, k.chg) && material(k, k.chg)).sort((a, b) => Math.abs(b.chg!) - Math.abs(a.chg!));
+    const good = ks.filter((k) => !wrongWay(k, k.chg) && material(k, k.chg)).sort((a, b) => Math.abs(b.chg!) - Math.abs(a.chg!));
+    // structural = also worse than the same period last year, not just a monthly wobble
+    const structural = bad.filter((k) => wrongWay(k, k.chgLy) && material(k, k.chgLy));
+    const status: BriefConclusion['status'] = structural.length || bad.length >= 2 && bad.length > good.length ? 'off' : bad.length ? 'watch' : 'on';
+    const text = status === 'off'
+      ? `Off course — ${bad.slice(0, 2).map((k) => kMove(k, P)).join('; ')}.${structural.length ? ` ${structural.length === 1 ? 'This is' : 'These are'} also worse than ${P.lyLabel}, so the decline is structural, not seasonal — corrective action needed now.` : ' Correct before it compounds next period.'}`
+      : status === 'watch'
+        ? `Holding, with one weak spot — ${kMove(bad[0], P)}${good[0] ? `, offset by ${kMove(good[0], P)}` : ''}. Fix the weak spot before it becomes a trend.`
+        : good.length ? `On track — ${good.slice(0, 2).map((k) => kMove(k, P)).join('; ')}. Protect what is working and scale it.` : `Stable — no material movement vs ${P.prevLabel}; no intervention needed.`;
+    conclusions.push({ section: s.id, area: s.title, status, text });
+    for (const k of bad) {
+      if (decisions.some((d) => d.metric === k.id)) continue;
+      const play = PLAYBOOK[k.id] ?? (/late.?cancel/.test(k.id) ? PLAYBOOK.late_cancel_rate : /retention|renewal/.test(k.id) ? PLAYBOOK.second_visit_rate
+        : `Name an owner for ${k.label.toLowerCase()} in ${s.title}: diagnose the driver in the full report and agree a recovery plan this week.`);
+      const isStructural = structural.includes(k);
+      decisions.push({ section: s.id, area: s.title, priority: isStructural || Math.abs(k.chg!) >= (k.format === 'percent' ? 0.05 : 0.15) ? 'high' : 'medium', decision: play,
+        because: `${kMove(k, P)}${isStructural ? ' — structural decline' : ''}.`,
+        target: k.prev !== null ? `${k.label} back to ${k.higherIsBetter ? '≥' : '≤'} ${fmtVal(k.prev, k.format)} next period` : `${k.label} moving the right way next period`, metric: k.id });
+    }
+  }
+  decisions.sort((a, b) => (a.priority === b.priority ? 0 : a.priority === 'high' ? -1 : 1));
+  return { conclusions, decisions: decisions.slice(0, 8) };
 }
 
 /* ── AI commentary (stored per part) ── */
@@ -212,7 +251,7 @@ export async function buildReview(raw: unknown): Promise<Review> {
   const glance: ReviewGlance = { cards: report.headline.slice(0, 8), tables: glTables, charts: glCharts, lists, notes: notesFor(glCharts, glTables) };
 
   const id = `rv_${crypto.randomUUID().slice(0, 10)}`;
-  const review: Review = { id, generatedAt: new Date().toISOString(), request: req, period: P, scope: report.scope, cover: { photo: Math.floor(Math.random() * 9), headlineKpis: report.headline.slice(0, 4) }, glance, sections, scorecard: report.scorecard, studios: report.studios ?? S.st?.tables[0] };
+  const review: Review = { id, generatedAt: new Date().toISOString(), request: req, period: P, scope: report.scope, cover: { photo: Math.floor(Math.random() * 9), headlineKpis: report.headline.slice(0, 4) }, glance, sections, scorecard: report.scorecard, studios: report.studios ?? S.st?.tables[0], brief: briefVerdict(sections, P) };
   cache.set(id, { review, report });
   if (cache.size > 30) cache.delete(cache.keys().next().value!);
   return review;
@@ -305,7 +344,7 @@ CONSISTENCY (the report is audited line by line — a figure that disagrees with
 - Name every benchmark explicitly: "vs <previous period label>", "vs the <current-year monthly average label>", "vs <same period last year label>". Never write an unqualified "monthly average" or "N-month average".
 - Revenue: say gross (incl. GST) or net (excl. GST) every time; never mix them in one calculation or share.
 - Class average excludes empty classes; when you set it against classes held, say so and use the non-empty class count if the digest gives it.
-- Memberships ending = Renewed + Lapsed + other status; the renewal rate uses Renewed + Lapsed only. Do not imply the two populations are the same.
+- Memberships ending = Renewed + Lapsed + Grace Period + other status; the renewal and churn rates use Renewed + Lapsed only. Lapsed means 30+ days past end without renewal; under 30 days is Grace Period — always state both counts. Do not imply the two populations are the same.
 - Paid ads: platform cost per lead uses the ad platforms' own lead counts; cost per lead (CRM) uses CRM leads. Never present spend ÷ all conversions as an acquisition cost unless you call it a blended upper bound.
 - Separate observation from inference: causes the data does not measure directly (e.g. cannibalisation, why clients chose something, advertising effect) must be worded as "suggests" / "apparent" / "likely".
 - Opportunity sizes are scenarios: write them as "if <assumption>, ~₹X" and state the assumption and base population.
@@ -397,10 +436,10 @@ export async function writeGlance(rv: Review, tier: Tier = 'balanced'): Promise<
   const ids = [...rv.glance.charts.map((c) => c.id), ...rv.glance.tables.map((t) => t.id)];
   const secIds = rv.sections.map((s) => s.id);
   const tool: Anthropic.Tool = { name: 'write_glance', description: 'Write the cover headline and the At a glance page.', input_schema: { type: 'object', properties: {
-    headline: { type: 'string', description: 'The review\'s main headline: one sentence, the single most important story with its number.' },
+    headline: { type: 'string', description: 'The review\'s main headline: one sentence that states a CONCLUSION (is the business on or off course, and why) with its number — a verdict, not a data recital.' },
     tagline: { type: 'string', description: '4–8 words capturing the period\'s mood.' },
-    summary: { type: 'string', description: '220–300 words in 3 short paragraphs (blank line between). 1: the verdict on the period with the 3–4 numbers that matter most vs baselines. 2: the causal story connecting sales, attendance, funnel, classes, trainers, formats and churn. 3: the two or three priorities for next period and what is at stake.' },
-    insights: { type: 'array', items: { type: 'string' }, description: '6 non-obvious insights that connect chapters (e.g. pricing ↔ conversion, schedule ↔ fill, leads ↔ new clients), each 25–45 words with numbers.' },
+    summary: { type: 'string', description: '220–300 words in 3 short paragraphs (blank line between). 1: the verdict on the period with the 3–4 numbers that matter most vs baselines. 2: the causal story connecting sales, attendance, funnel, classes, trainers, formats and churn. 3: the two or three DECISIONS senior management must take now to correct course, each with the number it is meant to move and what is at stake if nothing changes. Be conclusive: say what the data means and what to do, never just restate figures.' },
+    insights: { type: 'array', items: { type: 'string' }, description: '6 non-obvious insights that connect chapters (e.g. pricing ↔ conversion, schedule ↔ fill, leads ↔ new clients), each 25–45 words with numbers, and each ending in its implication for leadership (what it means / what to do).' },
     highlights: { type: 'array', description: 'One key finding per section, in order.', items: { type: 'object', properties: { section: { type: 'string', enum: secIds }, text: { type: 'string' } }, required: ['section', 'text'] } },
     watch: { type: 'array', items: { type: 'string' }, description: '3–5 risks or early-warning signals to monitor next period, each with the metric and threshold that would trigger action.' }, notes: notesSchema(ids),
   }, required: ['headline', 'tagline', 'summary', 'insights', 'highlights', 'watch', 'notes'] } as Anthropic.Tool['input_schema'] };

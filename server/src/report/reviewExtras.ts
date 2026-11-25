@@ -163,7 +163,7 @@ export async function productList(req: Req) {
 }
 
 /* ── retention: who churns, the leading indicators and the value at stake ── */
-const RET = ['memberships_expiring', 'sheet_renewal_rate', 'churn_rate', 'lapsed_memberships', 'lapsed_value', 'expiring_value'];
+const RET = ['memberships_expiring', 'sheet_renewal_rate', 'churn_rate', 'lapsed_memberships', 'grace_memberships', 'lapsed_value', 'grace_value', 'expiring_value'];
 export async function retentionExtras(req0: Req) {
   // no memberships ending in the period → the breakdowns would all be empty; show the last 12 months instead, and say so
   const here = await q(req0, ['memberships_expiring'], []);

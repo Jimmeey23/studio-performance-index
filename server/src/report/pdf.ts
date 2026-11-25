@@ -29,14 +29,16 @@ function logoTag() {
 export async function reviewPdf(url: string, title: string): Promise<Uint8Array> {
   if (running >= 2) throw new Error('Two PDFs are already being prepared — try again in a moment.');
   running++;
-  const page = await (await browser()).newPage();
+  let page: Awaited<ReturnType<Browser['newPage']>> | null = null;
   try {
+    page = await (await browser()).newPage();
     await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
     await page.emulateMediaType('print');
     await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'reduce' }]);
     await page.evaluateOnNewDocument(() => { try { localStorage.setItem('theme', 'light'); } catch { /* */ } });
     await page.goto(url, { waitUntil: 'networkidle0', timeout: 90_000 });
-    await page.waitForSelector('.epr-sec', { timeout: 60_000 });
+    // full report renders chapters (.epr-sec); the executive brief renders pages (.xb-page)
+    await page.waitForSelector('.epr-sec, .xb-page', { timeout: 60_000 });
     // let every chapter, chart and font settle; lazy blocks render on scroll
     await page.evaluate(async () => {
       document.documentElement.classList.add('epr-pdf'); delete document.documentElement.dataset.theme;
@@ -50,5 +52,5 @@ export async function reviewPdf(url: string, title: string): Promise<Uint8Array>
     return await page.pdf({ format: 'A4', printBackground: true, displayHeaderFooter: true, headerTemplate: '<span></span>', footerTemplate: foot,
       margin: { top: '12mm', bottom: '16mm', left: '10mm', right: '10mm' }, preferCSSPageSize: false, scale: 0.62, tagged: true, outline: true, timeout: 120_000 });
   } catch (e) { log.warn({ err: (e as Error).message }, 'review pdf failed'); throw e; }
-  finally { running--; await page.close().catch(() => {}); }
+  finally { running--; await page?.close().catch(() => {}); }
 }

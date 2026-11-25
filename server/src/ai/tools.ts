@@ -80,7 +80,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'winback_analysis',
-    description: 'Win-backs/reactivations: purchases by clients inactive for N+ days before buying, by month or location, plus the current lapsed-client pool.',
+    description: 'Win-backs/reactivations: purchases by clients inactive for N+ days before buying, by month or location, plus the current inactive-client pool (paying clients with no visit for N+ days — a visit-inactivity measure, distinct from membership status Lapsed, which means 30+ days past membership end without renewal).',
     input_schema: { type: 'object', properties: { start: date, end: date, inactive_days: { type: 'integer' }, group_by: { type: 'string', enum: ['month', 'location'] } } },
   },
   {

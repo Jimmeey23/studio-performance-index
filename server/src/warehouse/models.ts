@@ -8,7 +8,7 @@
  * match, a trailing `?` yields NULL when the column is absent.
  */
 import { Db, sqlString } from './db.js';
-import { loadRules, type BusinessRules } from './rules.js';
+import { loadRules, graceDays, type BusinessRules } from './rules.js';
 import { log } from '../util/log.js';
 import { FORMAT_MODELS } from './formatModels.js';
 
@@ -442,7 +442,14 @@ export const MODELS: ModelDef[] = [
           _row_num
         from raw_memberships)
       select md5(coalesce(member_id,'') || '|' || coalesce(membership,'') || '|' || coalesce(cast(start_ts as varchar),'') || '|' || coalesce(cast(end_ts as varchar),'')) as membership_key,
-        x.* exclude (_row_num), cast(end_ts as date) as end_date, date_trunc('month', end_ts)::date as end_month,
+        x.* exclude (_row_num, status), x.status as sheet_status,
+        -- one governed lapse rule for every tab / report: a membership that ended without renewal is in the
+        -- renewal grace period until it is ${graceDays()} or more days past its end date, and only then Lapsed
+        case when x.status in ('Lapsed', 'Renewal Grace Period')
+          then case when date_diff('day', cast(end_ts as date), current_date) >= ${graceDays()} then 'Lapsed' else 'Grace Period' end
+          else x.status end as status,
+        date_diff('day', cast(end_ts as date), current_date) as days_since_end,
+        cast(end_ts as date) as end_date, date_trunc('month', end_ts)::date as end_month,
         cast(start_ts as date) as start_date, coalesce(l.city, p57_host_city(host_id)) as city, primary_location as location
       from x left join dim_location l on l.location = x.primary_location
       where member_id is not null
