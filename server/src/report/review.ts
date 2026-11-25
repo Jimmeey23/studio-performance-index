@@ -307,10 +307,20 @@ CONSISTENCY (the report is audited line by line — a figure that disagrees with
 - Paid ads: platform cost per lead uses the ad platforms' own lead counts; cost per lead (CRM) uses CRM leads. Never present spend ÷ all conversions as an acquisition cost unless you call it a blended upper bound.
 - Separate observation from inference: causes the data does not measure directly (e.g. cannibalisation, why clients chose something, advertising effect) must be worded as "suggests" / "apparent" / "likely".
 - Opportunity sizes are scenarios: write them as "if <assumption>, ~₹X" and state the assumption and base population.
+- Attendance has three different counts: "Visits (attended)" (booking records), "Class check-ins" (class roster totals) and core-format check-ins. Name the one you use, never present two of them as the same figure, and quote each one's own % change.
+- Zero denominators: when nothing is in scope (e.g. no memberships ended, no leads from a channel), the rate is not applicable. Write "not measurable this period", never 0%, "clean" or an implied improvement.
+- Cohort maturity: second-visit, newcomer conversion and retention for the latest first-visit cohort are still maturing. Say so whenever you compare them with older cohorts, and set targets on a fixed window (e.g. "within 30 days of first visit").
+- Scheduling: fill rate is the primary utilisation measure; class average (non-empty classes) and booking fill support it. Recommend slot changes as time-boxed tests with a stated sample and success KPI, never as blanket moves on small samples.
+- Unsold-seat opportunity is an upper bound for the report period at the current class revenue per attendee; say so when you quote it, and never present it as recoverable revenue.
+- Class revenue (and class revenue per attendee / per class) is the visit value attributed to classes, not total sales; never divide total revenue by attendance and call it the same metric.
+- People and sources: if two names look like the same trainer or associate, or a lead source looks re-tagged, flag it as a data check before ranking or comparing them.
+- Every recommendation names its success KPI and the population it is measured on (lead funnel, newcomer cohort, studio-wide, a format, a slot) and a date or window that falls AFTER today (given at the top of the digest).
 - Elegant, decisive British/Indian English for the MD; plain sentences, no markdown, no emojis, no bold. Call the tool exactly once.`;
 
+const todayIST = () => new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
 async function callTool<T>(tool: Anthropic.Tool, content: string, tier: Tier): Promise<{ out: T; model: string } | null> {
   if (!config.anthropicKey) return null;
+  content = `TODAY: ${todayIST()} (the report is written and read from today; every deadline must fall after this date).\n\n${content}`;
   const client = new Anthropic({ apiKey: config.anthropicKey });
   let order = fallbackOrder(tier);
   let forced = true;   // newer models reject a forced tool_choice; fall back to 'auto' + an explicit instruction
@@ -346,6 +356,22 @@ export function rulesGlance(rv: Review): ReviewGlanceAI {
     highlights: rv.sections.map((s) => ({ section: s.id, text: s.ruleFindings[0] ?? s.lead })), watch: rv.sections.flatMap((s) => s.ruleFindings.filter((f) => /attention/.test(f))).slice(0, 4), notes: rv.glance.notes, source: 'rules', at: now() };
 }
 
+/** A deadline already in the past when the report is written is replaced by a window from today, by priority. */
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+export function futureTimeline(t: string | undefined, priority: string | undefined, today = todayIST()): string | undefined {
+  if (!t) return t;
+  const y0 = Number(today.slice(0, 4));
+  const m = t.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?(?:,?\s+(\d{4}))?/) ?? t.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/);
+  if (!m) return t;
+  const [a, b, yr] = [m[1], m[2], m[3]]; const dayFirst = /^\d/.test(a);
+  const mon = MONTHS.indexOf((dayFirst ? b : a).slice(0, 3).toLowerCase()); const day = Number(dayFirst ? a : b);
+  if (mon < 0 || !day) return t;
+  const iso = `${yr ?? y0}-${String(mon + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  if (iso > today) return t;
+  const days = priority === 'high' ? 14 : priority === 'medium' ? 30 : 60;
+  const due = new Date(Date.parse(today) + days * 86400_000);
+  return `By ${due.getUTCDate()} ${due.toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' })} ${due.getUTCFullYear()}`;
+}
 export async function writeSection(rv: Review, sid: string, tier: Tier = 'balanced'): Promise<ReviewSectionAI> {
   const s = rv.sections.find((x) => x.id === sid);
   if (!s) throw new Error('Unknown section');
@@ -362,7 +388,7 @@ export async function writeSection(rv: Review, sid: string, tier: Tier = 'balanc
   const o = res.out; const fb = rulesSection(s);
   const notes = typeof o.notes === 'object' && o.notes ? Object.fromEntries(Object.entries(o.notes).filter(([k, v]) => ids.includes(k) && typeof v === 'string')) : {};
   return { headline: o.headline || fb.headline, summary: o.summary || fb.summary, insights: strs(o.insights), findings: strs(o.findings).length ? strs(o.findings) : fb.findings,
-    recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).filter((r) => r && r.title).map((r) => ({ ...r, owner: normaliseOwner(r.owner) })), notes: { ...s.notes, ...notes }, model: res.model, source: 'ai', at: now() };
+    recommendations: (Array.isArray(o.recommendations) ? o.recommendations : []).filter((r) => r && r.title).map((r) => ({ ...r, owner: normaliseOwner(r.owner), timeline: futureTimeline(r.timeline, r.priority) })), notes: { ...s.notes, ...notes }, model: res.model, source: 'ai', at: now() };
 }
 export async function writeGlance(rv: Review, tier: Tier = 'balanced'): Promise<ReviewGlanceAI> {
   const ids = [...rv.glance.charts.map((c) => c.id), ...rv.glance.tables.map((t) => t.id)];
